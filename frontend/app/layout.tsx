@@ -13,6 +13,8 @@ import "../styles/conversations-list.css";
 import "../styles/widget-settings.css";
 import "../styles/team.css";
 import "../styles/reports.css";
+import "../styles/super-admin-dashboard.css";
+
 export const metadata = {
     title: "AI Chat SaaS Panel",
     description: "Admin and support panel for AI Chat SaaS",
