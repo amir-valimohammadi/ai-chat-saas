@@ -1,7 +1,7 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/super-admin/user-status-update.php
-// هدف: فعال / غیرفعال کردن کاربر مشتری توسط Super Admin
+// هدف: فعال یا غیرفعال کردن امن کاربر مشتری و لغو نشست‌های قبلی
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
         'success' => false,
-        'message' => 'Method not allowed'
+        'message' => 'Method not allowed',
     ], 405);
 }
 
@@ -20,60 +20,96 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 
 $input = get_json_input();
+$userId = filter_var($input['user_id'] ?? 0, FILTER_VALIDATE_INT, [
+    'options' => ['default' => 0, 'min_range' => 1],
+]);
 
-$userId = isset($input['user_id']) ? (int) $input['user_id'] : 0;
-$isActive = isset($input['is_active']) ? (bool) $input['is_active'] : false;
+if (!array_key_exists('is_active', $input)) {
+    json_response([
+        'success' => false,
+        'message' => 'is_active is required',
+    ], 422);
+}
+
+$isActive = filter_var($input['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
 if ($userId <= 0) {
     json_response([
         'success' => false,
-        'message' => 'user_id is required'
+        'message' => 'user_id is required',
+    ], 422);
+}
+
+if ($isActive === null) {
+    json_response([
+        'success' => false,
+        'message' => 'Invalid is_active value',
     ], 422);
 }
 
 try {
     $userStmt = $pdo->prepare("
-        SELECT id, role
+        SELECT id, tenant_id, name, email, role, is_active
         FROM users
         WHERE id = :user_id
+          AND tenant_id IS NOT NULL
           AND role IN ('customer_admin', 'agent')
         LIMIT 1
     ");
-
-    $userStmt->execute([
-        ':user_id' => $userId,
-    ]);
+    $userStmt->execute([':user_id' => $userId]);
 
     $targetUser = $userStmt->fetch();
 
     if (!$targetUser) {
         json_response([
             'success' => false,
-            'message' => 'User not found'
+            'message' => 'User not found',
         ], 404);
     }
 
-    $stmt = $pdo->prepare("
-        UPDATE users
-        SET is_active = :is_active
-        WHERE id = :user_id
-          AND role IN ('customer_admin', 'agent')
-    ");
+    $previousState = (bool) $targetUser['is_active'];
 
-    $stmt->execute([
-        ':is_active' => $isActive ? 1 : 0,
-        ':user_id' => $userId,
-    ]);
+    if ($previousState !== $isActive) {
+        $updateStmt = $pdo->prepare("
+            UPDATE users
+            SET
+                is_active = :is_active,
+                availability_status = CASE
+                    WHEN :is_active_for_status = 0 THEN 'offline'
+                    ELSE availability_status
+                END,
+                token_version = token_version + 1
+            WHERE id = :user_id
+              AND role IN ('customer_admin', 'agent')
+        ");
+        $updateStmt->execute([
+            ':is_active' => $isActive ? 1 : 0,
+            ':is_active_for_status' => $isActive ? 1 : 0,
+            ':user_id' => $userId,
+        ]);
+    }
 
     json_response([
         'success' => true,
-        'message' => 'User status updated',
-        'is_active' => $isActive,
+        'message' => $previousState === $isActive
+            ? 'User status was already up to date'
+            : 'User status updated',
+        'user' => [
+            'id' => (int) $targetUser['id'],
+            'tenant_id' => (int) $targetUser['tenant_id'],
+            'name' => $targetUser['name'],
+            'email' => $targetUser['email'],
+            'role' => $targetUser['role'],
+            'previous_is_active' => $previousState,
+            'is_active' => $isActive,
+        ],
     ]);
-} catch (Exception $e) {
+} catch (Throwable $e) {
+    error_log('[AI_CHAT_SAAS] user-status-update failed: ' . $e->getMessage());
+
     json_response([
         'success' => false,
         'message' => 'Failed to update user status',
-        'error' => $e->getMessage()
+        'error' => $e->getMessage(),
     ], 500);
 }
