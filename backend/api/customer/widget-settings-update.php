@@ -1,7 +1,7 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/customer/widget-settings-update.php
-// هدف: ویرایش تنظیمات ویجت یک سایت توسط Customer Admin
+// هدف: ویرایش امن تنظیمات ویجت یک سایت توسط Customer Admin
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
@@ -12,36 +12,99 @@ require_once __DIR__ . '/../../includes/auth.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
         'success' => false,
-        'message' => 'Method not allowed'
+        'message' => 'Method not allowed',
     ], 405);
 }
 
 $user = require_auth($pdo);
-
 require_role($user, ['customer_admin']);
 
 $input = get_json_input();
 
+function widget_setting_string(array $input, string $key, string $default = ''): string
+{
+    $value = $input[$key] ?? $default;
+
+    if (!is_string($value)) {
+        return $default;
+    }
+
+    return trim($value);
+}
+
+function widget_setting_length(string $value): int
+{
+    return function_exists('mb_strlen')
+        ? mb_strlen($value, 'UTF-8')
+        : strlen($value);
+}
+
 $siteId = isset($input['site_id']) ? (int) $input['site_id'] : 0;
-$brandName = trim($input['brand_name'] ?? '');
-$brandColor = trim($input['brand_color'] ?? '#2563eb');
-$logoUrl = trim($input['logo_url'] ?? '');
-$welcomeMessage = trim($input['welcome_message'] ?? '');
-$aiMode = trim($input['ai_mode'] ?? 'assistant');
+$brandName = widget_setting_string($input, 'brand_name');
+$brandColor = strtolower(widget_setting_string($input, 'brand_color', '#2563eb'));
+$logoUrl = widget_setting_string($input, 'logo_url');
+$welcomeMessage = widget_setting_string($input, 'welcome_message');
+$aiMode = widget_setting_string($input, 'ai_mode', 'assistant');
 
 $allowedAiModes = ['off', 'assistant', 'semi_auto'];
 
 if ($siteId <= 0) {
     json_response([
         'success' => false,
-        'message' => 'Site ID is required'
+        'message' => 'شناسه سایت الزامی است.',
+    ], 422);
+}
+
+if ($brandName !== '' && widget_setting_length($brandName) > 80) {
+    json_response([
+        'success' => false,
+        'message' => 'نام برند نباید بیشتر از ۸۰ کاراکتر باشد.',
+    ], 422);
+}
+
+if (!preg_match('/^#[0-9a-f]{6}$/', $brandColor)) {
+    json_response([
+        'success' => false,
+        'message' => 'رنگ برند باید با فرمت شش‌رقمی Hex مانند #2563eb وارد شود.',
+    ], 422);
+}
+
+if ($logoUrl !== '') {
+    if (widget_setting_length($logoUrl) > 2048) {
+        json_response([
+            'success' => false,
+            'message' => 'آدرس لوگو بیش از حد طولانی است.',
+        ], 422);
+    }
+
+    if (filter_var($logoUrl, FILTER_VALIDATE_URL) === false) {
+        json_response([
+            'success' => false,
+            'message' => 'آدرس لوگو معتبر نیست.',
+        ], 422);
+    }
+
+    $logoScheme = strtolower((string) parse_url($logoUrl, PHP_URL_SCHEME));
+
+    if (!in_array($logoScheme, ['http', 'https'], true)) {
+        json_response([
+            'success' => false,
+            'message' => 'آدرس لوگو فقط می‌تواند با http یا https شروع شود.',
+        ], 422);
+    }
+}
+
+if (widget_setting_length($welcomeMessage) > 300) {
+    json_response([
+        'success' => false,
+        'message' => 'پیام خوش‌آمدگویی نباید بیشتر از ۳۰۰ کاراکتر باشد.',
     ], 422);
 }
 
 if (!in_array($aiMode, $allowedAiModes, true)) {
     json_response([
         'success' => false,
-        'message' => 'Invalid AI mode'
+        'message' => 'حالت انتخاب‌شده برای هوش مصنوعی معتبر نیست.',
     ], 422);
 }
 
@@ -56,13 +119,13 @@ try {
 
     $siteStmt->execute([
         ':id' => $siteId,
-        ':tenant_id' => $user['tenant_id']
+        ':tenant_id' => (int) $user['tenant_id'],
     ]);
 
     if (!$siteStmt->fetch()) {
         json_response([
             'success' => false,
-            'message' => 'Site not found'
+            'message' => 'سایت موردنظر پیدا نشد.',
         ], 404);
     }
 
@@ -82,20 +145,33 @@ try {
         ':brand_name' => $brandName !== '' ? $brandName : null,
         ':brand_color' => $brandColor,
         ':logo_url' => $logoUrl !== '' ? $logoUrl : null,
-        ':welcome_message' => $welcomeMessage,
+        ':welcome_message' => $welcomeMessage !== '' ? $welcomeMessage : null,
         ':ai_mode' => $aiMode,
         ':id' => $siteId,
-        ':tenant_id' => $user['tenant_id'],
+        ':tenant_id' => (int) $user['tenant_id'],
     ]);
 
     json_response([
         'success' => true,
-        'message' => 'Widget settings updated successfully'
+        'message' => 'تنظیمات ویجت با موفقیت ذخیره شد.',
+        'site' => [
+            'id' => $siteId,
+            'brand_name' => $brandName !== '' ? $brandName : null,
+            'brand_color' => $brandColor,
+            'logo_url' => $logoUrl !== '' ? $logoUrl : null,
+            'welcome_message' => $welcomeMessage !== '' ? $welcomeMessage : null,
+            'ai_mode' => $aiMode,
+        ],
     ]);
-} catch (Exception $e) {
-    json_response([
+} catch (Throwable $e) {
+    $payload = [
         'success' => false,
-        'message' => 'Failed to update widget settings',
-        'error' => $e->getMessage()
-    ], 500);
+        'message' => 'ذخیره تنظیمات ویجت با خطا مواجه شد.',
+    ];
+
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+
+    json_response($payload, 500);
 }

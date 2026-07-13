@@ -94,6 +94,10 @@ $appConfig = [
     'debug' => app_env('APP_DEBUG', true),
     'url' => app_env('APP_URL', 'http://localhost:3000'),
     'api_url' => app_env('API_URL', 'http://localhost/ai-chat-saas/backend/api'),
+    'widget_script_url' => app_env(
+        'WIDGET_SCRIPT_URL',
+        'http://localhost/ai-chat-saas/widget/dist/widget.js'
+    ),
     'frontend_url' => app_env('FRONTEND_URL', 'http://localhost:3000'),
     'timezone' => app_env('APP_TIMEZONE', 'Asia/Tehran'),
 
