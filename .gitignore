@@ -1,0 +1,78 @@
+# ==============================
+# IDE and operating system
+# ==============================
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# ==============================
+# Environment variables / secrets
+# ==============================
+
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+
+
+# ==============================
+# Frontend / Next.js
+# ==============================
+
+**/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/.vercel/
+
+*.tsbuildinfo
+frontend/next-env.d.ts
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
+# ==============================
+# PHP dependencies and runtime
+# ==============================
+
+**/vendor/
+
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+backend/storage/logs/
+backend/storage/cache/
+backend/storage/sessions/
+backend/storage/tmp/
+
+*.log
+
+
+# ==============================
+# Database dumps
+# ==============================
+
+*.sql
+
+# فقط نسخه پاک‌سازی‌شده دیتابیس مجاز باشد
+!backend/database/schema.sql
+!backend/database/migrations/**/*.sql
+
+
+# ==============================
+# Archives and temporary files
+# ==============================
+
+*.zip
+*.rar
+*.7z
+*.tmp
+*.temp
+*.bak

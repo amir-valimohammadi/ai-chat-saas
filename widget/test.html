@@ -1,0 +1,86 @@
+<!-- مسیر فایل: ai-chat-saas/widget/test.html -->
+<!-- هدف: تست ویجت چت روی یک صفحه ساده -->
+
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <title>تست ویجت چت</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .page {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 48px 20px;
+        }
+
+        .card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 24px;
+            padding: 28px;
+            box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 28px;
+        }
+
+        p {
+            line-height: 1.9;
+            color: #4b5563;
+        }
+
+        .hint {
+            margin-top: 20px;
+            padding: 14px;
+            border-radius: 16px;
+            background: #eff6ff;
+            color: #1e40af;
+            font-size: 14px;
+        }
+
+        code {
+            direction: ltr;
+            display: inline-block;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 2px 6px;
+        }
+    </style>
+</head>
+
+<body>
+<main class="page">
+    <section class="card">
+        <h1>صفحه تست ویجت چت</h1>
+
+        <p>
+            این صفحه نقش سایت مشتری را دارد. دکمه چت باید پایین سمت راست صفحه
+            نمایش داده شود. کاربر می‌تواند گفتگو را شروع کند و پیام بفرستد.
+        </p>
+
+        <div class="hint">
+            مقدار <code>SITE_KEY_HERE</code> را با site_key واقعی سایتی که ساختی
+            جایگزین کن.
+        </div>
+    </section>
+</main>
+
+<script
+        src="./src/widget.js"
+        data-site-key="eec968e8b030d8bbac114ed7194f6899829aef35c35c23a0"
+        data-api-base="http://localhost/ai-chat-saas/backend/api"
+></script>
+</body>
+</html>

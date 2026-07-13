@@ -1,0 +1,136 @@
+<?php
+
+// مسیر فایل: ai-chat-saas/backend/config/app.php
+// هدف: تنظیمات عمومی پروژه، خواندن .env و سازگاری با کدهای قدیمی که array config می‌خواهند
+
+if (!defined('APP_ROOT')) {
+    define('APP_ROOT', dirname(__DIR__));
+}
+
+if (!function_exists('app_load_env')) {
+    function app_load_env(string $path): void
+    {
+        static $loadedPaths = [];
+
+        if (isset($loadedPaths[$path])) {
+            return;
+        }
+
+        $loadedPaths[$path] = true;
+
+        if (!file_exists($path) || !is_readable($path)) {
+            return;
+        }
+
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+        if (!$lines) {
+            return;
+        }
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+
+            if (!str_contains($line, '=')) {
+                continue;
+            }
+
+            [$key, $value] = explode('=', $line, 2);
+
+            $key = trim($key);
+            $value = trim($value);
+
+            if ($key === '') {
+                continue;
+            }
+
+            $value = trim($value, "\"'");
+
+            if (getenv($key) === false) {
+                putenv($key . '=' . $value);
+                $_ENV[$key] = $value;
+                $_SERVER[$key] = $value;
+            }
+        }
+    }
+}
+
+app_load_env(APP_ROOT . '/.env');
+
+if (!function_exists('app_env')) {
+    function app_env(string $key, mixed $default = null): mixed
+    {
+        $value = getenv($key);
+
+        if ($value === false) {
+            return $default;
+        }
+
+        $lowerValue = strtolower((string) $value);
+
+        if ($lowerValue === 'true') {
+            return true;
+        }
+
+        if ($lowerValue === 'false') {
+            return false;
+        }
+
+        if ($lowerValue === 'null') {
+            return null;
+        }
+
+        return $value;
+    }
+}
+
+$appConfig = [
+    'name' => app_env('APP_NAME', 'AI Chat SaaS'),
+    'env' => app_env('APP_ENV', 'local'),
+    'debug' => app_env('APP_DEBUG', true),
+    'url' => app_env('APP_URL', 'http://localhost:3000'),
+    'api_url' => app_env('API_URL', 'http://localhost/ai-chat-saas/backend/api'),
+    'frontend_url' => app_env('FRONTEND_URL', 'http://localhost:3000'),
+    'timezone' => app_env('APP_TIMEZONE', 'Asia/Tehran'),
+
+    'jwt_secret' => app_env('JWT_SECRET', 'change_this_secret'),
+
+    // پیشنهاد:
+    // برای پنل ادمین بهتر است access token کوتاه‌تر باشد.
+    // مقدار پیش‌فرض فعلاً 7 روز مانده تا پروژه‌ات نشکند.
+    'jwt_expiration_seconds' => (int) app_env('JWT_EXPIRATION_SECONDS', 604800),
+    'jwt_max_ttl_seconds' => (int) app_env('JWT_MAX_TTL_SECONDS', 604800),
+    'jwt_issuer' => app_env('JWT_ISSUER', 'ai-chat-saas'),
+    'jwt_audience' => app_env('JWT_AUDIENCE', 'ai-chat-saas-panel'),
+];
+
+if (!function_exists('app_is_production')) {
+    function app_is_production(): bool
+    {
+        return app_env('APP_ENV', 'local') === 'production';
+    }
+}
+
+if (!function_exists('app_debug_enabled')) {
+    function app_debug_enabled(): bool
+    {
+        return app_env('APP_DEBUG', true) === true;
+    }
+}
+
+if (!function_exists('app_config')) {
+    function app_config(string $key, mixed $default = null): mixed
+    {
+        global $appConfig;
+
+        return $appConfig[$key] ?? $default;
+    }
+}
+
+date_default_timezone_set((string) app_config('timezone', 'Asia/Tehran'));
+
+return $appConfig;

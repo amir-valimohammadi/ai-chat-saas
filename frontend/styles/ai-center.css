@@ -1,0 +1,279 @@
+/* مسیر فایل: ai-chat-saas/frontend/styles/ai-center.css */
+/* بازطراحی اولیه AI Center: فشرده‌تر، قابل اسکن‌تر، آماده برای tab-based شدن */
+
+.ai-center-shell {
+    display: grid;
+    gap: 14px;
+}
+
+.ai-center-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    gap: 14px;
+    align-items: start;
+}
+
+.ai-center-main,
+.ai-center-side {
+    display: grid;
+    gap: 14px;
+}
+
+.ai-center-side {
+    position: sticky;
+    top: 18px;
+}
+
+.ai-center-section,
+.ai-center-card {
+    padding: 14px !important;
+    border-radius: var(--radius-lg);
+    background: #ffffff;
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-xs);
+}
+
+.ai-center-section-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.ai-center-section-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.5;
+    font-weight: 950;
+}
+
+.ai-center-section-subtitle {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.7;
+}
+
+.ai-center-toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.ai-center-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 5px;
+    border-radius: 14px;
+    background: #e9eef7;
+    border: 1px solid var(--border);
+}
+
+.ai-center-tab {
+    border: none;
+    min-height: 32px;
+    padding: 0 11px;
+    border-radius: 10px;
+    color: #64748b;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.ai-center-tab.active {
+    color: var(--primary-dark);
+    background: #ffffff;
+    box-shadow: var(--shadow-xs);
+}
+
+.ai-center-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 10px;
+}
+
+.ai-center-metric {
+    padding: 12px;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid var(--border-soft);
+}
+
+.ai-center-metric strong {
+    display: block;
+    font-size: 20px;
+    line-height: 1.3;
+    font-weight: 950;
+}
+
+.ai-center-metric span {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11.5px;
+}
+
+.ai-center-form {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid var(--border-soft);
+}
+
+.ai-center-two-col {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.ai-center-three-col {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.ai-center-list {
+    display: grid;
+    gap: 8px;
+}
+
+.ai-center-item {
+    display: grid;
+    gap: 8px;
+    padding: 11px;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid var(--border-soft);
+}
+
+.ai-center-item:hover {
+    border-color: #cbd5e1;
+}
+
+.ai-center-item-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.ai-center-item-title {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.7;
+    font-weight: 900;
+}
+
+.ai-center-item-meta {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.7;
+}
+
+.ai-center-item-text {
+    margin: 0;
+    color: #475569;
+    font-size: 12.5px;
+    line-height: 1.85;
+    white-space: pre-wrap;
+}
+
+.ai-center-actions {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.ai-center-edit-box {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid var(--border-soft);
+}
+
+.ai-center-source-type {
+    display: inline-flex;
+    width: fit-content;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: var(--primary-dark);
+    background: var(--primary-soft);
+    font-size: 10.5px;
+    font-weight: 850;
+}
+
+.ai-center-status-approved,
+.ai-center-status-active {
+    color: #15803d;
+    background: var(--success-soft);
+    border-color: #bbf7d0;
+}
+
+.ai-center-status-inactive,
+.ai-center-status-archived {
+    color: #9a3412;
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+/* سازگاری با sectionهای فعلی AI Center که هنوز کلاس اختصاصی ندارند */
+
+.page-content-pro > section.card-solid {
+    padding: 14px !important;
+}
+
+.page-content-pro > section.card-solid h2 {
+    margin-top: 0;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.page-content-pro > section.card-solid h3 {
+    font-size: 14px;
+}
+
+.page-content-pro > section.card-solid .list-item {
+    padding: 11px;
+    border-radius: 14px;
+}
+
+.page-content-pro > section.card-solid form.grid {
+    gap: 10px;
+}
+
+/* Responsive */
+
+@media (max-width: 1100px) {
+    .ai-center-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-center-side {
+        position: static;
+    }
+}
+
+@media (max-width: 760px) {
+    .ai-center-two-col,
+    .ai-center-three-col {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-center-section-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .ai-center-toolbar {
+        width: 100%;
+    }
+}
