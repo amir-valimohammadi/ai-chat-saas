@@ -1,0 +1,526 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{fancyvrb}
+
+\providecommand{\UseMathForPositioningText}{}
+
+\IfFontExistsTF{Vazirmatn}{
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \settextfont{Tahoma}
+  }{
+    \settextfont{Arial}
+  }
+}
+
+\IfFontExistsTF{Consolas}{
+  \setmonofont{Consolas}
+}{
+  \setmonofont{Courier New}
+}
+
+\IfFontExistsTF{Arial}{
+  \setlatintextfont{Arial}
+}{
+  \setlatintextfont{Times New Roman}
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={AI Chat SaaS AI Architecture},
+  pdfauthor={Mobin Yousefi}
+}
+
+\definecolor{HeaderBlue}{HTML}{1E3A8A}
+\definecolor{BorderGray}{HTML}{CBD5E1}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{7pt}
+\setlength{\headheight}{15pt}
+\emergencystretch=3em
+\sloppy
+\renewcommand{\arraystretch}{1.45}
+\setlist[itemize]{rightmargin=1.2cm,itemsep=3pt,topsep=4pt}
+\setlist[enumerate]{rightmargin=1.2cm,itemsep=3pt,topsep=4pt}
+
+\titleformat{\section}{\Large\bfseries\color{HeaderBlue}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{مستند معماری هوش مصنوعی \lr{AI Chat SaaS}}
+\lhead{نسخه \lr{1.0}}
+\cfoot{\thepage}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+
+\newenvironment{diagramblock}
+{%
+  \VerbatimEnvironment
+  \begin{latin}
+  \begin{Verbatim}[
+    fontsize=\small,
+    frame=single,
+    rulecolor=\color{BorderGray},
+    baselinestretch=1,
+    xleftmargin=0.2cm,
+    xrightmargin=0.2cm
+  ]%
+}
+{%
+  \end{Verbatim}
+  \end{latin}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2.2cm}
+{\Huge\bfseries مستند معماری هوش مصنوعی \en{AI Chat SaaS}\par}
+\vspace{0.7cm}
+{\Large\bfseries \en{AI Architecture Documentation}\par}
+\vspace{1.3cm}
+{\large معماری دستیار هوشمند دانش‌محور برای پیشنهاد پاسخ، پاسخ خودکار، خزیدن محتوای سایت، بازیابی دانش و چرخه بهبود پرسش‌های بی‌پاسخ\par}
+\vfill
+\begin{tabular}{rl}
+\textbf{نام پروژه:} & \en{AI Chat SaaS} \\
+\textbf{نوع سند:} & مستند معماری هوش مصنوعی \\
+\textbf{نسخه سند:} & \en{1.0} \\
+\textbf{تاریخ:} & ۱۴ جولای ۲۰۲۶ \\
+\textbf{نویسنده/تهیه‌کننده:} & مبین یوسفی \\
+\textbf{مسیر سند:} & \code{doc/LaTeX/05-AI-Architecture/05-AI-Architecture.tex} \\
+\end{tabular}
+\vfill
+{\small این سند مطابق راهنمای \code{Rahnama.md} تهیه شده و بر پایه کدهای واقعی پروژه، سند \code{ArchitectureForMobin.md} و گزارش \code{ReportForSale.md} نوشته شده است.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{هدف و دامنه سند}
+هدف این سند توضیح دقیق این است که لایه هوش مصنوعی پروژه \en{AI Chat SaaS} چگونه کار می‌کند، داده را از چه منابعی می‌گیرد، چگونه دانش سایت مشتری را آماده می‌کند، چگونه سوال کاربر را تحلیل می‌کند، چگونه منبع مناسب را پیدا می‌کند، چگونه پاسخ می‌سازد و در چه شرایطی پاسخ مستقیم نمی‌دهد.
+
+این سند به‌صورت مشخص موارد خواسته‌شده در \code{Rahnama.md} برای «مستند معماری هوش مصنوعی» را پوشش می‌دهد:
+\begin{itemize}
+  \item \en{Pipeline} و \en{NLP Pipeline}
+  \item \en{Prompt Engineering} و منطق قالب‌های پرسش
+  \item \en{Embedding}، \en{Vector Database} و وضعیت فعلی آن‌ها
+  \item \en{Semantic Search}، بازیابی مستندات و امتیازدهی
+  \item \en{Intent Detection} و \en{Entity Extraction}
+  \item \en{Document Retrieval}، \en{Ranking} و \en{RAG}
+  \item \en{Memory} و \en{Context Management}
+  \item \en{Response Generation}، \en{Fallback Logic} و \en{Caching}
+  \item \en{Model Selection}، \en{Reasoning}، \en{Fine Tuning} و \en{Evaluation}
+\end{itemize}
+
+نکته مهم معماری این است که موتور فعال فعلی در مسیرهای اصلی محصول، یک سیستم دانش‌محور، امتیازدهی‌شده و استخراجی است. یعنی برای هر پاسخ الزاما به مدل زبانی خارجی متکی نیست؛ بلکه از دانش دستی، محتوای خزیده‌شده سایت، سوال‌های تولیدشده از محتوا، تشخیص نیت، جست‌وجوی متنی، تقویت امتیاز و آستانه اطمینان استفاده می‌کند. متغیرهای \code{OPENAI_API_KEY} و \code{OPENAI_MODEL} در پیکربندی وجود دارند، اما جریان فعال پاسخ‌دهی در فایل \code{backend/includes/ai-answer-engine.php} بر پایه جست‌وجوی محلی و ساخت پاسخ استخراجی پیاده‌سازی شده است.
+
+\section{نمای کلی معماری AI}
+لایه هوش مصنوعی پروژه از سه زیرسیستم اصلی تشکیل شده است:
+\begin{enumerate}
+  \item \textbf{زیرسیستم ساخت دانش:} شامل دانش دستی، منابع خزیدن سایت، خزنده، استخراج متن خوانا، قطعه‌بندی محتوا، استخراج واژه‌های مهم و تولید سوال‌های احتمالی.
+  \item \textbf{زیرسیستم بازیابی و رتبه‌بندی:} شامل نرمال‌سازی سوال، استخراج توکن‌ها، تشخیص نیت، جست‌وجو در منابع دانش، امتیازدهی، تقویت با termها و انتخاب بهترین نامزد.
+  \item \textbf{زیرسیستم مصرف پاسخ:} شامل پیشنهاد پاسخ برای agent، پاسخ خودکار widget در زمان آفلاین بودن پشتیبانی، fallback، ثبت لاگ و ثبت سوال‌های بی‌پاسخ برای بهبود آینده.
+\end{enumerate}
+
+\textbf{نمودار ۱: معماری کلان لایه AI}
+\begin{diagramblock}
+Customer Admin
+   |
+   | manage knowledge / crawl sources / AI settings
+   v
++-----------------------+      +-----------------------+
+| Manual Knowledge      |      | Website Crawler       |
+| knowledge_sources     |      | ai_crawl_sources/runs |
++-----------+-----------+      +-----------+-----------+
+            |                              |
+            v                              v
+   +-------------------------------------------------+
+   | AI Knowledge Store                              |
+   | ai_pages, ai_content_chunks, ai_terms,          |
+   | ai_generated_questions, ai_site_settings        |
+   +----------------------+--------------------------+
+                          |
+Visitor / Agent Question  |
+            |             v
+            +----> +-------------------------------+
+                   | AI Answer Engine              |
+                   | normalize, tokenize, intent,  |
+                   | search, score, rank, excerpt  |
+                   +---------------+---------------+
+                                   |
+            +----------------------+----------------------+
+            v                                             v
+ Agent Suggestion                              Widget Auto Reply
+ ai_suggestions                               messages(sender_type=ai)
+ ai_answer_logs                               fallback/unanswered/logs
+\end{diagramblock}
+
+\section{اجزای پیاده‌سازی}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4.5cm} p{10cm}}
+\toprule
+\textbf{فایل/جدول} & \textbf{نقش در معماری AI} \\
+\midrule
+\code{ai-crawler.php} & خزیدن صفحات، استخراج عنوان، توضیحات متا، تیتر اصلی، متن خوانا، لینک‌ها، قطعه‌بندی متن، استخراج term و تولید سوال‌های قالبی. \\
+{\footnotesize\code{ai-answer-engine.php}} & هسته پاسخ‌دهی؛ نرمال‌سازی سوال، استخراج توکن، تشخیص نیت، جست‌وجو در دانش دستی، chunks و generated questions، امتیازدهی و ساخت پاسخ استخراجی. \\
+\code{ai-helpers.php} & توابع کمکی AI شامل تبدیل مقدارها، محدودسازی score، دسترسی سایت مشتری، نرمال‌سازی host و اعتبارسنجی منبع crawl. \\
+\code{ai-crawl-start.php} & شروع crawl برای سایت مشتری، خواندن تنظیمات، صف URLها، اجرای خزیدن همزمان و ثبت summary اجرای crawl. \\
+{\scriptsize\code{ai-suggestion-generate.php}} & تولید پیشنهاد پاسخ برای agent با کنترل نقش، دسترسی سایت، قابلیت plan و آستانه \code{min_suggestion_score}. \\
+\code{ai-reply.php} & پاسخ خودکار به visitor در widget، فقط در صورت فعال بودن AI، آفلاین بودن پشتیبانی و عبور امتیاز از \code{min_auto_reply_score}. \\
+\code{ai_site_settings} & تنظیمات AI در سطح سایت؛ فعال/غیرفعال بودن assistant، auto reply، crawl، آستانه‌ها، حداکثر صفحات و پیام fallback. \\
+\code{ai_pages} & صفحات خزیده‌شده همراه با URL، عنوان، تیتر، متن تمیز، دسته‌بندی، intent، وضعیت crawl و hash محتوا. \\
+\code{ai_content_chunks} & قطعه‌های قابل جست‌وجو از صفحات، همراه با متن نرمال‌شده، category، intent، keywords و importance score. \\
+\code{ai_terms} & termهای استخراج‌شده از هر chunk برای تقویت امتیاز تطبیق. \\
+{\footnotesize\code{ai_generated_questions}} & سوال‌های احتمالی تولیدشده با template از محتوای هر chunk. \\
+\code{ai_answer_logs} & لاگ همه تلاش‌های پاسخ‌دهی، score، متن پاسخ، منبع‌های استفاده‌شده و mode پاسخ. \\
+{\footnotesize\code{ai_unanswered_questions}} & صف سوال‌هایی که پاسخ مطمئن نگرفته‌اند و باید توسط مشتری بررسی و به دانش اضافه شوند. \\
+\bottomrule
+\end{longtable}
+
+\newpage
+\section{Pipeline اصلی AI}
+جریان AI در محصول دو ورودی اصلی دارد: ساخت دانش و پاسخ‌دهی. ساخت دانش قبل از پاسخ‌دهی انجام می‌شود و خروجی آن پایگاه دانشی است که موتور پاسخ روی آن کار می‌کند.
+
+\subsection{Pipeline ساخت دانش}
+\textbf{نمودار ۲: Knowledge Ingestion Pipeline}
+\begin{diagramblock}
+AI Crawl Source / Manual Knowledge
+       |
+       v
+Validate tenant, site, role, source type, domain
+       |
+       v
+Fetch HTML page or sitemap URLs
+       |
+       v
+Extract title, meta description, H1, readable text, links
+       |
+       v
+Normalize text and remove duplicate lines
+       |
+       v
+Detect category and intent from URL/title/text
+       |
+       v
+Split readable text into chunks
+       |
+       v
+Extract terms and calculate importance score
+       |
+       v
+Generate template questions per chunk
+       |
+       v
+Store pages, chunks, terms, generated questions, crawl summary
+\end{diagramblock}
+
+در این pipeline، منابع crawl در جدول \code{ai_crawl_sources} تعریف می‌شوند و می‌توانند از نوع \code{url}، \code{path_prefix} یا \code{sitemap} باشند. endpoint شروع crawl، منابع فعال را می‌خواند، تنظیمات سایت را اعمال می‌کند، URLها را در صف قرار می‌دهد و تا سقف \code{max_pages_per_crawl} و \code{max_depth} صفحات را دریافت می‌کند. هر URL باید به دامنه همان سایت تعلق داشته باشد؛ این کنترل با توابع \code{ai_host_belongs_to_site} و \code{ai_validate_crawl_source} انجام می‌شود.
+
+\subsection{Pipeline پاسخ‌دهی}
+\textbf{نمودار ۳: Answer Pipeline}
+\begin{diagramblock}
+Visitor or Agent Question
+       |
+       v
+Normalize question
+       |
+       v
+Extract meaningful tokens and remove stop words
+       |
+       v
+Detect category and intent
+       |
+       v
+Search candidates:
+  - knowledge_sources
+  - ai_generated_questions
+  - ai_content_chunks
+       |
+       v
+Score candidates:
+  token match + question match + answer match
+  + intent/category boost + term boost
+  + manual knowledge boost + FAQ/approved boost
+       |
+       v
+Rank candidates and select best answer
+       |
+       v
+Build extractive reply from best source text
+       |
+       v
+Apply threshold:
+  suggestion >= min_suggestion_score
+  auto reply >= min_auto_reply_score
+       |
+       v
+Return answer or fallback, log result, save unanswered if needed
+\end{diagramblock}
+
+تابع مرکزی این جریان \code{ai_find_best_answer()} است. این تابع خروجی‌هایی مانند \code{confidence_score}، \code{answer}، \code{sources}، \code{matched_chunk_id}، \code{matched_question_id} و \code{best_candidates} تولید می‌کند. سپس endpoint مصرف‌کننده تصمیم می‌گیرد آیا پاسخ به agent پیشنهاد شود، مستقیم در widget ارسال شود یا fallback فعال شود.
+
+\section{NLP Pipeline}
+پردازش زبان طبیعی در نسخه فعلی سبک و rule-based است. هدف آن ساخت یک سیستم قابل توضیح، قابل کنترل و وابسته به دانش تاییدشده مشتری است.
+
+\subsection{نرمال‌سازی متن}
+تابع \code{ai_normalize_text()} کارهای زیر را انجام می‌دهد:
+\begin{itemize}
+  \item تبدیل HTML entityها به متن قابل خواندن.
+  \item یکسان‌سازی برخی نویسه‌های عربی و فارسی مانند «ي» به «ی» و «ك» به «ک».
+  \item حذف فاصله‌های تکراری و مرتب‌سازی شکست خط‌ها.
+  \item آماده‌سازی متن برای ذخیره، جست‌وجو و امتیازدهی.
+\end{itemize}
+
+\subsection{توکن‌سازی سوال}
+تابع \code{ai_question_tokens()} سوال را کوچک‌سازی، پاک‌سازی و به توکن تبدیل می‌کند. سپس کلمات توقف فارسی و انگلیسی حذف می‌شوند و حداکثر ۱۲ توکن متمایز برای جست‌وجو نگه داشته می‌شود. این محدودیت باعث می‌شود queryهای SQL کنترل‌شده‌تر بمانند و سوال‌های طولانی، موتور جست‌وجو را بیش از حد گسترده نکنند.
+
+\subsection{تشخیص نیت و دسته‌بندی}
+تابع \code{ai_detect_question_intent()} با keyword ruleها intent سوال را تشخیص می‌دهد. intentهای فعلی شامل موارد زیر هستند:
+\begin{itemize}
+  \item \code{pricing}: قیمت، هزینه، تعرفه و پرداخت
+  \item \code{contact}: تماس، آدرس، شماره تماس و موقعیت
+  \item \code{appointment}: نوبت‌دهی، رزرو و وقت مشاوره
+  \item \code{shipping}: ارسال، تحویل و مرسوله
+  \item \code{faq}: سوالات متداول
+  \item \code{service_info}: اطلاعات خدمات یا محصول
+  \item \code{general_info}: حالت عمومی در صورت نبود تطبیق مشخص
+\end{itemize}
+
+\section{Prompt Engineering و منطق قالب‌ها}
+در جریان فعال فعلی، prompt به معنای ارسال متن به LLM خارجی استفاده نمی‌شود. اما سیستم از «قالب‌های تولید سوال» و «قالب پاسخ استخراجی» استفاده می‌کند که نقش مشابهی در کنترل خروجی دارند.
+
+\subsection{قالب تولید سوال}
+تابع \code{ai_generate_questions_from_chunk()} براساس intent هر chunk سوال‌های احتمالی تولید می‌کند. برای مثال اگر intent برابر \code{pricing} باشد، سوال‌هایی درباره هزینه و تعرفه ساخته می‌شود؛ اگر intent برابر \code{appointment} باشد، سوال‌هایی درباره رزرو و نوبت ساخته می‌شود. این سوال‌های قالبی در \code{ai_generated_questions} ذخیره می‌شوند و هنگام پاسخ‌دهی به‌عنوان نامزد بازیابی استفاده می‌شوند.
+
+\subsection{قالب پاسخ استخراجی}
+تابع \code{ai_build_excerpt_reply()} متن منبع منتخب را به جمله‌های کوتاه‌تر تقسیم می‌کند، جمله‌های نزدیک‌تر به سوال را امتیازدهی می‌کند و نهایتا یک پاسخ کوتاه با پیشوند «طبق اطلاعات سایت» می‌سازد. این طراحی باعث می‌شود پاسخ به منبع واقعی سایت متکی باشد و از تولید آزاد و غیرقابل کنترل جلوگیری شود.
+
+\section{Embedding و Vector Database}
+در نسخه فعلی، پروژه جدول embedding یا پایگاه برداری اختصاصی ندارد. جست‌وجوی فعال با \code{LIKE}، FULLTEXT indexهای MySQL، توکن‌های نرمال‌شده، term boost و امتیازدهی rule-based انجام می‌شود. بنابراین وضعیت فعلی معماری به شکل زیر است:
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4.3cm} p{10.2cm}}
+\toprule
+\textbf{مفهوم} & \textbf{وضعیت در نسخه فعلی} \\
+\midrule
+\en{Embedding} & پیاده‌سازی نشده است. معادل عملی فعلی، نرمال‌سازی متن، استخراج term و scoring متنی است. \\
+\en{Vector Database} & وجود ندارد. پایگاه اصلی MySQL است و جداول AI با index و FULLTEXT آماده شده‌اند. \\
+\en{Semantic Search} & به‌صورت کامل برداری نیست؛ به‌صورت جست‌وجوی معنایی سبک با intent/category، term boost، سوال‌های تولیدی و رتبه‌بندی ترکیبی پیاده‌سازی شده است. \\
+\en{Future Path} & امکان افزودن ستون‌های embedding برای chunkها و سوال‌ها، و اتصال به pgvector، Qdrant، Milvus یا سرویس مشابه در نسخه‌های بعدی وجود دارد. \\
+\bottomrule
+\end{longtable}
+
+این تصمیم برای MVP منطقی است، چون پاسخ‌ها قابل توضیح و قابل کنترل هستند، هزینه inference خارجی کاهش می‌یابد و محصول می‌تواند بدون وابستگی کامل به سرویس ثالث کار کند. در عین حال برای دقت معنایی بهتر در سوال‌های پارافرایز شده، افزودن embedding در مسیر توسعه آینده توصیه می‌شود.
+
+\section{Semantic Search و Document Retrieval}
+موتور جست‌وجوی پاسخ سه منبع را همزمان بررسی می‌کند:
+\begin{enumerate}
+  \item \textbf{دانش دستی:} جدول \code{knowledge_sources} که توسط customer admin ایجاد می‌شود.
+  \item \textbf{سوال‌های تولیدشده:} جدول \code{ai_generated_questions} که از chunks ساخته شده است.
+  \item \textbf{قطعه‌های محتوایی:} جدول \code{ai_content_chunks} که متن صفحات خزیده‌شده را نگه می‌دارد.
+\end{enumerate}
+
+برای هر منبع، candidateهای مرتبط با توکن‌های سوال بازیابی می‌شوند. سپس موتور به هر candidate امتیاز می‌دهد. دانش دستی به‌صورت عمدی boost بالاتری دریافت می‌کند، چون داده‌ای است که مشتری آگاهانه وارد کرده و معمولا دقیق‌تر از متن خام سایت است.
+
+\subsection{Ranking}
+امتیاز نهایی از ترکیب چند عامل ساخته می‌شود:
+\begin{itemize}
+  \item تعداد و وزن توکن‌های تطبیق‌یافته.
+  \item تطبیق سوال اصلی با عنوان، سوال یا متن منبع.
+  \item تطبیق intent و category تشخیص‌داده‌شده.
+  \item term boost از جدول \code{ai_terms}.
+  \item importance score هر chunk.
+  \item اولویت دانش دستی، وضعیت \code{approved} و نوع \code{faq}.
+\end{itemize}
+
+خروجی ranking فقط یک answer نیست؛ بلکه top sources و best candidates را هم برمی‌گرداند تا در debug، analytics و بهبود آینده قابل استفاده باشند.
+
+\section{RAG در معماری فعلی}
+اگر \en{RAG} را به‌معنای «بازیابی دانش مرتبط و ساخت پاسخ بر پایه آن دانش» در نظر بگیریم، معماری فعلی یک RAG استخراجی و rule-based است. تفاوت آن با RAG متداول LLMمحور این است که مرحله generation با LLM انجام نمی‌شود؛ بلکه پاسخ از متن منبع منتخب استخراج و خلاصه‌سازی سبک می‌شود.
+
+\textbf{نمودار ۴: RAG استخراجی فعلی}
+\begin{diagramblock}
+Question
+  |
+  v
+Retriever:
+  manual knowledge + generated questions + chunks
+  |
+  v
+Ranker:
+  token score + intent/category + term boost
+  |
+  v
+Context:
+  best source text + top sources
+  |
+  v
+Generator:
+  extract best sentences from source text
+  |
+  v
+Answer / Fallback / Unanswered Queue
+\end{diagramblock}
+
+این روش برای پشتیبانی مشتری مزیت دارد، چون پاسخ‌ها به محتوای تاییدشده سایت محدود می‌شوند و ریسک پاسخ‌سازی بی‌پایه کاهش می‌یابد.
+
+\section{Entity Extraction}
+در نسخه فعلی entity extraction به‌صورت یک ماژول مستقل پیاده‌سازی نشده است. اما برخی نشانه‌های معنایی از متن استخراج می‌شوند:
+\begin{itemize}
+  \item termهای پرتکرار و مهم از هر chunk در \code{ai_terms}.
+  \item category و intent برای page، chunk و question.
+  \item URL، title، meta description و main heading به‌عنوان metadata قابل بازیابی.
+\end{itemize}
+
+برای نسخه‌های بعدی، entityهایی مانند نام محصول، خدمت، شهر، شماره تماس، قیمت، تاریخ، ساعت کاری و نام شعبه می‌توانند به‌صورت ساختاریافته استخراج و در جداول جداگانه یا JSON metadata ذخیره شوند.
+
+\section{Memory و Context Management}
+معماری فعلی دو نوع حافظه دارد:
+\begin{enumerate}
+  \item \textbf{حافظه مکالمه:} پیام‌ها در \code{messages} و گفتگوها در \code{conversations} ذخیره می‌شوند. AI suggestion از آخرین پیام visitor در conversation استفاده می‌کند.
+  \item \textbf{حافظه دانشی:} دانش دستی، صفحات خزیده‌شده، chunks، terms و generated questions در جداول AI ذخیره می‌شوند و بین مکالمات قابل استفاده‌اند.
+\end{enumerate}
+
+در نسخه فعلی، پاسخ‌دهی AI تاریخچه کامل مکالمه را به‌عنوان context چندمرحله‌ای تحلیل نمی‌کند. تمرکز آن روی آخرین سوال visitor و دانش سایت است. این انتخاب ساده و قابل کنترل است، اما برای سوال‌های پیگیری مانند «قیمت همان مورد چقدر است؟» نیاز به توسعه context resolver وجود دارد.
+
+\section{Response Generation}
+تولید پاسخ در سیستم فعلی شامل انتخاب بهترین منبع و ساخت پاسخ استخراجی است:
+\begin{enumerate}
+  \item بهترین candidate براساس score انتخاب می‌شود.
+  \item متن پاسخ از \code{answer_text}، \code{content} یا \code{chunk_text} برداشته می‌شود.
+  \item متن به جمله‌ها تقسیم می‌شود.
+  \item جمله‌هایی که با توکن‌های سوال تطبیق بیشتری دارند انتخاب می‌شوند.
+  \item پاسخ کوتاه و کنترل‌شده ساخته می‌شود.
+\end{enumerate}
+
+در حالت پیشنهاد برای agent، این پاسخ در جدول \code{ai_suggestions} ذخیره می‌شود. در حالت پاسخ خودکار widget، اگر score کافی باشد یک پیام با \code{sender_type = 'ai'} در جدول \code{messages} ثبت می‌شود.
+
+\section{Fallback Logic}
+منطق fallback یکی از نقاط مهم اعتمادپذیری سیستم است. AI فقط زمانی پاسخ مستقیم می‌دهد که شرایط زیر برقرار باشد:
+\begin{itemize}
+  \item سایت فعال باشد و tenant فعال باشد.
+  \item \code{sites.ai_mode} برابر \code{off} نباشد.
+  \item \code{ai_site_settings.assistant_enabled} فعال باشد.
+  \item برای auto reply، \code{auto_reply_enabled} فعال باشد.
+  \item برای auto reply، پشتیبان انسانی در دو دقیقه اخیر آنلاین نباشد.
+  \item برای auto reply، پاسخ تکراری برای همان پیام قبلا ثبت نشده باشد.
+  \item \code{confidence_score} از آستانه \code{min_auto_reply_score} عبور کند.
+\end{itemize}
+
+اگر score پایین باشد، متن fallback ارسال یا پیشنهاد می‌شود و سوال در \code{ai_unanswered_questions} ذخیره می‌شود. این رفتار باعث می‌شود شکست پاسخ‌دهی به یک داده آموزشی عملی برای بهبود knowledge base تبدیل شود.
+
+\section{Caching}
+در نسخه فعلی caching اختصاصی برای پاسخ‌های AI یا retrieval وجود ندارد. اما چند نوع cache/جلوگیری از تکرار به‌صورت عملی دیده می‌شود:
+\begin{itemize}
+  \item جلوگیری از پاسخ خودکار تکراری برای یک \code{message_id} از طریق بررسی \code{ai_answer_logs}.
+  \item استفاده از hash برای URL و محتوا در \code{ai_pages} و \code{ai_content_chunks}.
+  \item استفاده از \code{ON DUPLICATE KEY UPDATE} برای به‌روزرسانی صفحه خزیده‌شده به‌جای ایجاد رکورد تکراری.
+  \item نگهداری دانش آماده‌شده در جداول AI، تا هر سوال نیازمند crawl یا پردازش مجدد HTML نباشد.
+\end{itemize}
+
+برای نسخه production، cache تنظیمات سایت، cache نتیجه جست‌وجو برای سوال‌های پرتکرار و queue برای crawlهای سنگین پیشنهاد می‌شود.
+
+\section{Model Selection}
+مدل فعال فعلی یک مدل rule-based/extractive داخلی است، نه یک مدل زبانی خارجی. انتخاب این مدل برای نسخه فعلی چند دلیل فنی دارد:
+\begin{itemize}
+  \item پاسخ‌ها باید به دانش مشتری محدود و قابل توضیح باشند.
+  \item هزینه پاسخ‌دهی برای SaaS چندمستاجری باید قابل کنترل باشد.
+  \item محصول باید حتی بدون API خارجی در جریان اصلی کار کند.
+  \item پشتیبان انسانی همچنان مسیر اصلی کنترل و اصلاح پاسخ است.
+\end{itemize}
+
+با این حال، متغیرهای محیطی \code{OPENAI_API_KEY} و \code{OPENAI_MODEL} نشان می‌دهند که معماری برای افزودن LLM آماده‌سازی اولیه دارد. مسیر تکامل مناسب این است که LLM فقط بعد از retrieval و با context محدود و citation/source guardrails استفاده شود، نه به‌عنوان پاسخ‌دهنده آزاد بدون منبع.
+
+\section{Reasoning}
+Reasoning در این معماری به‌صورت symbolic و قابل توضیح انجام می‌شود. موتور به‌جای استدلال زبانی آزاد، چند تصمیم قابل ردیابی می‌گیرد:
+\begin{itemize}
+  \item سوال کوتاه یا بدون توکن معنی‌دار رد می‌شود.
+  \item intent و category با rule تشخیص داده می‌شود.
+  \item منابع مرتبط با SQL و token matching پیدا می‌شوند.
+  \item هر منبع با score عددی رتبه‌بندی می‌شود.
+  \item اگر score به آستانه نرسد، fallback فعال می‌شود.
+  \item همه تصمیم‌ها در \code{ai_answer_logs} و در صورت شکست در \code{ai_unanswered_questions} قابل پیگیری هستند.
+\end{itemize}
+
+این نوع reasoning برای کاربرد پشتیبانی مشتری مناسب است، چون خروجی آن قابل audit و قابل دفاع است.
+
+\section{Fine Tuning}
+در نسخه فعلی fine-tuning مدل زبانی وجود ندارد. اما سیستم یک چرخه بهبود داده دارد که نقش عملی مشابه برای افزایش کیفیت پاسخ‌ها ایفا می‌کند:
+\begin{enumerate}
+  \item سوال visitor ثبت می‌شود.
+  \item اگر AI پاسخ مطمئن پیدا نکند، سوال وارد صف unanswered می‌شود.
+  \item customer admin سوال را بررسی می‌کند.
+  \item admin می‌تواند آن را به knowledge base اضافه کند.
+  \item پاسخ‌های بعدی با دانش جدید score بهتری می‌گیرند.
+\end{enumerate}
+
+اگر در آینده LLM یا embedding model اضافه شود، داده‌های \code{ai_unanswered_questions}، \code{ai_answer_logs}، تصمیم agentها درباره \code{ai_suggestions} و دانش تاییدشده می‌توانند dataset مناسبی برای evaluation، prompt improvement یا fine-tuning باشند.
+
+\section{Evaluation}
+ارزیابی AI باید هم از نظر فنی و هم از نظر تجربه پشتیبانی انجام شود. معیارهای پیشنهادی:
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4cm} p{10.5cm}}
+\toprule
+\textbf{معیار} & \textbf{روش اندازه‌گیری} \\
+\midrule
+\en{Answer Rate} & نسبت سوال‌هایی که score آن‌ها از آستانه suggestion یا auto reply عبور می‌کند. \\
+\en{Fallback Rate} & نسبت سوال‌هایی که به fallback یا no answer منتهی می‌شوند. \\
+\en{Accepted Suggestion Rate} & نسبت پیشنهادهایی که agent آن‌ها را accepted، edited یا used می‌کند. \\
+\en{Unanswered Resolution Rate} & نسبت سوال‌های بی‌پاسخ که توسط admin بررسی و به دانش اضافه می‌شوند. \\
+\en{Source Quality} & بررسی اینکه پاسخ از دانش دستی، generated question یا chunk خام آمده است و کدام منبع موفق‌تر است. \\
+\en{Latency} & زمان اجرای \code{ai_find_best_answer()} و endpointهای \code{ai-reply.php} و \code{ai-suggestion-generate.php}. \\
+\en{Coverage by Intent} & تعداد و کیفیت پاسخ‌ها در intentهایی مانند pricing، contact، appointment و shipping. \\
+\en{Safety} & بررسی پاسخ‌های fallback، جلوگیری از پاسخ بدون منبع و جلوگیری از پاسخ مستقیم هنگام آنلاین بودن پشتیبان. \\
+\bottomrule
+\end{longtable}
+
+برای demo و ارزیابی پارک علم و فناوری، پیشنهاد می‌شود چند سناریوی واقعی از سایت نمونه آماده شود: سوال قیمت، سوال تماس، سوال خدمات، سوال نامرتبط و سوالی که باید fallback شود. سپس لاگ‌ها، scoreها، sources و مسیر تبدیل unanswered به knowledge نمایش داده شود.
+
+\section{کنترل‌های امنیتی و دسترسی در AI}
+AI در این پروژه خارج از مدل امنیتی اصلی SaaS عمل نمی‌کند؛ بلکه به tenant، site، role و plan محدود است.
+\begin{itemize}
+  \item customer admin فقط سایت‌های tenant خودش را برای crawl و تنظیمات AI مدیریت می‌کند.
+  \item agent و customer admin برای پیشنهاد AI باید به conversation و site دسترسی داشته باشند.
+  \item endpoint پیشنهاد AI قابلیت plan با کلید \code{ai_suggestions_enabled} را بررسی می‌کند.
+  \item پاسخ خودکار widget با \code{site_key}، visitor، conversation، message، tenant status، site status، origin validation و rate limit کنترل می‌شود.
+  \item crawl source باید به دامنه همان سایت تعلق داشته باشد و از بیرون دامنه مشتری پذیرفته نمی‌شود.
+\end{itemize}
+
+نکته قابل بهبود برای production این است که در fetchهای crawler، SSL verification در کد فعلی غیرفعال است. برای محیط عملیاتی باید این رفتار بازبینی و ایمن‌تر شود.
+
+\section{محدودیت‌های فعلی و مسیر توسعه}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4.2cm} p{10.3cm}}
+\toprule
+\textbf{محدودیت} & \textbf{مسیر توسعه پیشنهادی} \\
+\midrule
+نبود embedding & افزودن embedding برای \code{ai_content_chunks} و \code{ai_generated_questions} و استفاده از vector search در کنار scoring فعلی. \\
+نبود vector database & اتصال به pgvector، Qdrant یا Milvus، یا استفاده از قابلیت برداری دیتابیس انتخابی در آینده. \\
+Context محدود به آخرین پیام & افزودن context resolver برای سوال‌های پیگیری و خلاصه مکالمه. \\
+Crawler همزمان در request & انتقال crawlهای بزرگ به queue و worker با وضعیت \code{queued/running/completed}. \\
+Entity extraction مستقل ندارد & استخراج ساختاریافته قیمت، شماره تماس، زمان، آدرس، نام محصول و خدمت. \\
+Evaluation خودکار محدود است & ساخت benchmark داخلی از سوال/پاسخ‌های تاییدشده و محاسبه precision، recall و latency. \\
+LLM در جریان فعال استفاده نمی‌شود & افزودن LLM اختیاری بعد از retrieval با context محدود، guardrail و ثبت source. \\
+\bottomrule
+\end{longtable}
+
+\section{جمع‌بندی}
+معماری هوش مصنوعی \en{AI Chat SaaS} در نسخه فعلی یک معماری دانش‌محور، قابل کنترل و قابل توضیح است. این معماری از crawler، دانش دستی، قطعه‌بندی محتوا، term extraction، generated questions، intent detection، retrieval، ranking و آستانه اطمینان برای پاسخ‌دهی استفاده می‌کند. پاسخ‌ها یا به agent پیشنهاد می‌شوند یا در صورت آفلاین بودن پشتیبانی و عبور از آستانه، به‌صورت خودکار در widget ارسال می‌شوند.
+
+مزیت اصلی این طراحی برای محصول SaaS پشتیبانی مشتری این است که AI نقش کمک‌کننده دارد، نه جایگزین کامل انسان. agent می‌تواند پاسخ را ببیند، ویرایش کند یا رد کند؛ customer admin می‌تواند سوال‌های بی‌پاسخ را به دانش اضافه کند؛ و همه تلاش‌های پاسخ‌دهی در لاگ‌ها قابل بررسی هستند. بنابراین سیستم علاوه بر کاربرد عملی در demo، یک هسته فنی قابل توسعه برای RAG برداری، LLM کنترل‌شده، ارزیابی خودکار و بهبود تدریجی دانش دارد.
+
+\end{document}
