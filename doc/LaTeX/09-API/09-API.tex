@@ -1,0 +1,591 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[a4paper,top=25mm,bottom=25mm,left=22mm,right=22mm]{geometry}
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{fancyvrb}
+\usepackage{tabularx}
+
+\IfFontExistsTF{Vazirmatn}{
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \settextfont{Tahoma}
+  }{
+    \settextfont{Arial}
+  }
+}
+\IfFontExistsTF{Consolas}{
+  \setlatintextfont{Consolas}
+}{
+  \setlatintextfont{Courier New}
+}
+
+\definecolor{primary}{HTML}{1F4E79}
+\definecolor{softgray}{HTML}{F3F6F8}
+\definecolor{danger}{HTML}{A61B1B}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=primary,
+  urlcolor=primary,
+  citecolor=primary,
+  pdftitle={مستند API سامانه AI Chat SaaS},
+  pdfauthor={Mobin Yousefi}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{مستند API}
+\lhead{AI Chat SaaS}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\Large\bfseries\color{primary}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{primary}}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{primary}}{\thesubsubsection}{0.7em}{}
+\setlist[itemize]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.35}
+\setlength{\LTpre}{6pt}
+\setlength{\LTpost}{6pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlength{\headheight}{15pt}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newenvironment{apiblock}{\VerbatimEnvironment\begin{latin}\begin{Verbatim}[fontsize=\small,frame=single,rulecolor=\color{softgray}]}{\end{Verbatim}\end{latin}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{22mm}
+{\Huge\bfseries\color{primary} مستند API سامانه AI Chat SaaS\par}
+\vspace{10mm}
+{\Large بخش ۹ راهنمای مستندات پروژه\par}
+\vspace{20mm}
+{\large \textbf{نسخه سند:} 1.0\par}
+\vspace{3mm}
+{\large \textbf{تاریخ تدوین:} ۱۵ جولای ۲۰۲۶\par}
+\vspace{3mm}
+{\large \textbf{تهیه‌کننده:} مبین یوسفی\par}
+\vspace{3mm}
+{\large \textbf{مسیر خروجی:} \code{doc/LaTeX/09-API/09-API.tex}\par}
+\vspace{3mm}
+{\large \textbf{منابع بررسی‌شده:} \code{Rahnama.md}، \code{ArchitectureForMobin.md}، \code{ReportForSale.md} و کدهای \code{backend/api}\par}
+\vfill
+{\large مستند فنی رابط‌های برنامه‌نویسی، قراردادهای درخواست/پاسخ، کنترل دسترسی و جریان‌های اصلی مصرف API}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{هدف و دامنه سند}
+این سند قراردادهای API سامانه \en{AI Chat SaaS} را برای مصرف‌کنندگان داخلی و خارجی توضیح می‌دهد. دامنه سند شامل APIهای احراز هویت، ویجت عمومی، پنل اپراتور، پنل مشتری و پنل سوپرادمین است. مبنای تدوین، کدهای فعلی پوشه \code{backend/api} و قواعد معماری پروژه است؛ بنابراین نام endpointها، روش احراز هویت، نقش‌های مجاز، وضعیت‌های خطا و جریان‌های عملیاتی با پیاده‌سازی موجود هماهنگ شده‌اند.
+
+سامانه از معماری \en{Plain PHP API} روی \en{PDO/MySQL} استفاده می‌کند. هر فایل PHP در پوشه \code{backend/api} عملا یک endpoint مستقل است و مسیریاب مرکزی یا نسخه‌بندی مسیر مانند \code{/api/v1} در وضعیت فعلی وجود ندارد. پاسخ‌ها با قالب JSON، هدرهای امنیتی پایه و وضعیت HTTP مناسب تولید می‌شوند.
+
+\section{قراردادهای عمومی API}
+
+\subsection{آدرس پایه}
+در محیط واقعی، آدرس پایه باید با دامنه نصب‌شده پروژه جایگزین شود. در این سند از نمونه زیر استفاده می‌شود:
+
+\begin{apiblock}
+https://api.example.com/backend/api
+\end{apiblock}
+
+نمونه مسیر کامل:
+\begin{apiblock}
+POST https://api.example.com/backend/api/auth/login.php
+\end{apiblock}
+
+\subsection{قالب داده و هدرها}
+\begin{itemize}
+  \item پاسخ‌ها با \code{Content-Type: application/json; charset=utf-8} برگردانده می‌شوند.
+  \item درخواست‌های معمولی با \code{Content-Type: application/json} ارسال می‌شوند.
+  \item endpointهای بارگذاری فایل مانند \code{attachment-send.php} و \code{announcement-image-upload.php} از \code{multipart/form-data} استفاده می‌کنند.
+  \item APIهای پنل با هدر \code{Authorization: Bearer <token>} محافظت می‌شوند.
+  \item APIهای عمومی ویجت به‌جای JWT از \code{site_key}، کنترل مبدا \en{Origin} و محدودیت نرخ استفاده می‌کنند.
+\end{itemize}
+
+\subsection{قالب پاسخ موفق و خطا}
+قالب پاسخ‌ها بسته به endpoint شامل فیلدهای داده‌ای متفاوت است، اما الگوی غالب به شکل زیر است:
+
+\begin{apiblock}
+{
+  "success": true,
+  "message": "Operation completed",
+  "data": {}
+}
+\end{apiblock}
+
+نمونه خطا:
+\begin{apiblock}
+{
+  "success": false,
+  "message": "Unauthorized"
+}
+\end{apiblock}
+
+در محیط production، پاسخ‌های 5xx توسط لایه مشترک پاسخ‌دهی پاک‌سازی می‌شوند و کلیدهای حساس مانند \code{debug}، \code{trace}، \code{file}، \code{line}، \code{sql} و \code{pdo_error} از خروجی حذف می‌شوند.
+
+\subsection{کدهای وضعیت HTTP}
+\begin{longtable}{R{26mm} R{112mm}}
+\toprule
+\textbf{کد} & \textbf{معنا در سامانه} \\
+\midrule
+\endhead
+\code{200} & عملیات خواندن یا به‌روزرسانی با موفقیت انجام شده است. \\
+\code{201} & موجودیت جدید مانند مشتری، پلن، پاسخ آماده یا منبع دانش ایجاد شده است. \\
+\code{204} & پاسخ preflight برای درخواست \code{OPTIONS} در APIهای ویجت. \\
+\code{400} & پارامترهای الزامی ناقص، مقدار نامعتبر، شناسه نامعتبر یا درخواست ناسازگار با وضعیت فعلی. \\
+\code{401} & توکن ارسال نشده، نامعتبر است یا کاربر احراز هویت نشده است. \\
+\code{403} & نقش کاربر، وضعیت tenant، وضعیت سایت یا دسترسی به قابلیت پلن اجازه انجام عملیات را نمی‌دهد. \\
+\code{404} & موجودیت هدف مانند گفتگو، سایت، کاربر، مشتری، پلن یا اعلان پیدا نشده است. \\
+\code{405} & متد HTTP endpoint رعایت نشده است. \\
+\code{422} & داده معتبر از نظر ساختار ارسال شده، اما از نظر قواعد دامنه قابل پذیرش نیست. \\
+\code{429} & محدودیت نرخ برای شناسه درخواست‌کننده فعال شده است و باید بعد از \code{Retry-After} تلاش شود. \\
+\code{500} & خطای داخلی سرور یا خطای وابستگی مانند پایگاه داده/ماژول هوش مصنوعی. \\
+\bottomrule
+\end{longtable}
+
+\subsection{احراز هویت و نقش‌ها}
+توکن JWT در login صادر می‌شود و در APIهای پنل استفاده می‌گردد. اعتبار توکن فقط به امضای JWT محدود نیست؛ هنگام هر درخواست، کاربر از پایگاه داده خوانده می‌شود، فعال بودن او بررسی می‌شود، مقدار \code{token_version} با payload توکن تطبیق داده می‌شود و برای کاربران غیرسوپرادمین، فعال بودن tenant نیز کنترل می‌شود.
+
+\begin{apiblock}
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+\end{apiblock}
+
+نقش‌های اصلی:
+\begin{itemize}
+  \item \code{super_admin}: مدیریت کل سامانه، tenantها، مشتریان، پلن‌ها، سایت‌ها، اعلان‌ها و مانیتورینگ.
+  \item \code{customer_admin}: مدیریت سایت‌های tenant، تیم، تنظیمات ویجت، دانش، AI و گزارش‌ها.
+  \item \code{agent}: پاسخ‌گویی به گفتگوها، مشاهده اعلان‌ها، حضور آنلاین و استفاده از پیشنهادهای AI در محدوده سایت‌های مجاز.
+\end{itemize}
+
+\section{کاتالوگ Endpointها}
+
+\subsection{احراز هویت}
+\begin{longtable}{R{34mm} R{16mm} R{30mm} R{48mm} R{36mm}}
+\toprule
+\textbf{Endpoint} & \textbf{متد} & \textbf{دسترسی} & \textbf{ورودی اصلی} & \textbf{خروجی/خطا} \\
+\midrule
+\endhead
+\code{auth/login.php} & \code{POST} & عمومی & \code{email}, \code{password} & صدور توکن، اطلاعات کاربر و tenant؛ خطا برای اعتبارنامه نامعتبر یا کاربر/tenant غیرفعال. \\
+\code{auth/me.php} & \code{GET} & JWT & بدون بدنه & اطلاعات کاربر فعلی و زمینه دسترسی. \\
+\code{auth/change-password.php} & \code{POST} & JWT & \code{current_password}, \code{new_password} & تغییر رمز کاربر؛ خطا برای رمز فعلی نادرست یا رمز جدید نامعتبر. \\
+\code{auth/logout-all.php} & \code{POST} & JWT & بدون بدنه & افزایش \code{token_version} و ابطال همه توکن‌های قبلی کاربر. \\
+\bottomrule
+\end{longtable}
+
+\subsection{ویجت عمومی}
+\begin{longtable}{R{38mm} R{16mm} R{32mm} R{48mm} R{30mm}}
+\toprule
+\textbf{Endpoint} & \textbf{متد} & \textbf{دسترسی} & \textbf{ورودی اصلی} & \textbf{خروجی/خطا} \\
+\midrule
+\endhead
+\code{widget/config.php} & \code{GET} & عمومی با \code{site_key} و \en{Origin} & \code{site_key} & تنظیمات ظاهری و رفتاری ویجت؛ خطا برای سایت نامعتبر یا غیرفعال. \\
+\code{widget/visitor-start.php} & \code{POST} & عمومی با کنترل نرخ & \code{site_key}, \code{browser_id}, اطلاعات اختیاری بازدیدکننده & ایجاد/به‌روزرسانی visitor و بازگرداندن \code{visitor_id}. \\
+\code{widget/conversation-start.php} & \code{POST} & عمومی با کنترل نرخ & \code{site_key}, \code{visitor_id}, \code{source_url}, \code{source_title} & ایجاد گفتگو یا بازگرداندن گفتگوی باز؛ خطا برای visitor نامعتبر یا محدودیت پلن. \\
+\code{widget/message-send.php} & \code{POST} & عمومی با کنترل نرخ & \code{site_key}, \code{visitor_id}, \code{conversation_id}, \code{content} & ثبت پیام بازدیدکننده و به‌روزرسانی گفتگو؛ خطا برای گفتگوی بسته یا متن بیش‌ازحد. \\
+\code{widget/attachment-send.php} & \code{POST} & عمومی، \code{multipart/form-data} & \code{site_key}, \code{visitor_id}, \code{conversation_id}, \code{file}, پیام اختیاری & بارگذاری پیوست و ثبت پیام فایل. \\
+\code{widget/messages-list.php} & \code{GET} & عمومی با \code{site_key} & \code{site_key}, \code{visitor_id}, \code{conversation_id} & فهرست پیام‌های گفتگو برای polling سمت ویجت. \\
+\code{widget/typing-status.php} & \code{GET} & عمومی با \code{site_key} & \code{site_key}, \code{visitor_id}, \code{conversation_id} & وضعیت تایپ اپراتور/سیستم. \\
+\code{widget/ai-reply.php} & \code{POST} & عمومی با کنترل نرخ و تنظیمات AI & \code{site_key}, \code{visitor_id}, \code{conversation_id}, \code{message_id} & تولید پاسخ خودکار AI در صورت فعال بودن؛ خطا برای پاسخ تکراری، گفتگوی بسته، اپراتور آنلاین یا AI غیرفعال. \\
+\bottomrule
+\end{longtable}
+
+\subsection{پنل اپراتور}
+\begin{longtable}{R{42mm} R{16mm} R{34mm} R{44mm} R{28mm}}
+\toprule
+\textbf{Endpoint} & \textbf{متد} & \textbf{دسترسی} & \textbf{ورودی اصلی} & \textbf{خروجی/خطا} \\
+\midrule
+\endhead
+\code{agent/conversations-list.php} & \code{GET} & \code{customer_admin}, \code{agent} & فیلترهای اختیاری مانند سایت، وضعیت، جست‌وجو و صفحه‌بندی & فهرست گفتگوهای قابل مشاهده برای کاربر. \\
+\code{agent/conversation-show.php} & \code{GET} & نقش‌های اپراتوری + دسترسی سایت & \code{conversation_id} & جزئیات گفتگو، پیام‌ها، visitor و وضعیت انتساب. \\
+\code{agent/message-send.php} & \code{POST} & نقش‌های اپراتوری + دسترسی سایت & \code{conversation_id}, \code{content} & ثبت پاسخ اپراتور؛ خطا برای گفتگوی بسته یا دسترسی نامعتبر. \\
+\code{agent/attachment-send.php} & \code{POST} & نقش‌های اپراتوری، \code{multipart/form-data} & \code{conversation_id}, \code{file}, پیام اختیاری & بارگذاری فایل اپراتور و ثبت پیام پیوست. \\
+\code{agent/conversation-assign.php} & \code{POST} & نقش‌های اپراتوری + دسترسی سایت & \code{conversation_id}, \code{agent_id} اختیاری & انتساب گفتگو به اپراتور مجاز یا آزادسازی انتساب. \\
+\code{agent/conversation-status-update.php} & \code{POST} & نقش‌های اپراتوری + دسترسی سایت & \code{conversation_id}, \code{status} & تغییر وضعیت گفتگو مانند باز/در حال پیگیری/بسته. \\
+\code{agent/conversation-close.php} & \code{POST} & نقش‌های اپراتوری + دسترسی سایت & \code{conversation_id} & بستن گفتگو. \\
+\code{agent/presence-update.php} & \code{POST} & نقش‌های اپراتوری & \code{site_id}, \code{status} & به‌روزرسانی حضور اپراتور برای تصمیم‌گیری پاسخ خودکار. \\
+\code{agent/presence-status.php} & \code{GET/POST} & نقش‌های اپراتوری & \code{site_id}, وضعیت در حالت POST & دریافت یا به‌روزرسانی وضعیت حضور. \\
+\code{agent/typing-update.php} & \code{POST} & نقش‌های اپراتوری + دسترسی سایت & \code{conversation_id}, \code{is_typing} & ثبت وضعیت تایپ برای ویجت. \\
+\code{agent/quick-replies-list.php} & \code{GET} & نقش‌های اپراتوری + دسترسی سایت & \code{site_id} & دریافت پاسخ‌های آماده سایت. \\
+\code{agent/assignable-agents-list.php} & \code{GET} & نقش‌های اپراتوری + دسترسی سایت & \code{site_id} یا \code{conversation_id} & فهرست اپراتورهای قابل انتساب. \\
+\code{agent/ai-suggestion-generate.php} & \code{POST} & نقش‌های اپراتوری + قابلیت پلن & \code{conversation_id}, \code{message_id} اختیاری & تولید پیشنهاد پاسخ AI برای اپراتور. \\
+\code{agent/ai-suggestions-list.php} & \code{GET} & نقش‌های اپراتوری + دسترسی سایت & \code{conversation_id} & فهرست پیشنهادهای تولیدشده برای گفتگو. \\
+\code{agent/ai-suggestion-accept.php} & \code{POST} & نقش‌های اپراتوری + دسترسی سایت & \code{suggestion_id} & پذیرش پیشنهاد و آماده‌سازی متن برای ارسال/ثبت. \\
+\code{agent/ai-suggestion-mark-used.php} & \code{POST} & نقش‌های اپراتوری + دسترسی سایت & \code{suggestion_id} & علامت‌گذاری پیشنهاد به‌عنوان استفاده‌شده. \\
+\bottomrule
+\end{longtable}
+
+\subsection{پنل مشتری}
+\begin{longtable}{R{48mm} R{16mm} R{34mm} R{42mm} R{24mm}}
+\toprule
+\textbf{Endpoint} & \textbf{متد} & \textbf{دسترسی} & \textbf{ورودی اصلی} & \textbf{خروجی/خطا} \\
+\midrule
+\endhead
+\code{customer/sites-list.php} & \code{GET} & \code{customer_admin}, \code{agent} & بدون بدنه & سایت‌های قابل مشاهده tenant. \\
+\code{customer/widget-settings-update.php} & \code{POST} & \code{customer_admin} & \code{site_id} و تنظیمات ویجت & به‌روزرسانی ظاهر و رفتار ویجت. \\
+\code{customer/team-list.php} & \code{GET} & \code{customer_admin} & فیلترهای اختیاری & فهرست اعضای تیم. \\
+\code{customer/team-create.php} & \code{POST} & \code{customer_admin} & نام، ایمیل، نقش و سایت‌های مجاز & ایجاد کاربر تیمی. \\
+\code{customer/plan-usage.php} & \code{GET} & \code{customer_admin} & بدون بدنه & مصرف پلن، محدودیت‌ها و قابلیت‌ها. \\
+\code{customer/reports-summary.php} & \code{GET} & \code{customer_admin} & بازه زمانی/سایت اختیاری & خلاصه گفتگوها، عملکرد و شاخص‌های عملیاتی. \\
+\code{customer/quick-replies-list.php} & \code{GET} & \code{customer_admin} & \code{site_id} اختیاری & فهرست پاسخ‌های آماده. \\
+\code{customer/quick-replies-create.php} & \code{POST} & \code{customer_admin} & \code{site_id}, \code{title}, \code{content} & ایجاد پاسخ آماده. \\
+\code{customer/quick-replies-delete.php} & \code{POST} & \code{customer_admin} & \code{id} & حذف پاسخ آماده. \\
+\code{customer/announcements-list.php} & \code{GET} & \code{customer_admin}, \code{agent} & وضعیت خوانده‌شدن اختیاری & فهرست اعلان‌های هدف‌گذاری‌شده. \\
+\code{customer/announcement-read.php} & \code{POST} & \code{customer_admin}, \code{agent} & \code{announcement_id} & ثبت خوانده‌شدن اعلان. \\
+\code{customer/announcement-dismiss.php} & \code{POST} & \code{customer_admin}, \code{agent} & \code{announcement_id} & بستن/نادیده‌گرفتن اعلان برای کاربر. \\
+\code{customer/knowledge-list.php} & \code{GET} & \code{customer_admin} & \code{site_id}، جست‌وجو/صفحه‌بندی اختیاری & فهرست دانش دستی سایت. \\
+\code{customer/knowledge-create.php} & \code{POST} & \code{customer_admin} & \code{site_id}, \code{question}, \code{answer} & ایجاد آیتم دانش برای پاسخ‌دهی AI. \\
+\code{customer/knowledge-delete.php} & \code{POST} & \code{customer_admin} & \code{id} & حذف آیتم دانش. \\
+\code{customer/ai-settings.php} & \code{GET/POST} & \code{customer_admin} & \code{site_id} و تنظیمات AI در POST & دریافت/ثبت فعال‌سازی AI، حالت خودکار و پارامترهای پاسخ. \\
+\code{customer/ai-search-test.php} & \code{POST} & \code{customer_admin} & \code{site_id}, \code{query} & آزمون جست‌وجوی دانش و کیفیت بازیابی. \\
+\code{customer/ai-overview.php} & \code{GET} & \code{customer_admin} & \code{site_id} اختیاری & نمای کلی منابع دانش، سوالات بی‌پاسخ و وضعیت AI. \\
+\code{customer/ai-crawl-sources-list.php} & \code{GET} & \code{customer_admin} & \code{site_id} & فهرست منابع خزنده. \\
+\code{customer/ai-crawl-source-create.php} & \code{POST} & \code{customer_admin} & \code{site_id}, \code{url}, تنظیمات crawl & ایجاد منبع خزنده. \\
+\code{customer/ai-crawl-source-delete.php} & \code{POST} & \code{customer_admin} & \code{id} & حذف منبع خزنده. \\
+\code{customer/ai-crawl-start.php} & \code{POST} & \code{customer_admin} & \code{source_id} یا \code{site_id} & شروع پردازش crawl و استخراج دانش. \\
+\code{customer/ai-knowledge-sources-list.php} & \code{GET} & \code{customer_admin} & \code{site_id} & فهرست منابع دانش ساخت‌یافته AI. \\
+\code{customer/ai-knowledge-source-create.php} & \code{POST} & \code{customer_admin} & \code{site_id}, عنوان/محتوا/متادیتا & ایجاد منبع دانش AI. \\
+\code{customer/ai-knowledge-source-update.php} & \code{POST} & \code{customer_admin} & \code{id} و فیلدهای قابل ویرایش & ویرایش منبع دانش AI. \\
+\code{customer/ai-generated-questions-list.php} & \code{GET} & \code{customer_admin} & \code{site_id} & سوالات پیشنهادی تولیدشده از منابع. \\
+\code{customer/ai-generated-question-update.php} & \code{POST} & \code{customer_admin} & \code{id}, وضعیت/متن اصلاحی & تایید، رد یا ویرایش سوال تولیدشده. \\
+\code{customer/ai-unanswered-list.php} & \code{GET} & \code{customer_admin} & \code{site_id}, فیلتر وضعیت & فهرست سوالات بی‌پاسخ ثبت‌شده از گفتگوها. \\
+\code{customer/ai-unanswered-update-status.php} & \code{POST} & \code{customer_admin} & \code{id}, \code{status} & تغییر وضعیت سوال بی‌پاسخ. \\
+\code{customer/ai-unanswered-add-to-knowledge.php} & \code{POST} & \code{customer_admin} & \code{id}, \code{answer} & تبدیل سوال بی‌پاسخ به دانش قابل استفاده. \\
+\bottomrule
+\end{longtable}
+
+\subsection{پنل سوپرادمین}
+\begin{longtable}{R{50mm} R{16mm} R{28mm} R{44mm} R{24mm}}
+\toprule
+\textbf{Endpoint} & \textbf{متد} & \textbf{دسترسی} & \textbf{ورودی اصلی} & \textbf{خروجی/خطا} \\
+\midrule
+\endhead
+\code{super-admin/dashboard-stats.php} & \code{GET} & \code{super_admin} & بدون بدنه & آمار کل سامانه. \\
+\code{super-admin/tenants-list.php} & \code{GET} & \code{super_admin} & فیلتر/صفحه‌بندی اختیاری & فهرست tenantها. \\
+\code{super-admin/tenants-options.php} & \code{GET} & \code{super_admin} & بدون بدنه & گزینه‌های tenant برای فرم‌ها. \\
+\code{super-admin/customer-create.php} & \code{POST} & \code{super_admin} & اطلاعات tenant، مدیر، سایت و پلن & ایجاد مشتری کامل با کاربر مدیر و سایت اولیه. \\
+\code{super-admin/customer-show.php} & \code{GET} & \code{super_admin} & \code{tenant_id} یا \code{id} & جزئیات مشتری، پلن، کاربران و سایت‌ها. \\
+\code{super-admin/customer-status-update.php} & \code{POST} & \code{super_admin} & \code{tenant_id}, \code{status} & فعال/غیرفعال‌سازی مشتری. \\
+\code{super-admin/customer-plan-update.php} & \code{POST} & \code{super_admin} & \code{tenant_id}, \code{plan_id} & تغییر پلن مشتری. \\
+\code{super-admin/plans-list.php} & \code{GET} & \code{super_admin} & فیلتر اختیاری & فهرست پلن‌ها و قابلیت‌ها. \\
+\code{super-admin/plan-create.php} & \code{POST} & \code{super_admin} & نام، قیمت، محدودیت‌ها و قابلیت‌ها & ایجاد پلن. \\
+\code{super-admin/plan-update.php} & \code{POST} & \code{super_admin} & \code{id} و فیلدهای قابل ویرایش & ویرایش پلن. \\
+\code{super-admin/plan-toggle-status.php} & \code{POST} & \code{super_admin} & \code{id} & فعال/غیرفعال‌کردن پلن. \\
+\code{super-admin/sites-list.php} & \code{GET} & \code{super_admin} & tenant یا وضعیت اختیاری & فهرست سایت‌ها. \\
+\code{super-admin/site-settings-update.php} & \code{POST} & \code{super_admin} & \code{site_id} و تنظیمات & ویرایش تنظیمات سایت. \\
+\code{super-admin/site-status-update.php} & \code{POST} & \code{super_admin} & \code{site_id}, \code{status} & تغییر وضعیت سایت. \\
+\code{super-admin/user-status-update.php} & \code{POST} & \code{super_admin} & \code{user_id}, \code{status} & فعال/غیرفعال‌کردن کاربر. \\
+\code{super-admin/user-password-reset.php} & \code{POST} & \code{super_admin} & \code{user_id}, رمز جدید یا تولید خودکار & بازنشانی رمز کاربر. \\
+\code{super-admin/announcements-list.php} & \code{GET} & \code{super_admin} & فیلتر اختیاری & فهرست اعلان‌ها. \\
+\code{super-admin/announcement-create.php} & \code{POST} & \code{super_admin} & عنوان، متن، نوع، اولویت و هدف‌گیری & ایجاد اعلان. \\
+\code{super-admin/announcement-update.php} & \code{POST} & \code{super_admin} & \code{id} و فیلدهای قابل ویرایش & ویرایش اعلان. \\
+\code{super-admin/announcement-delete.php} & \code{POST} & \code{super_admin} & \code{id} & حذف اعلان. \\
+\code{super-admin/announcement-image-upload.php} & \code{POST} & \code{super_admin}، \code{multipart/form-data} & فایل تصویر & بارگذاری تصویر اعلان. \\
+\code{super-admin/ai-monitoring-stats.php} & \code{GET} & \code{super_admin} & بازه/tenant اختیاری & آمار استفاده، خطا و کارایی AI. \\
+\code{super-admin/audit-logs-list.php} & \code{GET} & \code{super_admin} & فیلتر کاربر، عمل، بازه و صفحه‌بندی & لاگ‌های ممیزی عملیات مدیریتی. \\
+\bottomrule
+\end{longtable}
+
+\section{جریان‌های عملیاتی و نمونه قرارداد}
+
+\subsection{ورود و استفاده از توکن}
+\textbf{درخواست ورود}
+\begin{apiblock}
+POST /backend/api/auth/login.php
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "SecretPassword123"
+}
+\end{apiblock}
+
+\textbf{پاسخ موفق}
+\begin{apiblock}
+{
+  "success": true,
+  "message": "Login successful",
+  "token": "JWT_TOKEN",
+  "user": {
+    "id": 12,
+    "name": "Admin User",
+    "email": "admin@example.com",
+    "role": "customer_admin",
+    "tenant_id": 4
+  }
+}
+\end{apiblock}
+
+\textbf{دریافت کاربر فعلی}
+\begin{apiblock}
+GET /backend/api/auth/me.php
+Authorization: Bearer JWT_TOKEN
+\end{apiblock}
+
+\textbf{ابطال همه نشست‌ها}
+\begin{apiblock}
+POST /backend/api/auth/logout-all.php
+Authorization: Bearer JWT_TOKEN
+\end{apiblock}
+
+\subsection{جریان راه‌اندازی ویجت}
+ویجت سمت سایت مشتری ابتدا تنظیمات را با \code{site_key} دریافت می‌کند، سپس visitor و conversation ایجاد می‌کند و پیام‌ها را با polling یا درخواست‌های دوره‌ای دریافت می‌کند. همه درخواست‌های ویجت تحت کنترل \en{Origin} و rate limit هستند.
+
+\textbf{دریافت تنظیمات}
+\begin{apiblock}
+GET /backend/api/widget/config.php?site_key=site_public_key
+Origin: https://customer-site.example
+\end{apiblock}
+
+\textbf{ثبت بازدیدکننده}
+\begin{apiblock}
+POST /backend/api/widget/visitor-start.php
+Content-Type: application/json
+Origin: https://customer-site.example
+
+{
+  "site_key": "site_public_key",
+  "browser_id": "browser-uuid",
+  "name": "Visitor Name",
+  "email": "visitor@example.com",
+  "phone": "+989120000000"
+}
+\end{apiblock}
+
+\textbf{شروع گفتگو}
+\begin{apiblock}
+POST /backend/api/widget/conversation-start.php
+Content-Type: application/json
+
+{
+  "site_key": "site_public_key",
+  "visitor_id": 345,
+  "source_url": "https://customer-site.example/pricing",
+  "source_title": "Pricing"
+}
+\end{apiblock}
+
+\textbf{ارسال پیام بازدیدکننده}
+\begin{apiblock}
+POST /backend/api/widget/message-send.php
+Content-Type: application/json
+
+{
+  "site_key": "site_public_key",
+  "visitor_id": 345,
+  "conversation_id": 890,
+  "content": "Hello, I need help choosing a plan."
+}
+\end{apiblock}
+
+\textbf{درخواست پاسخ خودکار AI}
+\begin{apiblock}
+POST /backend/api/widget/ai-reply.php
+Content-Type: application/json
+
+{
+  "site_key": "site_public_key",
+  "visitor_id": 345,
+  "conversation_id": 890,
+  "message_id": 1204
+}
+\end{apiblock}
+
+\textbf{خواندن پیام‌ها}
+\begin{apiblock}
+GET /backend/api/widget/messages-list.php?site_key=site_public_key&visitor_id=345&conversation_id=890
+\end{apiblock}
+
+\subsection{جریان اپراتور و پیشنهاد AI}
+اپراتور پس از login گفتگوها را دریافت می‌کند، جزئیات یک گفتگو را می‌بیند و در صورت فعال بودن قابلیت پلن، پیشنهاد پاسخ AI تولید می‌کند. پیشنهاد AI در این سامانه بر اساس موتور محلی/استخراجی و منابع دانش داخلی سایت عمل می‌کند و وابسته به سرویس خارجی LLM در جریان فعال نیست.
+
+\begin{apiblock}
+GET /backend/api/agent/conversations-list.php?site_id=10&status=open
+Authorization: Bearer JWT_TOKEN
+\end{apiblock}
+
+\begin{apiblock}
+GET /backend/api/agent/conversation-show.php?conversation_id=890
+Authorization: Bearer JWT_TOKEN
+\end{apiblock}
+
+\begin{apiblock}
+POST /backend/api/agent/ai-suggestion-generate.php
+Authorization: Bearer JWT_TOKEN
+Content-Type: application/json
+
+{
+  "conversation_id": 890,
+  "message_id": 1204
+}
+\end{apiblock}
+
+\begin{apiblock}
+POST /backend/api/agent/message-send.php
+Authorization: Bearer JWT_TOKEN
+Content-Type: application/json
+
+{
+  "conversation_id": 890,
+  "content": "Hello, please share your agent count and monthly conversation volume."
+}
+\end{apiblock}
+
+\subsection{جریان مدیریت AI و دانش در پنل مشتری}
+مدیر مشتری تنظیمات AI را برای هر سایت مدیریت می‌کند، منابع دانش دستی یا crawl شده را اضافه می‌کند و سوالات بی‌پاسخ را به دانش قابل بازیابی تبدیل می‌کند.
+
+\begin{apiblock}
+GET /backend/api/customer/ai-settings.php?site_id=10
+Authorization: Bearer JWT_TOKEN
+\end{apiblock}
+
+\begin{apiblock}
+POST /backend/api/customer/ai-settings.php
+Authorization: Bearer JWT_TOKEN
+Content-Type: application/json
+
+{
+  "site_id": 10,
+  "ai_enabled": true,
+  "auto_reply_enabled": true,
+  "assistant_name": "Support Assistant",
+  "confidence_threshold": 0.65
+}
+\end{apiblock}
+
+\begin{apiblock}
+POST /backend/api/customer/knowledge-create.php
+Authorization: Bearer JWT_TOKEN
+Content-Type: application/json
+
+{
+  "site_id": 10,
+  "question": "How can I upgrade my plan?",
+  "answer": "Open the billing section in the panel and submit an upgrade request."
+}
+\end{apiblock}
+
+\begin{apiblock}
+POST /backend/api/customer/ai-crawl-source-create.php
+Authorization: Bearer JWT_TOKEN
+Content-Type: application/json
+
+{
+  "site_id": 10,
+  "url": "https://customer-site.example/help",
+  "title": "Help Center"
+}
+\end{apiblock}
+
+\begin{apiblock}
+POST /backend/api/customer/ai-unanswered-add-to-knowledge.php
+Authorization: Bearer JWT_TOKEN
+Content-Type: application/json
+
+{
+  "id": 77,
+  "answer": "Approved answer to be added to the knowledge base."
+}
+\end{apiblock}
+
+\subsection{جریان مدیریت مشتری و پلن توسط سوپرادمین}
+سوپرادمین tenant، مدیر مشتری، سایت اولیه و پلن را از APIهای مدیریتی کنترل می‌کند. این endpointها فقط با نقش \code{super_admin} قابل دسترسی هستند.
+
+\begin{apiblock}
+POST /backend/api/super-admin/customer-create.php
+Authorization: Bearer SUPER_ADMIN_JWT
+Content-Type: application/json
+
+{
+  "tenant_name": "Acme",
+  "admin_name": "Acme Admin",
+  "admin_email": "admin@acme.example",
+  "site_name": "Acme Website",
+  "site_domain": "acme.example",
+  "plan_id": 2
+}
+\end{apiblock}
+
+\begin{apiblock}
+GET /backend/api/super-admin/plans-list.php
+Authorization: Bearer SUPER_ADMIN_JWT
+\end{apiblock}
+
+\begin{apiblock}
+POST /backend/api/super-admin/customer-plan-update.php
+Authorization: Bearer SUPER_ADMIN_JWT
+Content-Type: application/json
+
+{
+  "tenant_id": 4,
+  "plan_id": 3
+}
+\end{apiblock}
+
+\section{قواعد امنیتی و عملیاتی}
+
+\subsection{JWT و ابطال نشست}
+هر درخواست محافظت‌شده با \code{require_auth} اعتبارسنجی می‌شود. علاوه بر بررسی امضای JWT، وضعیت کاربر، نقش، ایمیل، tenant و \code{token_version} کنترل می‌شود. endpoint \code{logout-all.php} با افزایش \code{token_version} همه توکن‌های قبلی کاربر را نامعتبر می‌کند.
+
+\subsection{کنترل نقش و مالکیت داده}
+APIهای سوپرادمین فقط برای \code{super_admin} هستند. APIهای مشتری عمدتا فقط برای \code{customer_admin} باز هستند و APIهای اپراتوری برای \code{customer_admin} و \code{agent}. در عملیات وابسته به سایت، دسترسی کاربر به همان سایت نیز بررسی می‌شود تا کاربر tenant یا سایت دیگری را مشاهده یا تغییر ندهد.
+
+\subsection{امنیت ویجت عمومی}
+ویجت چون روی دامنه مشتری اجرا می‌شود، JWT دریافت نمی‌کند. امنیت آن با ترکیب چند کنترل برقرار می‌شود:
+\begin{itemize}
+  \item الزام \code{site_key} برای شناسایی سایت.
+  \item کنترل \en{Origin} بر اساس دامنه سایت، تنظیمات محیطی و مبداهای توسعه محلی.
+  \item پاسخ \code{OPTIONS} با وضعیت \code{204} برای preflight.
+  \item محدودیت نرخ برای عملیات visitor، گفتگو، پیام و پاسخ AI.
+  \item رد درخواست برای سایت یا tenant غیرفعال و گفتگوی بسته.
+\end{itemize}
+
+\subsection{محدودیت نرخ}
+لایه \code{rate-limit.php} تلاش‌های هر عملیات را با کلید action و identifier در جدول \code{api_rate_limits} ذخیره می‌کند. در صورت عبور از سقف، پاسخ \code{429} همراه با هدر \code{Retry-After} و فیلد \code{retry_after_seconds} برگردانده می‌شود.
+
+\subsection{بارگذاری فایل}
+endpointهای پیوست و تصویر اعلان باید با \code{multipart/form-data} فراخوانی شوند. مصرف‌کننده باید نوع فایل، اندازه و خطاهای اعتبارسنجی را در سطح UI مدیریت کند. در سمت سرور، فایل فقط در بستر endpoint مجاز و پس از احراز دسترسی گفتگو/اعلان پردازش می‌شود.
+
+\subsection{حذف اطلاعات حساس از خطا}
+تابع مشترک \code{json_response} در production کلیدهای حساس خطاهای 5xx را حذف می‌کند. بنابراین کلاینت نباید به جزئیات داخلی خطا وابسته شود و باید فقط \code{success}، \code{message} و کد HTTP را مبنای تصمیم قرار دهد.
+
+\section{نسخه‌بندی و سازگاری}
+در نسخه فعلی پروژه، نسخه API در مسیر URL وجود ندارد و endpointها مستقیم زیر \code{backend/api} قرار دارند. برای توسعه آتی، پیشنهاد می‌شود نسخه‌بندی صریح مانند \code{/api/v1}، قرارداد OpenAPI و migration تدریجی endpointهای فایل‌محور به کنترلرهای ماژولار اضافه شود. تا قبل از آن، تغییر نام فایل‌ها یا تغییر فیلدهای پاسخ باید به‌عنوان تغییر ناسازگار تلقی شود.
+
+\section{نکات تکمیلی و ریسک‌های شناخته‌شده}
+\begin{itemize}
+  \item فایل \code{agent/ai-suggestion-generate.backup.php} یک فایل پشتیبان است و نباید به‌عنوان API فعال در کلاینت‌ها استفاده شود.
+  \item مستند حاضر بر اساس کد فعلی نوشته شده است؛ چون OpenAPI رسمی در مخزن وجود ندارد، هر تغییر مستقیم در فایل‌های PHP باید هم‌زمان در این سند نیز بازتاب پیدا کند.
+  \item کلاینت‌ها باید برای \code{401} و \code{403} رفتار جداگانه داشته باشند: اولی معمولا نیازمند login مجدد است، دومی نشان‌دهنده نبود دسترسی یا غیرفعال بودن tenant/site/feature است.
+  \item در APIهای ویجت، نبود پاسخ AI لزوما خطا نیست؛ ممکن است به دلیل حضور اپراتور آنلاین، غیرفعال بودن پاسخ خودکار، کمبود اطمینان پاسخ یا بسته بودن گفتگو رخ دهد.
+  \item چون موتور AI فعال از منابع دانش داخلی استفاده می‌کند، کیفیت پاسخ APIهای AI مستقیما به کامل بودن \code{knowledge}، منابع crawl و وضعیت سوالات بی‌پاسخ وابسته است.
+\end{itemize}
+
+\section{چک‌لیست مصرف API}
+\begin{enumerate}
+  \item برای پنل، ابتدا \code{auth/login.php} را فراخوانی و توکن را در هدر \code{Authorization} ارسال کنید.
+  \item قبل از هر عملیات سایت‌محور، \code{site_id} معتبر و متعلق به tenant کاربر را انتخاب کنید.
+  \item برای ویجت، \code{site_key} را در همه درخواست‌های عمومی ارسال کنید و دامنه نصب را با تنظیمات سایت هم‌خوان نگه دارید.
+  \item برای endpointهای دارای کنترل نرخ، وضعیت \code{429} و هدر \code{Retry-After} را در کلاینت رعایت کنید.
+  \item برای آپلود فایل از \code{multipart/form-data} استفاده کنید و خطاهای اندازه/نوع فایل را برای کاربر نمایش دهید.
+  \item در محیط production، به جزئیات debug وابسته نشوید و لاگ داخلی سرور را منبع عیب‌یابی قرار دهید.
+\end{enumerate}
+
+\end{document}

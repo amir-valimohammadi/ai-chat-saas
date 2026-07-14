@@ -1,0 +1,421 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[a4paper,top=25mm,bottom=25mm,left=22mm,right=22mm]{geometry}
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{fancyvrb}
+
+\IfFontExistsTF{Vazirmatn}{
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \settextfont{Tahoma}
+  }{
+    \settextfont{Arial}
+  }
+}
+\IfFontExistsTF{Consolas}{
+  \setlatintextfont{Consolas}
+}{
+  \setlatintextfont{Courier New}
+}
+
+\definecolor{primary}{HTML}{1F4E79}
+\definecolor{softgray}{HTML}{F3F6F8}
+\definecolor{danger}{HTML}{A61B1B}
+\definecolor{okgreen}{HTML}{287D3C}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=primary,
+  urlcolor=primary,
+  citecolor=primary,
+  pdftitle={مستند امنیت سامانه AI Chat SaaS},
+  pdfauthor={Mobin Yousefi}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{مستند امنیت}
+\lhead{AI Chat SaaS}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\Large\bfseries\color{primary}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{primary}}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{primary}}{\thesubsubsection}{0.7em}{}
+\setlist[itemize]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.35}
+\setlength{\LTpre}{6pt}
+\setlength{\LTpost}{6pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlength{\headheight}{15pt}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+\newenvironment{codeblock}{\VerbatimEnvironment\begin{latin}\begin{Verbatim}[fontsize=\small,frame=single,rulecolor=\color{softgray}]}{\end{Verbatim}\end{latin}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{22mm}
+{\Huge\bfseries\color{primary} مستند امنیت سامانه AI Chat SaaS\par}
+\vspace{10mm}
+{\Large بخش ۱۱ راهنمای مستندات پروژه\par}
+\vspace{20mm}
+{\large \textbf{نسخه سند:} 1.0\par}
+\vspace{3mm}
+{\large \textbf{تاریخ تدوین:} ۱۵ جولای ۲۰۲۶\par}
+\vspace{3mm}
+{\large \textbf{تهیه‌کننده:} مبین یوسفی\par}
+\vspace{3mm}
+{\large \textbf{مسیر خروجی:} \code{doc/LaTeX/11-Security/11-Security.tex}\par}
+\vspace{3mm}
+{\large \textbf{منابع بررسی‌شده:} \code{Rahnama.md}، \code{ArchitectureForMobin.md}، \code{ReportForSale.md} و کدهای \code{backend}\par}
+\vfill
+{\large مستند کنترل‌های امنیتی، مدل تهدید، احراز هویت، مجوزدهی، مدیریت رازها، ثبت رخداد و آمادگی عملیاتی}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{هدف و دامنه سند}
+این سند وضعیت امنیتی سامانه \en{AI Chat SaaS} را بر اساس کدهای فعلی و مستندات معماری پروژه شرح می‌دهد. هدف، ثبت کنترل‌های موجود، نقاط اتکا، ریسک‌های باقی‌مانده و الزامات لازم برای آماده‌سازی production است. دامنه سند شامل APIهای PHP، پنل، ویجت عمومی، کنترل‌های tenant/site، مدیریت فایل، تنظیمات محیطی، ثبت رخداد و تهدیدهای رایج وب است.
+
+سامانه از backend فایل‌محور PHP با PDO/MySQL استفاده می‌کند. هر endpoint به‌صورت مستقل middlewareهای لازم مانند CORS، احراز هویت، کنترل نقش، rate limit و پاسخ JSON امن را include می‌کند. بنابراین امنیت پروژه ترکیبی از کنترل‌های مشترک در \code{backend/includes} و کنترل‌های اختصاصی endpointها است.
+
+\section{خلاصه وضعیت امنیتی}
+\begin{longtable}{R{36mm} R{82mm} R{32mm}}
+\toprule
+\textbf{حوزه} & \textbf{وضعیت فعلی} & \textbf{بلوغ} \\
+\midrule
+\endhead
+احراز هویت & ورود با ایمیل/رمز، ذخیره رمز با \code{password_hash}، بررسی با \code{password_verify}، صدور JWT و rehash خودکار در login. & مناسب برای MVP \\
+مجوزدهی & RBAC با نقش‌های \code{super_admin}، \code{customer_admin} و \code{agent}؛ کنترل دسترسی سایت برای جلوگیری از IDOR. & خوب \\
+JWT & امضای \code{HS256}، بررسی \code{iss}، \code{aud}، \code{exp}، \code{iat}، \code{nbf}، \code{jti} و \code{token_version}. & خوب \\
+CORS & قوانین جدا برای پنل و ویجت؛ پنل با \code{PANEL_ALLOWED_ORIGINS} و ویجت با دامنه سایت/allowlist. & خوب، نیازمند تنظیم production \\
+Rate Limit & ذخیره محدودیت نرخ در جدول \code{api_rate_limits} برای login، تغییر رمز، ویجت و عملیات حساس. & خوب \\
+Upload & allowlist نوع فایل، بررسی MIME، اندازه، پسوندهای خطرناک، payload scan، PDF active-content check و نام تصادفی. & خوب \\
+Audit Log & ثبت رخدادهای مدیریتی سوپرادمین با redaction برای رمز، توکن و secret. & متوسط تا خوب \\
+Secret Management & خواندن از \code{.env}؛ خطا در production برای \code{JWT_SECRET} ضعیف. & مناسب، وابسته به deployment \\
+Encryption & رمز عبور hash می‌شود؛ انتقال امن به TLS در زیرساخت production وابسته است؛ رمزگذاری سطح دیتابیس در کد دیده نشد. & نیازمند تکمیل عملیاتی \\
+Backup/Recovery & در کد مکانیزم backup دیده نمی‌شود؛ باید در DevOps/DB عملیاتی تعریف شود. & نیازمند تکمیل \\
+\bottomrule
+\end{longtable}
+
+\section{دارایی‌ها و مرزهای اعتماد}
+\subsection{دارایی‌های حساس}
+\begin{itemize}
+  \item حساب‌های کاربران پنل شامل ایمیل، نام، نقش، tenant و وضعیت فعال بودن.
+  \item \code{password_hash} کاربران.
+  \item JWTهای فعال و مقدار \code{token_version}.
+  \item داده‌های tenant، سایت‌ها، گفتگوها، پیام‌ها، visitorها و پیوست‌ها.
+  \item منابع دانش AI، سوالات بی‌پاسخ، منابع crawl و تنظیمات پاسخ خودکار.
+  \item رازهای محیطی مانند \code{JWT_SECRET}، \code{DB_PASS}، \code{OPENAI_API_KEY} و URLهای تولیدی.
+  \item لاگ‌های audit شامل actor، action، entity، IP و user-agent.
+\end{itemize}
+
+\subsection{مرزهای اعتماد}
+\begin{itemize}
+  \item مرورگر پنل فقط از مسیرهای مجاز CORS می‌تواند به APIهای پنل متصل شود، اما کنترل اصلی همچنان JWT و RBAC است.
+  \item ویجت روی دامنه مشتری اجرا می‌شود و JWT ندارد؛ مرز اعتماد آن با \code{site_key}، \en{Origin}، وضعیت سایت/tenant و rate limit کنترل می‌شود.
+  \item دیتابیس منبع حقیقت برای کاربر، نقش، tenant، site access، plan limits و token revocation است.
+  \item storage فایل‌های upload شده عمومی‌تر از دیتابیس است؛ بنابراین validate-before-store و جلوگیری از اجرای فایل اهمیت بالایی دارد.
+  \item crawler با اینترنت خارجی تعامل دارد و از نظر SSRF، SSL و حجم پردازش باید محدود و مانیتور شود.
+\end{itemize}
+
+\section{Authentication}
+\subsection{ورود کاربران پنل}
+endpoint ورود \code{backend/api/auth/login.php} فقط متد POST را می‌پذیرد. ورودی ایمیل و رمز از JSON خوانده می‌شود، ایمیل normalize و validate می‌شود، سپس کاربر با PDO و query پارامتری از جدول کاربران بازیابی می‌شود. رمز با \code{password_verify} بررسی می‌شود و در صورت نیاز با \code{password_needs_rehash} و \code{password_hash} دوباره hash می‌شود.
+
+کنترل‌های مهم در login:
+\begin{itemize}
+  \item محدودیت نرخ بر اساس IP با سقف ۳۰ تلاش در ۱۵ دقیقه.
+  \item محدودیت نرخ بر اساس ترکیب ایمیل و IP با سقف ۸ تلاش در ۱۵ دقیقه.
+  \item پیام خطای یکسان برای ایمیل/رمز نامعتبر جهت کاهش account enumeration.
+  \item رد کاربر غیرفعال.
+  \item رد کاربر غیرسوپرادمین در صورت نبود tenant یا غیرفعال بودن tenant.
+  \item ثبت \code{last_login_at} پس از ورود موفق.
+  \item پاک‌کردن رکوردهای rate limit پس از login موفق.
+\end{itemize}
+
+\subsection{تغییر رمز}
+endpoint \code{auth/change-password.php} نیازمند JWT معتبر است. رمز جدید باید حداقل ۸ و حداکثر ۱۲۸ کاراکتر باشد و حداقل یک حرف و یک عدد داشته باشد. رمز جدید نباید با رمز فعلی یکسان باشد. پس از تغییر رمز، مقدار \code{token_version} یک واحد افزایش می‌یابد تا همه توکن‌های قبلی نامعتبر شوند.
+
+\subsection{خروج از همه نشست‌ها}
+endpoint \code{auth/logout-all.php} نیز با افزایش \code{token_version} همه نشست‌های قبلی را باطل می‌کند. این طراحی از نگهداری state کامل session در سرور سبک‌تر است و برای JWT مناسب است، چون هر درخواست protected دوباره مقدار \code{token_version} دیتابیس را با payload مقایسه می‌کند.
+
+\section{JWT}
+\subsection{ساختار و امضا}
+JWT در \code{backend/includes/jwt.php} بدون کتابخانه خارجی ساخته و بررسی می‌شود. الگوریتم فقط \code{HS256} است و header باید \code{typ=JWT} و \code{alg=HS256} داشته باشد. امضا با \code{hash_hmac('sha256', ...)} تولید می‌شود و اعتبارسنجی با \code{hash_equals} انجام می‌گیرد.
+
+\begin{codeblock}
+Required claims:
+iss, aud, sub, exp, iat, nbf, jti, token_version
+
+Default TTL:
+JWT_EXPIRATION_SECONDS=604800
+JWT_MAX_TTL_SECONDS=604800
+\end{codeblock}
+
+\subsection{اعتبارسنجی توکن}
+در \code{require_auth} پس از decode، موارد زیر بررسی می‌شود:
+\begin{itemize}
+  \item وجود \code{sub}، \code{exp}، \code{iat}، \code{jti} و \code{token_version}.
+  \item معتبر بودن user id و وجود کاربر در دیتابیس.
+  \item فعال بودن کاربر.
+  \item تطبیق \code{token_version} payload با دیتابیس.
+  \item تطبیق ایمیل و نقش payload با دیتابیس برای جلوگیری از استفاده از توکن قدیمی پس از تغییرات حساس.
+  \item فعال بودن tenant برای کاربران غیرسوپرادمین.
+  \item رعایت \code{issuer}، \code{audience}، \code{max TTL} و clock skew محدود.
+\end{itemize}
+
+\subsection{ریسک‌های JWT}
+JWT در سمت کلاینت باید به‌گونه‌ای نگهداری شود که در برابر XSS کمترین آسیب را داشته باشد. در کد backend، token blacklist سراسری وجود ندارد و مکانیزم اصلی ابطال، \code{token_version} است. این روش برای logout all، تغییر رمز و غیرفعال‌سازی کاربر کافی است، اما برای ابطال یک توکن منفرد پیش از انقضا نیاز به blacklist یا جدول session دارد.
+
+\section{Authorization}
+\subsection{نقش‌ها}
+سامانه از کنترل نقش در \code{require_role} استفاده می‌کند. نقش‌های اصلی عبارت‌اند از:
+\begin{itemize}
+  \item \code{super_admin}: دسترسی مدیریتی کل سامانه، tenantها، پلن‌ها، سایت‌ها، کاربران، اعلان‌ها و audit.
+  \item \code{customer_admin}: مدیریت tenant خود، سایت‌ها، تیم، ویجت، دانش، AI و گزارش‌ها.
+  \item \code{agent}: عملیات پشتیبانی، مشاهده گفتگوهای مجاز، پاسخ‌گویی، presence و پیشنهادهای AI در محدوده سایت‌های مجاز.
+\end{itemize}
+
+\subsection{کنترل tenant و سایت}
+برای جلوگیری از \en{IDOR}، فایل \code{site-access.php} دسترسی site را جداگانه بررسی می‌کند:
+\begin{itemize}
+  \item \code{super_admin} به همه سایت‌ها دسترسی دارد.
+  \item \code{customer_admin} فقط به سایت‌های tenant خودش دسترسی دارد.
+  \item \code{agent} فقط به سایت‌هایی دسترسی دارد که در جدول \code{agent_site_access} برای او ثبت شده‌اند.
+\end{itemize}
+
+این کنترل در endpointهای حساس agent و customer استفاده شده است. اگر endpointی مستقیم \code{site_id} یا \code{conversation_id} دریافت می‌کند، باید یا خودش tenant/site را join کند یا پس از بازیابی موجودیت، \code{require_site_access} را فراخوانی کند.
+
+\subsection{کنترل پلن و قابلیت}
+فایل \code{plan-limits.php} محدودیت‌های tenant و plan را اعمال می‌کند. کنترل‌های مهم:
+\begin{itemize}
+  \item فعال بودن tenant و plan.
+  \item محدودیت تعداد سایت.
+  \item محدودیت تعداد agent.
+  \item محدودیت تعداد گفتگوهای ماهانه.
+  \item فعال بودن قابلیت‌هایی مانند \code{ai_suggestions_enabled}، \code{ai_auto_reply_enabled} و \code{knowledge_base_enabled}.
+\end{itemize}
+
+\section{CORS و امنیت ویجت}
+\subsection{CORS پنل}
+فایل \code{cors.php} مبداهای مجاز پنل را از \code{PANEL_ALLOWED_ORIGINS} یا \code{FRONTEND_URL} می‌خواند. در production، origin نامعتبر برای preflight رد می‌شود. هدرهای مجاز شامل \code{Content-Type} و \code{Authorization} هستند و متدهای رایج API مجاز شده‌اند.
+
+\subsection{CORS ویجت}
+فایل \code{widget-cors.php} برای APIهای عمومی ویجت طراحی شده است. چون ویجت روی دامنه مشتری نصب می‌شود و از cookie استفاده نمی‌کند، \code{Access-Control-Allow-Credentials} برای ویجت فعال نمی‌شود. کنترل‌های اصلی:
+\begin{itemize}
+  \item رد origin خالی در production مگر با \code{WIDGET_ALLOW_EMPTY_ORIGIN=true}.
+  \item validate کردن scheme و host.
+  \item جلوگیری از header injection با رد \code{\textbackslash r} و \code{\textbackslash n}.
+  \item تطبیق host مبدا با دامنه سایت و حالت‌های \code{www}.
+  \item allowlist اضافه از \code{WIDGET_ALLOWED_ORIGINS}.
+  \item مجاز بودن localhost فقط در محیط غیرproduction.
+\end{itemize}
+
+\subsection{ریسک‌های ویجت عمومی}
+\code{site_key} به‌تنهایی secret کامل محسوب نمی‌شود، زیرا در اسکریپت embed سمت کاربر دیده می‌شود. بنابراین امنیت ویجت باید با ترکیب origin validation، فعال بودن سایت، rate limit، محدودیت پلن و کنترل وضعیت conversation تامین شود. در production مقدار \code{WIDGET_ALLOW_EMPTY_ORIGIN} باید \code{false} باشد.
+
+\section{Rate Limit و مقابله با سوءاستفاده}
+فایل \code{rate-limit.php} شناسه درخواست‌کننده را از IP، user-agent و مقدار اضافی endpoint می‌سازد، سپس کلید hash شده را در جدول \code{api_rate_limits} ذخیره می‌کند. در صورت عبور از سقف، پاسخ \code{429} همراه با هدر \code{Retry-After} و فیلد \code{retry_after_seconds} برگردانده می‌شود.
+
+\begin{longtable}{R{46mm} R{74mm} R{34mm}}
+\toprule
+\textbf{سناریو} & \textbf{مکانیزم} & \textbf{اثر امنیتی} \\
+\midrule
+\endhead
+Login brute force & محدودیت IP و ایمیل+IP در \code{auth/login.php} & کاهش حمله حدس رمز \\
+تغییر رمز & محدودیت کاربر+IP در \code{change-password.php} & کاهش brute force روی رمز فعلی \\
+ویجت عمومی & محدودیت روی config، visitor، conversation، پیام، attachment، messages و AI reply & کاهش spam و مصرف بی‌رویه منابع \\
+آپلود فایل & ترکیب rate limit endpoint و اعتبارسنجی فایل & کاهش DoS و upload abuse \\
+\bottomrule
+\end{longtable}
+
+برای production بهتر است rate limit فعلی با محدودیت در لایه reverse proxy یا WAF نیز تکمیل شود، چون محدودیت دیتابیسی در حملات حجیم قبل از رسیدن به PHP فشار روی دیتابیس ایجاد می‌کند.
+
+\section{Hash، Encryption و مدیریت رمزها}
+\subsection{Hash رمز عبور}
+رمزهای عبور با \code{password_hash(..., PASSWORD_DEFAULT)} ذخیره می‌شوند. این انتخاب از الگوریتم پیش‌فرض امن PHP استفاده می‌کند و با ارتقای نسخه PHP امکان rehash تدریجی وجود دارد. login نیز در صورت نیاز hash قدیمی را rehash می‌کند.
+
+\subsection{Encryption}
+در کد فعلی، رمزگذاری اختصاصی برای داده‌های دیتابیس مشاهده نشد. داده‌های حساس در transit باید با HTTPS/TLS در سطح وب‌سرور و load balancer محافظت شوند. برای داده‌های at rest، باید سیاست رمزگذاری دیسک، backup encrypted و محدودیت دسترسی دیتابیس در سطح زیرساخت اعمال شود.
+
+\subsection{Secret Management}
+فایل \code{config/app.php} مقادیر حساس را از \code{.env} می‌خواند. \code{JWT_SECRET} در production اگر خالی، مقدار پیش‌فرض یا کمتر از ۳۲ کاراکتر باشد خطای امنیتی ایجاد می‌کند. نمونه \code{.env.example} شامل متغیرهای زیر است:
+
+\begin{codeblock}
+JWT_SECRET
+DB_HOST
+DB_NAME
+DB_USER
+DB_PASS
+OPENAI_API_KEY
+PANEL_ALLOWED_ORIGINS
+WIDGET_ALLOWED_ORIGINS
+UPLOAD_STORAGE_ROOT
+UPLOAD_PUBLIC_URL
+\end{codeblock}
+
+قواعد production:
+\begin{itemize}
+  \item فایل \code{.env} نباید در git commit شود.
+  \item \code{JWT_SECRET} باید تصادفی، طولانی و متفاوت برای هر محیط باشد.
+  \item دسترسی فایل \code{.env} باید فقط برای کاربر runtime لازم باشد.
+  \item rotation برای \code{JWT_SECRET} باید با برنامه انجام شود، چون تغییر آن همه JWTهای قبلی را نامعتبر می‌کند.
+  \item \code{APP_DEBUG=false} و \code{APP_ENV=production} باید در production قطعی باشد.
+\end{itemize}
+
+\section{امنیت آپلود فایل}
+فایل \code{upload.php} یکی از کامل‌ترین کنترل‌های امنیتی پروژه است. نوع‌های مجاز شامل \code{jpg}، \code{jpeg}، \code{png}، \code{gif}، \code{webp} و \code{pdf} است. مسیر ذخیره با channel و تاریخ ساخته می‌شود و نام ذخیره‌شده با \code{random_bytes(24)} تولید می‌گردد.
+
+کنترل‌های upload:
+\begin{itemize}
+  \item بررسی \code{UPLOAD_ERR_*}.
+  \item الزام \code{is_uploaded_file}.
+  \item محدودیت اندازه با \code{UPLOAD_MAX_BYTES}.
+  \item پاک‌سازی نام اصلی فایل و حذف کاراکترهای کنترلی.
+  \item رد پسوندهای خطرناک حتی در نام‌های چندپسوندی مانند \code{file.php.jpg}.
+  \item allowlist پسوند و MIME با \code{finfo}.
+  \item رد payloadهای شامل \code{<?php}، \code{<script}، \code{<svg}، HTML و shebang.
+  \item رد فایل executable ویندوز با امضای \code{MZ}.
+  \item بررسی dimensions و MIME داخلی برای تصویر.
+  \item بررسی امضای \code{\%PDF-} و active content در PDF.
+  \item ساخت \code{.htaccess} برای غیرفعال‌کردن اجرای فایل و بستن index listing.
+  \item بررسی اینکه مسیر target داخل upload root باقی بماند.
+\end{itemize}
+
+ریسک باقی‌مانده: اگر پروژه روی وب‌سروری غیر از Apache اجرا شود، \code{.htaccess} اعمال نمی‌شود. در این حالت باید معادل Nginx/IIS برای جلوگیری از اجرای فایل‌ها و غیرفعال‌کردن directory listing تنظیم شود.
+
+\section{Audit Log و Logging}
+\subsection{Audit مدیریتی}
+فایل \code{admin-audit.php} رخدادهای مدیریتی سوپرادمین را در \code{admin_audit_logs} ثبت می‌کند. داده‌های ثبت‌شده شامل actor، نقش، action، entity، tenant، site، target user، plan، توضیح، IP، user-agent و old/new values است.
+
+برای جلوگیری از افشای اطلاعات حساس، تابع \code{admin_audit_sanitize} کلیدهایی مانند \code{password}، \code{password_hash}، \code{new_password}، \code{token}، \code{jwt_secret}، \code{secret}، \code{api_key}، \code{authorization} و \code{cookie} را با \code{[REDACTED]} جایگزین می‌کند.
+
+\subsection{Error Handling}
+فایل \code{error-handler.php} در production نمایش خطا را خاموش می‌کند و خطاهای جدی را با پیام عمومی \code{Internal server error} برمی‌گرداند. تابع \code{json_response} نیز در production کلیدهای حساس خطاهای 5xx مانند \code{debug}، \code{trace}، \code{file}، \code{line}، \code{sql} و \code{pdo_error} را حذف می‌کند.
+
+\section{Security Headers}
+فایل \code{security-headers.php} هدرهای امنیتی عمومی را برای APIها ارسال می‌کند:
+\begin{itemize}
+  \item \code{X-Content-Type-Options: nosniff}
+  \item \code{X-Frame-Options: DENY}
+  \item \code{Referrer-Policy: no-referrer}
+  \item \code{X-Permitted-Cross-Domain-Policies: none}
+  \item \code{Permissions-Policy} با غیرفعال‌سازی قابلیت‌های حساس مرورگر.
+  \item \code{Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'} برای API.
+  \item \code{Strict-Transport-Security} فقط در production و زمانی که درخواست HTTPS تشخیص داده شود.
+\end{itemize}
+
+این هدرها برای API مناسب هستند. اگر frontend یا widget HTML مستقل از همین backend سرو شود، باید CSP جداگانه و متناسب با نیازهای asset/script آن تعریف شود.
+
+\section{امنیت دیتابیس و Queryها}
+کدهای بررسی‌شده عمدتا از PDO prepared statements استفاده می‌کنند و این موضوع ریسک SQL Injection را کاهش می‌دهد. اتصال دیتابیس با charset \code{utf8mb4} انجام می‌شود و \code{PDO::ATTR_ERRMODE} روی exception قرار دارد. خطای اتصال دیتابیس پیام عمومی برمی‌گرداند و رمز دیتابیس در خروجی چاپ نمی‌شود.
+
+الزامات تکمیلی production:
+\begin{itemize}
+  \item کاربر دیتابیس باید حداقل دسترسی لازم را داشته باشد.
+  \item دسترسی مستقیم اینترنت به MySQL باید بسته باشد.
+  \item backup دیتابیس باید رمزگذاری و تست بازیابی شود.
+  \item migration/schema باید versioned و قابل audit باشد.
+  \item برای گزارش‌ها و جست‌وجوهای دارای sort/filter داینامیک، فقط allowlist ستون‌ها مجاز باشد.
+\end{itemize}
+
+\section{Threat Model}
+\begin{longtable}{R{30mm} R{50mm} R{52mm} R{28mm}}
+\toprule
+\textbf{دسته تهدید} & \textbf{سناریو} & \textbf{کنترل موجود} & \textbf{ریسک باقی‌مانده} \\
+\midrule
+\endhead
+\en{Spoofing} & جعل هویت کاربر پنل با توکن نامعتبر یا قدیمی & JWT امضاشده، \code{exp}، \code{iss/aud}، \code{token_version}، فعال بودن کاربر & سرقت توکن از کلاینت در صورت XSS \\
+\en{Tampering} & تغییر داده سایت یا گفتگوی tenant دیگر & RBAC، \code{require_site_access}، prepared statements & نیاز به audit endpointهای جدید \\
+\en{Repudiation} & انکار عملیات مدیریتی & \code{admin_audit_logs} با actor/IP/user-agent & پوشش audit برای همه عملیات غیرسوپرادمین کامل نیست \\
+\en{Information Disclosure} & افشای stack trace، SQL یا مسیر فایل & production sanitization، error handler، debug flag & تنظیم اشتباه \code{APP_DEBUG} \\
+\en{Denial of Service} & spam پیام ویجت، login brute force یا upload abuse & rate limit، upload size limit، plan limits & نیاز به WAF/reverse proxy برای حملات حجیم \\
+\en{Elevation of Privilege} & دسترسی agent به قابلیت customer admin یا super admin & \code{require_role} در endpointها & endpoint جدید بدون role check می‌تواند ریسک ایجاد کند \\
+\bottomrule
+\end{longtable}
+
+\section{نگاشت OWASP Top 10}
+\begin{longtable}{R{42mm} R{78mm} R{34mm}}
+\toprule
+\textbf{دسته OWASP} & \textbf{وضعیت در پروژه} & \textbf{اقدام پیشنهادی} \\
+\midrule
+\endhead
+\en{A01 Broken Access Control} & RBAC و \code{site-access} وجود دارد؛ tenant فعال هم کنترل می‌شود. & تست خودکار IDOR برای endpointهای site/conversation. \\
+\en{A02 Cryptographic Failures} & password hash وجود دارد؛ TLS و at-rest encryption وابسته به زیرساخت است. & اجبار HTTPS، backup encrypted، بررسی storage عمومی. \\
+\en{A03 Injection} & PDO prepared statements رایج است. & static review برای queryهای داینامیک و allowlist sort/filter. \\
+\en{A04 Insecure Design} & plan limits، role boundaries و widget origin validation در طراحی دیده شده است. & threat modeling دوره‌ای برای AI/crawler و multi-tenant. \\
+\en{A05 Security Misconfiguration} & security headers و env separation وجود دارد. & hardening وب‌سرور، \code{APP_DEBUG=false}، \code{WIDGET_ALLOW_EMPTY_ORIGIN=false}. \\
+\en{A06 Vulnerable Components} & backend عمدتا PHP بدون کتابخانه زیاد است؛ frontend/dependencies باید جدا بررسی شوند. & dependency scanning در CI. \\
+\en{A07 Authentication Failures} & rate limit login، hash، token revocation و password policy وجود دارد. & افزودن MFA، کوتاه‌تر کردن TTL و session/device management. \\
+\en{A08 Software/Data Integrity Failures} & upload validation و random filenames وجود دارد. & کنترل integrity deployment و امضای artifactها. \\
+\en{A09 Logging/Monitoring Failures} & audit مدیریتی و error logging وجود دارد. & centralized logging، alerting و retention policy. \\
+\en{A10 SSRF} & crawler URL خارجی fetch می‌کند و SSL verification فعلا غیرفعال است. & allowlist/denylist IP، فعال‌سازی SSL verification و محدودیت redirect. \\
+\bottomrule
+\end{longtable}
+
+\section{Backup و Recovery}
+در کد فعلی مکانیزم backup/recovery پیاده‌سازی نشده و باید به‌عنوان مسئولیت عملیاتی DevOps تعریف شود. برای این سامانه حداقل سیاست زیر لازم است:
+\begin{itemize}
+  \item backup روزانه دیتابیس و نگهداری چند نسخه زمانی.
+  \item رمزگذاری backupها و محدودیت دسترسی به آن‌ها.
+  \item backup از storage پیوست‌ها و تصاویر اعلان، هماهنگ با دیتابیس.
+  \item تست بازیابی دوره‌ای در محیط staging.
+  \item تعریف RPO و RTO برای مشتریان SaaS.
+  \item ثبت رخداد backup/restore در audit یا لاگ عملیاتی.
+\end{itemize}
+
+\section{ریسک‌ها و شکاف‌های شناخته‌شده}
+\begin{longtable}{R{44mm} R{70mm} R{42mm}}
+\toprule
+\textbf{ریسک} & \textbf{شرح} & \textbf{اقدام لازم} \\
+\midrule
+\endhead
+Crawler SSL verification & در \code{ai-crawler.php} گزینه‌های SSL peer/host verification غیرفعال شده‌اند. & برای production فعال شود و خطاهای certificate مدیریت شوند. \\
+نبود OAuth & در کد فعلی OAuth/Social login پیاده‌سازی نشده است. & اگر نیاز محصولی وجود دارد، با provider معتبر و state/PKCE طراحی شود. \\
+نبود MFA & login فقط رمز عبور دارد. & MFA برای super admin و customer admin اضافه شود. \\
+توکن منفرد قابل revoke نیست & \code{token_version} همه توکن‌ها را باطل می‌کند، نه یک device خاص. & جدول session یا token blacklist اضافه شود. \\
+Backup عملیاتی نامشخص & کد backup/recovery ندارد. & سیاست backup زیرساختی و تست restore اضافه شود. \\
+وابستگی \code{.htaccess} & محافظت upload در Apache قوی است، اما روی Nginx اعمال نمی‌شود. & معادل وب‌سرور production تعریف شود. \\
+Rate limit دیتابیسی & در حملات بزرگ می‌تواند DB را درگیر کند. & rate limit در reverse proxy/WAF اضافه شود. \\
+عدم وجود OpenAPI/security tests & قرارداد امنیتی endpointها تست خودکار کامل ندارد. & تست RBAC، IDOR، upload و rate limit در CI اضافه شود. \\
+\bottomrule
+\end{longtable}
+
+\section{چک‌لیست Production}
+\begin{enumerate}
+  \item \code{APP_ENV=production} و \code{APP_DEBUG=false} تنظیم شود.
+  \item \code{JWT_SECRET} تصادفی، حداقل ۳۲ کاراکتر و متفاوت از محیط‌های دیگر باشد.
+  \item \code{PANEL_ALLOWED_ORIGINS} فقط دامنه پنل production باشد.
+  \item \code{WIDGET_ALLOW_EMPTY_ORIGIN=false} شود و \code{WIDGET_ALLOWED_ORIGINS} فقط در موارد ضروری استفاده شود.
+  \item HTTPS اجباری و HSTS فعال شود.
+  \item crawler با SSL verification فعال و محدودیت SSRF اجرا شود.
+  \item کاربر دیتابیس با حداقل سطح دسترسی ساخته شود.
+  \item upload storage خارج از مسیر اجرای PHP یا با تنظیمات سخت‌گیرانه وب‌سرور قرار گیرد.
+  \item backup دیتابیس و فایل‌ها رمزگذاری و restore تست شود.
+  \item لاگ‌ها و audit به سامانه مانیتورینگ مرکزی متصل شوند.
+  \item MFA برای \code{super_admin} و عملیات حساس اضافه شود.
+  \item تست‌های خودکار برای role، tenant isolation، site access، rate limit، upload و token revocation اضافه شود.
+\end{enumerate}
+
+\section{جمع‌بندی}
+امنیت فعلی پروژه برای یک MVP جدی و دمو/عرضه اولیه وضعیت قابل قبولی دارد: احراز هویت JWT، hash رمز، ابطال نشست با \code{token_version}، RBAC، جداسازی tenant/site، CORS جدا برای پنل و ویجت، rate limit، upload validation، security headers و audit مدیریتی پیاده‌سازی شده‌اند. با این حال، برای عرضه تجاری گسترده باید سخت‌سازی production، فعال‌سازی SSL verification در crawler، سیاست backup/recovery، MFA، مانیتورینگ مرکزی و تست‌های امنیتی خودکار تکمیل شوند.
+
+\end{document}
