@@ -1,0 +1,26 @@
+\contentsline {section}{\numberline {1}هدف و دامنه سند}{3}{section.1}%
+\contentsline {section}{\numberline {2}خلاصه معماری}{3}{section.2}%
+\contentsline {section}{\numberline {3}Architecture Diagram}{3}{section.3}%
+\contentsline {subsection}{\numberline {3.1}توضیح معماری کلان}{3}{subsection.3.1}%
+\contentsline {section}{\numberline {4}Context Diagram}{4}{section.4}%
+\contentsline {section}{\numberline {5}Component Diagram}{4}{section.5}%
+\contentsline {subsection}{\numberline {5.1}اجزای اصلی}{4}{subsection.5.1}%
+\contentsline {section}{\numberline {6}Deployment Diagram}{5}{section.6}%
+\contentsline {subsection}{\numberline {6.1}واحدهای قابل استقرار}{5}{subsection.6.1}%
+\contentsline {section}{\numberline {7}Sequence Diagramها}{5}{section.7}%
+\contentsline {subsection}{\numberline {7.1}جریان ایجاد مشتری توسط سوپرادمین}{5}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}جریان مکالمه بازدیدکننده و پاسخ خودکار AI}{5}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}جریان پیشنهاد پاسخ برای Agent}{5}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Class / Domain Diagram}{6}{section.8}%
+\contentsline {section}{\numberline {9}Microservice Diagram / نقشه سرویس‌های منطقی}{7}{section.9}%
+\contentsline {section}{\numberline {10}Network Diagram}{8}{section.10}%
+\contentsline {subsection}{\numberline {10.1}مرزهای امنیتی شبکه}{8}{subsection.10.1}%
+\contentsline {section}{\numberline {11}Database Diagram}{9}{section.11}%
+\contentsline {subsection}{\numberline {11.1}توضیح مدل داده}{9}{subsection.11.1}%
+\contentsline {section}{\numberline {12}معماری جریان داده}{9}{section.12}%
+\contentsline {subsection}{\numberline {12.1}جریان داده چت}{9}{subsection.12.1}%
+\contentsline {subsection}{\numberline {12.2}جریان داده دانش AI}{10}{subsection.12.2}%
+\contentsline {section}{\numberline {13}تصمیم‌های معماری}{10}{section.13}%
+\contentsline {section}{\numberline {14}مقیاس‌پذیری و مسیر تکامل معماری}{11}{section.14}%
+\contentsline {section}{\numberline {15}ریسک‌ها و محدودیت‌های معماری فعلی}{11}{section.15}%
+\contentsline {section}{\numberline {16}جمع‌بندی}{11}{section.16}%
