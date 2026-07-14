@@ -1,6 +1,6 @@
 \documentclass[12pt,a4paper]{article}
 
-\usepackage[margin=2.2cm]{geometry}
+\usepackage[margin=2.3cm]{geometry}
 \usepackage{fontspec}
 \usepackage{xepersian}
 \usepackage{longtable}
@@ -12,9 +12,7 @@
 \usepackage{enumitem}
 \usepackage{fancyhdr}
 \usepackage{titlesec}
-\usepackage{tikz}
-\usepackage{adjustbox}
-\usetikzlibrary{arrows.meta, positioning, shapes.geometric, shapes.multipart, fit, calc}
+\usepackage{fancyvrb}
 
 \providecommand{\UseMathForPositioningText}{}
 
@@ -27,6 +25,13 @@
     \settextfont{Arial}
   }
 }
+
+\IfFontExistsTF{Consolas}{
+  \setmonofont{Consolas}
+}{
+  \setmonofont{Courier New}
+}
+
 \IfFontExistsTF{Arial}{
   \setlatintextfont{Arial}
 }{
@@ -42,12 +47,8 @@
 }
 
 \definecolor{HeaderBlue}{HTML}{1E3A8A}
-\definecolor{AppBlue}{HTML}{DBEAFE}
-\definecolor{ApiGreen}{HTML}{DCFCE7}
-\definecolor{DataYellow}{HTML}{FEF3C7}
-\definecolor{RiskRed}{HTML}{FEE2E2}
-\definecolor{SoftGray}{HTML}{F3F4F6}
-\definecolor{BorderGray}{HTML}{94A3B8}
+\definecolor{SoftGray}{HTML}{F8FAFC}
+\definecolor{BorderGray}{HTML}{CBD5E1}
 
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{7pt}
@@ -65,22 +66,28 @@
 \pagestyle{fancy}
 \fancyhf{}
 \rhead{مستند معماری سیستم AI Chat SaaS}
-\lhead{نسخه 1.0}
+\lhead{نسخه \en{1.0}}
 \cfoot{\thepage}
 
 \newcommand{\en}[1]{\lr{#1}}
 \newcommand{\code}[1]{\lr{\texttt{#1}}}
 
-\tikzset{
-  box/.style={rectangle, rounded corners=3pt, draw=BorderGray, thick, align=center, minimum height=1cm, text width=3.1cm, font=\small},
-  smallbox/.style={rectangle, rounded corners=3pt, draw=BorderGray, thick, align=center, minimum height=0.85cm, text width=2.5cm, font=\scriptsize},
-  actor/.style={rectangle, rounded corners=10pt, draw=HeaderBlue, thick, fill=AppBlue, align=center, minimum height=0.9cm, text width=2.6cm, font=\small},
-  api/.style={box, fill=ApiGreen},
-  app/.style={box, fill=AppBlue},
-  data/.style={box, fill=DataYellow},
-  risk/.style={box, fill=RiskRed},
-  line/.style={-Latex, thick, draw=HeaderBlue},
-  dashedline/.style={-Latex, thick, dashed, draw=BorderGray}
+\newenvironment{diagramblock}
+{%
+  \VerbatimEnvironment
+  \begin{latin}
+  \begin{Verbatim}[
+    fontsize=\small,
+    frame=single,
+    rulecolor=\color{BorderGray},
+    baselinestretch=1,
+    xleftmargin=0.2cm,
+    xrightmargin=0.2cm
+  ]%
+}
+{%
+  \end{Verbatim}
+  \end{latin}
 }
 
 \begin{document}
@@ -97,7 +104,7 @@
 \begin{tabular}{rl}
 \textbf{نام پروژه:} & \en{AI Chat SaaS} \\
 \textbf{نوع سند:} & مستند معماری سیستم \\
-\textbf{نسخه سند:} & 1.0 \\
+\textbf{نسخه سند:} & \en{1.0} \\
 \textbf{تاریخ:} & ۱۴ جولای ۲۰۲۶ \\
 \textbf{نویسنده/تهیه‌کننده:} & مبین یوسفی \\
 \textbf{مسیر سند:} & \code{doc/LaTeX/04-System-Architecture/04-System-Architecture.tex} \\
@@ -125,7 +132,7 @@
   \item \en{Database Diagram}
 \end{itemize}
 
-منابع فنی این سند شامل فایل‌های \code{ArchitectureForMobin.md}، \code{ReportForSale.md}، endpointهای \code{backend/api}، helperهای \code{backend/includes}، migration مربوط به AI و ساختار frontend و widget است.
+منابع فنی این سند شامل \code{ArchitectureForMobin.md}، \code{ReportForSale.md}، endpointهای \code{backend/api}، helperهای \code{backend/includes}، migration مربوط به AI و ساختار frontend و widget است.
 
 \section{خلاصه معماری}
 \en{AI Chat SaaS} یک سامانه B2B SaaS چندمستاجری است که از سه سطح اصلی تشکیل شده است:
@@ -137,111 +144,101 @@
 
 بک‌اند در نسخه فعلی به‌صورت endpointهای مستقل PHP طراحی شده است. هر endpoint مسئول یک عملیات مشخص است و قابلیت‌های مشترک مانند احراز هویت، پاسخ JSON، CORS، کنترل دسترسی سایت، rate limit، upload و موتور AI از طریق فایل‌های \code{backend/includes} استفاده می‌شوند.
 
-\section{Architecture Diagram}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1.4cm and 1.6cm]
-  \node[actor] (visitor) {بازدیدکننده\\\en{Website Visitor}};
-  \node[actor, below=of visitor] (agent) {ادمین/اپراتور\\\en{Admin / Agent}};
-  \node[actor, below=of agent] (super) {سوپرادمین\\\en{Super Admin}};
+\newpage
+\section{نمودار معماری کلان \en{(Architecture Diagram)}}
+\textbf{نمودار ۱: نمای معماری کلان سامانه}
 
-  \node[app, right=2.2cm of visitor] (widget) {ویجت چت\\\code{widget/dist/widget.js}\\\en{Shadow DOM}};
-  \node[app, right=2.2cm of agent] (panel) {پنل مدیریتی\\\code{frontend}\\\en{Next.js / React}};
-
-  \node[api, right=2.4cm of widget] (widgetapi) {API عمومی ویجت\\\code{backend/api/widget}};
-  \node[api, right=2.4cm of panel] (panelapi) {API پنل\\\code{auth / agent / customer / super-admin}};
-
-  \node[api, right=2.4cm of widgetapi] (core) {هسته بک‌اند\\\code{includes}\\Auth, Access, Rate Limit, Upload};
-  \node[data, above right=0.6cm and 2.1cm of core] (db) {پایگاه داده\\\en{MySQL / InnoDB}};
-  \node[data, right=2.1cm of core] (ai) {موتور دانش و AI\\Crawler, Search, Scoring};
-  \node[data, below right=0.6cm and 2.1cm of core] (storage) {فضای فایل\\Uploads / Attachments};
-
-  \draw[line] (visitor) -- (widget);
-  \draw[line] (agent) -- (panel);
-  \draw[line] (super) |- (panel);
-  \draw[line] (widget) -- (widgetapi);
-  \draw[line] (panel) -- (panelapi);
-  \draw[line] (widgetapi) -- (core);
-  \draw[line] (panelapi) -- (core);
-  \draw[line] (core) -- (db);
-  \draw[line] (core) -- (ai);
-  \draw[line] (core) -- (storage);
-  \draw[dashedline] (ai) -- (db);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نمای معماری کلان سامانه}
-\end{figure}
+\begin{diagramblock}
+Website Visitor       Admin / Agent        Super Admin
+      |                    |                    |
+      v                    v                    v
++-------------+      +-------------------------------+
+| Chat Widget |      | Next.js Management Panel      |
+| JS + Shadow |      | Super Admin / Customer / Agent |
++-------------+      +-------------------------------+
+      |                    |
+      v                    v
++-------------+      +-------------------------------+
+| Widget API  |      | Panel APIs                    |
+| site_key    |      | auth / agent / customer / SA  |
++-------------+      +-------------------------------+
+      \                    /
+       \                  /
+        v                v
+   +---------------------------------------------+
+   | PHP Backend Core                            |
+   | auth, jwt, cors, site access, plan limits,  |
+   | rate limit, upload, response, ai helpers    |
+   +---------------------------------------------+
+        |                |                 |
+        v                v                 v
+ +-------------+   +----------------+   +----------------+
+ | MySQL DB    |   | AI Knowledge   |   | Upload Storage |
+ | SaaS data   |   | crawler/search |   | attachments    |
+ +-------------+   +----------------+   +----------------+
+\end{diagramblock}
 
 \subsection{توضیح معماری کلان}
 در این معماری، ویجت و پنل دو client مستقل هستند. ویجت از طریق \code{site\_key} و کنترل origin به API عمومی وصل می‌شود. پنل مدیریتی با JWT و نقش کاربر به endpointهای محافظت‌شده متصل می‌شود. بک‌اند، مرز اصلی اعمال قوانین دسترسی، محدودیت پلن، امنیت فایل، ثبت مکالمه و اجرای منطق AI است.
 
-\section{Context Diagram}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1.5cm and 2cm]
-  \node[api, text width=4.4cm, minimum height=2cm] (system) {سامانه \en{AI Chat SaaS}\\چت، پشتیبانی، AI، SaaS Admin};
-  \node[actor, above left=of system] (customerSite) {سایت مشتری};
-  \node[actor, left=of system] (visitor) {بازدیدکننده};
-  \node[actor, below left=of system] (admin) {ادمین مشتری / Agent};
-  \node[actor, below=of system] (super) {مالک پلتفرم};
-  \node[data, right=of system] (mysql) {MySQL};
-  \node[data, above right=of system] (webpages) {صفحات سایت مشتری\\برای Crawl};
-  \node[data, below right=of system] (uploads) {Storage فایل‌ها};
+\newpage
+\section{نمودار زمینه و مرز سیستم \en{(Context Diagram)}}
+\textbf{نمودار ۲: Context Diagram و مرز سامانه}
 
-  \draw[line] (customerSite) -- node[above, font=\scriptsize]{نصب ویجت} (system);
-  \draw[line] (visitor) -- node[above, font=\scriptsize]{پیام/فایل} (system);
-  \draw[line] (admin) -- node[below, font=\scriptsize]{مدیریت مکالمه و دانش} (system);
-  \draw[line] (super) -- node[right, font=\scriptsize]{مدیریت SaaS} (system);
-  \draw[line] (system) -- node[above, font=\scriptsize]{CRUD / Query} (mysql);
-  \draw[dashedline] (system) -- node[above, font=\scriptsize]{Fetch HTML} (webpages);
-  \draw[line] (system) -- node[below, font=\scriptsize]{Upload / Download URL} (uploads);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نمودار Context و مرز سامانه}
-\end{figure}
+\begin{diagramblock}
+                   +-------------------------+
+                   | Customer Website Pages  |
+                   | HTML used for crawling  |
+                   +-----------+-------------+
+                               |
+                               v
++-------------+       +-----------------------+       +-------------+
+| Visitor     | ----> | AI Chat SaaS System   | ----> | MySQL DB    |
+| chat user   |       | widget + panel + API  |       | data store  |
++-------------+       +-----------------------+       +-------------+
+      ^                         ^       |
+      |                         |       v
++-------------+       +---------+---+   +----------------+
+| Customer    | ----> | Platform   |   | File Storage   |
+| Admin/Agent |       | SuperAdmin |   | uploads        |
++-------------+       +-------------+   +----------------+
+\end{diagramblock}
 
-\section{Component Diagram}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1.1cm and 1.2cm]
-  \node[app] (frontend) {پنل Next.js\\Pages, Components\\\code{frontend/lib/api.ts}};
-  \node[app, below=of frontend] (widget) {ویجت JavaScript\\Shadow DOM\\Polling, LocalStorage};
+مرز سیستم در این نمودار شامل frontend، widget، backend، دیتابیس و storage است. سایت مشتری و مرورگرهای کاربران بیرون از مرز سیستم قرار دارند، اما از طریق script نصب‌شده و APIهای کنترل‌شده با سامانه تعامل می‌کنند.
 
-  \node[api, right=of frontend] (auth) {Auth API\\Login, Me, Password};
-  \node[api, below=of auth] (agentapi) {Agent API\\Conversations, Messages\\AI Suggestions};
-  \node[api, below=of agentapi] (customerapi) {Customer API\\Sites, Team, Knowledge\\AI Settings};
-  \node[api, below=of customerapi] (superapi) {Super Admin API\\Tenants, Plans, Sites};
-  \node[api, below=of superapi] (widgetapi) {Widget API\\Config, Visitor\\Conversation, AI Reply};
+\newpage
+\section{نمودار اجزا \en{(Component Diagram)}}
+\textbf{نمودار ۳: Component Diagram}
 
-  \node[api, right=1.5cm of agentapi] (shared) {Shared Includes\\Auth, JWT, Response\\CORS, Upload, Rate Limit\\Site Access, Plan Limits};
-  \node[api, right=1.5cm of customerapi] (ai) {AI Knowledge Engine\\Crawler, Chunking\\Terms, Scoring};
-  \node[data, right=1.7cm of shared] (db) {MySQL Database\\Tenants, Sites, Users\\Conversations, Messages\\AI Tables};
-  \node[data, below=of db] (files) {Upload Storage\\Chat Attachments\\Announcement Images};
-
-  \draw[line] (frontend) -- (auth);
-  \draw[line] (frontend) -- (agentapi);
-  \draw[line] (frontend) -- (customerapi);
-  \draw[line] (frontend) -- (superapi);
-  \draw[line] (widget) -- (widgetapi);
-
-  \draw[line] (auth) -- (shared);
-  \draw[line] (agentapi) -- (shared);
-  \draw[line] (customerapi) -- (shared);
-  \draw[line] (superapi) -- (shared);
-  \draw[line] (widgetapi) -- (shared);
-  \draw[line] (agentapi) -- (ai);
-  \draw[line] (customerapi) -- (ai);
-  \draw[line] (widgetapi) -- (ai);
-  \draw[line] (shared) -- (db);
-  \draw[line] (ai) -- (db);
-  \draw[line] (shared) -- (files);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نمودار اجزای نرم‌افزاری}
-\end{figure}
+\begin{diagramblock}
++----------------------+        +--------------------------+
+| Frontend / Next.js   |        | Widget / JavaScript      |
+| app pages, api.ts    |        | Shadow DOM, polling      |
++----------+-----------+        +------------+-------------+
+           |                                 |
+           v                                 v
++----------------------+        +--------------------------+
+| Protected Panel APIs |        | Public Widget APIs       |
+| auth, agent,         |        | config, visitor,         |
+| customer, superadmin |        | conversation, ai-reply   |
++----------+-----------+        +------------+-------------+
+           |                                 |
+           +---------------+-----------------+
+                           v
+             +-----------------------------+
+             | Shared Backend Includes     |
+             | auth, jwt, cors, response,  |
+             | site-access, plan-limits,   |
+             | upload, rate-limit, ai      |
+             +--------------+--------------+
+                            |
+        +-------------------+-------------------+
+        v                   v                   v
++---------------+   +----------------+   +----------------+
+| MySQL Tables  |   | AI Engine      |   | File Storage   |
+| SaaS + Chat   |   | crawler/search |   | uploads        |
++---------------+   +----------------+   +----------------+
+\end{diagramblock}
 
 \subsection{اجزای اصلی}
 \begin{longtable}{>{\raggedleft\arraybackslash}p{4cm} p{10.5cm}}
@@ -260,31 +257,31 @@
 \bottomrule
 \end{longtable}
 
-\section{Deployment Diagram}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1.25cm and 1.5cm]
-  \node[actor] (browser1) {Browser\\Visitor};
-  \node[actor, below=of browser1] (browser2) {Browser\\Admin/Agent};
-  \node[app, right=of browser1] (cdn) {Static Hosting\\\code{widget/dist/widget.js}};
-  \node[app, right=of browser2] (next) {Frontend Server\\Next.js\\Port 3000 / HTTPS};
-  \node[api, right=1.8cm of next] (php) {PHP Web Server\\Apache/Nginx + PHP\\\code{backend/api}};
-  \node[data, right=1.8cm of php] (mysql) {MySQL Server\\Database\\\code{ai\_chat\_saas}};
-  \node[data, below=of mysql] (storage) {Filesystem Storage\\\code{backend/storage/uploads}};
-  \node[data, above=of php] (env) {Environment Config\\.env, URLs, JWT, CORS};
+\newpage
+\section{نمودار استقرار \en{(Deployment Diagram)}}
+\textbf{نمودار ۴: Deployment Diagram منطقی}
 
-  \draw[line] (browser1) -- node[above, font=\scriptsize]{load script} (cdn);
-  \draw[line] (browser1) |- node[above, font=\scriptsize]{HTTPS JSON API} (php);
-  \draw[line] (browser2) -- node[below, font=\scriptsize]{HTTPS} (next);
-  \draw[line] (next) -- node[above, font=\scriptsize]{fetch API + JWT} (php);
-  \draw[line] (php) -- node[above, font=\scriptsize]{PDO} (mysql);
-  \draw[line] (php) -- node[right, font=\scriptsize]{read/write files} (storage);
-  \draw[dashedline] (env) -- (php);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نمودار استقرار منطقی}
-\end{figure}
+\begin{diagramblock}
+Browser / Visitor
+   | loads widget script
+   v
+Static Widget Host or CDN
+   |
+   | HTTPS JSON API
+   v
+PHP Backend Host  <-------------------  Browser / Admin
+Apache/Nginx + PHP                      |
+backend/api/*                           | HTTPS
+   |                                    v
+   | PDO                         Next.js Frontend Host
+   v                              frontend/app/*
+MySQL Server
+ai_chat_saas database
+   ^
+   |
+PHP Backend Host ---- file IO ---- Upload Storage
+backend/storage/uploads
+\end{diagramblock}
 
 \subsection{واحدهای قابل استقرار}
 \begin{itemize}
@@ -295,182 +292,131 @@
   \item \textbf{Storage:} مسیر ذخیره فایل‌های پیوست و تصاویر اعلان‌ها.
 \end{itemize}
 
-\section{Sequence Diagramها}
+\newpage
+\section{نمودارهای توالی \en{(Sequence Diagrams)}}
 \subsection{جریان ایجاد مشتری توسط سوپرادمین}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1.1cm]
-  \node[smallbox] (super) {Super Admin};
-  \node[smallbox, right=1.1cm of super] (panel) {Next.js Panel};
-  \node[smallbox, right=1.1cm of panel] (api) {\code{customer-create.php}};
-  \node[smallbox, right=1.1cm of api] (auth) {Auth/Role};
-  \node[smallbox, right=1.1cm of auth] (db) {MySQL};
+\textbf{نمودار ۵: Sequence ایجاد مشتری، سایت و ادمین مشتری}
 
-  \draw[line] (super) -- node[above, font=\scriptsize]{submit tenant/site/admin} (panel);
-  \draw[line] (panel) -- node[above, font=\scriptsize]{POST + JWT} (api);
-  \draw[line] (api) -- node[above, font=\scriptsize]{require\_auth, super\_admin} (auth);
-  \draw[line] (api) -- node[above, font=\scriptsize]{validate plan/email/domain} (db);
-  \draw[line] (api) to[bend left=18] node[above, font=\scriptsize]{begin transaction} (db);
-  \draw[line] (api) to[bend left=10] node[below, font=\scriptsize]{insert tenant, site, user, access} (db);
-  \draw[line] (db) -- node[below, font=\scriptsize]{ids + commit} (api);
-  \draw[line] (api) -- node[below, font=\scriptsize]{site\_key + install code} (panel);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{Sequence ایجاد مشتری، سایت و ادمین مشتری}
-\end{figure}
+\begin{diagramblock}
+SuperAdmin -> Panel: submit tenant, site, admin, plan
+Panel -> customer-create.php: POST payload + Bearer JWT
+customer-create.php -> Auth: require_auth + require_role(super_admin)
+customer-create.php -> MySQL: validate plan, email, domain
+customer-create.php -> MySQL: BEGIN TRANSACTION
+customer-create.php -> MySQL: INSERT tenants
+customer-create.php -> MySQL: INSERT sites with generated site_key
+customer-create.php -> MySQL: INSERT customer_admin user
+customer-create.php -> MySQL: INSERT agent_site_access
+customer-create.php -> MySQL: COMMIT
+customer-create.php -> Panel: tenant_id, site_id, site_key, install_code
+\end{diagramblock}
 
 \subsection{جریان مکالمه بازدیدکننده و پاسخ خودکار AI}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=0.9cm]
-  \node[smallbox] (visitor) {Visitor};
-  \node[smallbox, right=0.9cm of visitor] (widget) {Widget};
-  \node[smallbox, right=0.9cm of widget] (wapi) {Widget API};
-  \node[smallbox, right=0.9cm of wapi] (core) {Core Checks};
-  \node[smallbox, right=0.9cm of core] (ai) {AI Engine};
-  \node[smallbox, right=0.9cm of ai] (db) {MySQL};
+\textbf{نمودار ۶: Sequence مکالمه و AI Auto Reply}
 
-  \draw[line] (visitor) -- node[above, font=\scriptsize]{open chat} (widget);
-  \draw[line] (widget) -- node[above, font=\scriptsize]{config(site\_key)} (wapi);
-  \draw[line] (widget) -- node[above, font=\scriptsize]{visitor-start} (wapi);
-  \draw[line] (widget) -- node[above, font=\scriptsize]{conversation-start} (wapi);
-  \draw[line] (wapi) -- node[above, font=\scriptsize]{origin + plan limit} (core);
-  \draw[line] (core) -- node[above, font=\scriptsize]{read/write visitor, conversation} (db);
-  \draw[line] (visitor) -- node[below, font=\scriptsize]{send message} (widget);
-  \draw[line] (widget) -- node[below, font=\scriptsize]{message-send} (wapi);
-  \draw[line] (wapi) -- node[below, font=\scriptsize]{insert message} (db);
-  \draw[line] (widget) -- node[above, font=\scriptsize]{ai-reply(message\_id)} (wapi);
-  \draw[line] (wapi) -- node[above, font=\scriptsize]{site/tenant/online/settings} (core);
-  \draw[line] (core) -- node[above, font=\scriptsize]{find best answer} (ai);
-  \draw[line] (ai) -- node[above, font=\scriptsize]{knowledge search} (db);
-  \draw[line] (wapi) -- node[below, font=\scriptsize]{insert AI/fallback + log} (db);
-  \draw[line] (widget) -- node[below, font=\scriptsize]{poll messages} (wapi);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{Sequence مکالمه و پاسخ خودکار AI در ویجت}
-\end{figure}
+\begin{diagramblock}
+Visitor -> Widget: open chat and submit first message
+Widget -> widget/config.php: GET config by site_key
+Widget -> widget/visitor-start.php: POST browser_id, name, phone, email
+Widget -> widget/conversation-start.php: POST site_key, visitor_id, source page
+conversation-start.php -> Core: validate site_key, origin, active site/tenant
+conversation-start.php -> PlanLimits: ensure monthly conversation limit
+conversation-start.php -> MySQL: create or reuse active conversation
+Widget -> widget/message-send.php: POST visitor message
+message-send.php -> MySQL: insert message(sender_type=visitor)
+Widget -> widget/ai-reply.php: POST message_id
+ai-reply.php -> Core: check ai_mode, settings, duplicate, support online
+ai-reply.php -> AI Engine: ai_find_best_answer(site, question)
+AI Engine -> MySQL: search knowledge_sources, ai_content_chunks, generated_questions
+ai-reply.php -> MySQL: insert AI/fallback message, log, unanswered if needed
+Widget -> widget/messages-list.php: poll latest messages
+\end{diagramblock}
 
 \subsection{جریان پیشنهاد پاسخ برای Agent}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1cm]
-  \node[smallbox] (agent) {Agent};
-  \node[smallbox, right=1cm of agent] (panel) {Panel};
-  \node[smallbox, right=1cm of panel] (api) {\code{ai-suggestion-generate.php}};
-  \node[smallbox, right=1cm of api] (access) {Auth + Site Access + Plan};
-  \node[smallbox, right=1cm of access] (ai) {AI Answer Engine};
-  \node[smallbox, right=1cm of ai] (db) {MySQL};
+\textbf{نمودار ۷: Sequence تولید AI Suggestion برای اپراتور}
 
-  \draw[line] (agent) -- node[above, font=\scriptsize]{request suggestion} (panel);
-  \draw[line] (panel) -- node[above, font=\scriptsize]{POST conversation\_id + JWT} (api);
-  \draw[line] (api) -- node[above, font=\scriptsize]{role, plan, site access} (access);
-  \draw[line] (api) -- node[above, font=\scriptsize]{load latest visitor message} (db);
-  \draw[line] (api) -- node[above, font=\scriptsize]{question + site} (ai);
-  \draw[line] (ai) -- node[above, font=\scriptsize]{knowledge/chunks/questions} (db);
-  \draw[line] (api) -- node[below, font=\scriptsize]{upsert ai\_suggestions + log} (db);
-  \draw[line] (api) -- node[below, font=\scriptsize]{reply, confidence, sources} (panel);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{Sequence تولید پیشنهاد پاسخ برای اپراتور}
-\end{figure}
+\begin{diagramblock}
+Agent -> Panel: click generate AI suggestion
+Panel -> ai-suggestion-generate.php: POST conversation_id + Bearer JWT
+ai-suggestion-generate.php -> Auth: require_auth, role customer_admin/agent
+ai-suggestion-generate.php -> PlanLimits: require ai_suggestions_enabled
+ai-suggestion-generate.php -> SiteAccess: require_site_access
+ai-suggestion-generate.php -> MySQL: load conversation and latest visitor message
+ai-suggestion-generate.php -> AI Engine: ai_find_best_answer(site, question)
+AI Engine -> MySQL: search manual knowledge, chunks, generated questions
+ai-suggestion-generate.php -> MySQL: upsert ai_suggestions
+ai-suggestion-generate.php -> MySQL: insert ai_answer_logs
+ai-suggestion-generate.php -> MySQL: insert unanswered if score is low
+ai-suggestion-generate.php -> Panel: suggested_reply, confidence, sources
+\end{diagramblock}
 
-\section{Class / Domain Diagram}
-در PHP فعلی، مدل‌ها به‌صورت کلاس‌های domain entity پیاده‌سازی نشده‌اند؛ اما domain model سیستم از جداول و endpointها قابل استخراج است. نمودار زیر کلاس/موجودیت‌های دامنه و روابط اصلی را نشان می‌دهد.
+\newpage
+\section{نمودار دامنه \en{(Class / Domain Diagram)}}
+در PHP فعلی، مدل‌ها به‌صورت کلاس‌های domain entity پیاده‌سازی نشده‌اند؛ اما domain model سیستم از جداول و endpointها قابل استخراج است.
 
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1.2cm and 1cm]
-  \node[data] (tenant) {Tenant\\مشتری};
-  \node[data, right=of tenant] (plan) {Plan\\پلن};
-  \node[data, below=of tenant] (site) {Site\\سایت};
-  \node[data, below=of site] (visitor) {Visitor\\بازدیدکننده};
-  \node[data, right=of site] (user) {User\\کاربر پنل};
-  \node[data, right=of user] (access) {AgentSiteAccess\\دسترسی سایت};
-  \node[data, below=of visitor] (conv) {Conversation\\مکالمه};
-  \node[data, right=of conv] (msg) {Message\\پیام};
-  \node[data, right=of msg] (attach) {Attachment\\پیوست};
-  \node[data, below=of site] at ($(site)+(3.2,-2.7)$) (knowledge) {KnowledgeSource\\دانش دستی};
-  \node[data, below=of knowledge] (aitables) {AI Tables\\Pages, Chunks, Terms\\Questions, Logs};
+\textbf{نمودار ۸: Domain/Class Diagram مفهومی}
+\begin{diagramblock}
+Plan 1 --- * Tenant
+Tenant 1 --- * Site
+Tenant 1 --- * User
+User * --- * Site       through agent_site_access
+Site 1 --- * Visitor
+Site 1 --- * Conversation
+Visitor 1 --- * Conversation
+Conversation 1 --- * Message
+Message 1 --- * MessageAttachment
+Site 1 --- * KnowledgeSource
+Site 1 --- 1 AiSiteSettings
+Site 1 --- * AiPage
+AiPage 1 --- * AiContentChunk
+AiContentChunk 1 --- * AiTerm
+AiContentChunk 1 --- * AiGeneratedQuestion
+Conversation 1 --- * AiAnswerLog
+Conversation 1 --- * AiUnansweredQuestion
+\end{diagramblock}
 
-  \draw[line] (tenant) -- node[above, font=\scriptsize]{has plan} (plan);
-  \draw[line] (tenant) -- node[right, font=\scriptsize]{owns} (site);
-  \draw[line] (tenant) -- node[above, font=\scriptsize]{has users} (user);
-  \draw[line] (user) -- (access);
-  \draw[line] (access) -- (site);
-  \draw[line] (site) -- node[right, font=\scriptsize]{has visitors} (visitor);
-  \draw[line] (visitor) -- node[right, font=\scriptsize]{starts} (conv);
-  \draw[line] (site) -- (conv);
-  \draw[line] (conv) -- node[above, font=\scriptsize]{contains} (msg);
-  \draw[line] (msg) -- node[above, font=\scriptsize]{may have} (attach);
-  \draw[line] (site) -- (knowledge);
-  \draw[line] (site) -- (aitables);
-  \draw[line] (knowledge) -- (aitables);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نمودار دامنه و روابط مفهومی}
-\end{figure}
-
-\section{Microservice Diagram / نقشه سرویس‌های منطقی}
+\newpage
+\section{نقشه سرویس‌های منطقی \en{(Microservice Diagram)}}
 کد فعلی به‌صورت microservice فیزیکی جداگانه پیاده‌سازی نشده است؛ همه APIها در یک بک‌اند PHP قرار دارند. با این حال، معماری داخلی به چند سرویس منطقی تقسیم می‌شود که در آینده می‌توانند به سرویس مستقل تبدیل شوند.
 
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1cm and 1cm]
-  \node[api] (gateway) {PHP API Backend\\Monolith فعلی};
-  \node[smallbox, below left=of gateway] (auth) {Auth Service\\JWT, Roles};
-  \node[smallbox, below=of gateway] (tenant) {Tenant Service\\Plans, Sites, Users};
-  \node[smallbox, below right=of gateway] (chat) {Chat Service\\Visitors, Conversations};
-  \node[smallbox, below=of tenant] (ai) {AI Knowledge Service\\Crawler, Search, Scoring};
-  \node[smallbox, left=of ai] (file) {File Service\\Upload Validation};
-  \node[smallbox, right=of ai] (report) {Reporting Service\\Dashboards, Usage};
-  \node[data, below=of ai] (db) {Shared MySQL Database};
+\textbf{نمودار ۹: سرویس‌های منطقی داخل Monolith فعلی}
+\begin{diagramblock}
+                  +---------------------+
+                  | PHP API Monolith    |
+                  +----------+----------+
+                             |
+    +------------------------+------------------------+
+    |             |            |          |            |
+    v             v            v          v            v
+Auth Service  Tenant/Site   Chat/InBox  AI/KM      Reporting
+JWT, roles    Plans, users  messages    crawler    dashboards
+                           conversations search     usage
+    |             |            |          |            |
+    +-------------+------------+----------+------------+
+                              v
+                    Shared MySQL Database
+\end{diagramblock}
 
-  \draw[line] (gateway) -- (auth);
-  \draw[line] (gateway) -- (tenant);
-  \draw[line] (gateway) -- (chat);
-  \draw[line] (gateway) -- (file);
-  \draw[line] (gateway) -- (ai);
-  \draw[line] (gateway) -- (report);
-  \draw[line] (auth) -- (db);
-  \draw[line] (tenant) -- (db);
-  \draw[line] (chat) -- (db);
-  \draw[line] (file) -- (db);
-  \draw[line] (ai) -- (db);
-  \draw[line] (report) -- (db);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نقشه سرویس‌های منطقی در معماری فعلی}
-\end{figure}
-
-\section{Network Diagram}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1.3cm and 1.5cm]
-  \node[actor] (internet) {Internet\\Browsers};
-  \node[app, right=of internet] (edge) {HTTPS / Domain\\TLS Termination};
-  \node[app, right=of edge] (frontend) {Frontend Host\\Next.js};
-  \node[api, below=of frontend] (api) {Backend API Host\\PHP};
-  \node[data, right=of api] (db) {Private DB Network\\MySQL};
-  \node[data, below=of api] (storage) {Private/Protected Storage\\Uploads};
-  \node[data, above=of frontend] (widget) {Static Widget URL\\CDN or Public Path};
-
-  \draw[line] (internet) -- node[above, font=\scriptsize]{HTTPS} (edge);
-  \draw[line] (edge) -- node[above, font=\scriptsize]{panel traffic} (frontend);
-  \draw[line] (edge) |- node[left, font=\scriptsize]{api traffic} (api);
-  \draw[line] (edge) |- node[left, font=\scriptsize]{widget script} (widget);
-  \draw[line] (frontend) -- node[right, font=\scriptsize]{API requests} (api);
-  \draw[line] (api) -- node[above, font=\scriptsize]{3306 / internal} (db);
-  \draw[line] (api) -- node[right, font=\scriptsize]{file IO} (storage);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نمودار شبکه پیشنهادی برای استقرار production}
-\end{figure}
+\newpage
+\section{نمودار شبکه \en{(Network Diagram)}}
+\textbf{نمودار ۱۰: Network Diagram پیشنهادی برای Production}
+\begin{diagramblock}
+Internet Browsers
+      |
+      | HTTPS
+      v
+Public Domain / TLS Termination
+      |
+      +----> Next.js Frontend Host
+      |
+      +----> PHP Backend API Host
+      |          |
+      |          +---- internal DB connection ----> Private MySQL Server
+      |          |
+      |          +---- protected file IO --------> Upload Storage
+      |
+      +----> Static Widget URL / CDN
+\end{diagramblock}
 
 \subsection{مرزهای امنیتی شبکه}
 \begin{itemize}
@@ -480,53 +426,34 @@
   \item ویجت باید از مسیر پایدار HTTPS ارائه شود تا سایت مشتری بتواند script را امن بارگذاری کند.
 \end{itemize}
 
-\section{Database Diagram}
-\begin{figure}[h!]
-\centering
-\begin{adjustbox}{max width=\textwidth}
-\begin{tikzpicture}[node distance=1cm and 0.9cm]
-  \node[data] (plans) {plans};
-  \node[data, below=of plans] (tenants) {tenants};
-  \node[data, below=of tenants] (sites) {sites};
-  \node[data, left=of sites] (users) {users};
-  \node[data, left=of users] (asa) {agent\_site\_access};
-  \node[data, below=of sites] (visitors) {visitors};
-  \node[data, below=of visitors] (conv) {conversations};
-  \node[data, right=of conv] (messages) {messages};
-  \node[data, right=of messages] (attachments) {message\_attachments};
-  \node[data, right=of sites] (knowledge) {knowledge\_sources};
-  \node[data, below=of knowledge] (aisettings) {ai\_site\_settings};
-  \node[data, below=of aisettings] (aipages) {ai\_pages};
-  \node[data, right=of aipages] (chunks) {ai\_content\_chunks};
-  \node[data, right=of chunks] (terms) {ai\_terms};
-  \node[data, below=of chunks] (questions) {ai\_generated\_questions};
-  \node[data, below=of messages] (logs) {ai\_answer\_logs};
-  \node[data, below=of conv] (unanswered) {ai\_unanswered\_questions};
-
-  \draw[line] (tenants) -- (plans);
-  \draw[line] (tenants) -- (sites);
-  \draw[line] (tenants) -- (users);
-  \draw[line] (users) -- (asa);
-  \draw[line] (asa) -- (sites);
-  \draw[line] (sites) -- (visitors);
-  \draw[line] (sites) -- (conv);
-  \draw[line] (visitors) -- (conv);
-  \draw[line] (conv) -- (messages);
-  \draw[line] (messages) -- (attachments);
-  \draw[line] (sites) -- (knowledge);
-  \draw[line] (sites) -- (aisettings);
-  \draw[line] (sites) -- (aipages);
-  \draw[line] (aipages) -- (chunks);
-  \draw[line] (chunks) -- (terms);
-  \draw[line] (chunks) -- (questions);
-  \draw[line] (messages) -- (logs);
-  \draw[line] (conv) -- (logs);
-  \draw[line] (conv) -- (unanswered);
-  \draw[line] (messages) -- (unanswered);
-\end{tikzpicture}
-\end{adjustbox}
-\caption{نمودار سطح بالا از پایگاه داده و روابط اصلی}
-\end{figure}
+\newpage
+\section{نمودار پایگاه داده \en{(Database Diagram)}}
+\textbf{نمودار ۱۱: Database Diagram سطح بالا}
+\begin{diagramblock}
+plans
+  |
+tenants
+  |---------------- users
+  |                    |
+  |                    +-- agent_site_access -- sites
+  |                                             |
+  +-------------------- sites -----------------+
+                         |
+                         +-- visitors
+                         |      |
+                         |      +-- conversations -- messages -- message_attachments
+                         |                 |             |
+                         |                 |             +-- ai_answer_logs
+                         |                 +-- ai_unanswered_questions
+                         |
+                         +-- knowledge_sources
+                         +-- ai_site_settings
+                         +-- ai_crawl_sources -- ai_crawl_runs
+                         +-- ai_pages -- ai_content_chunks -- ai_terms
+                                      |                  |
+                                      |                  +-- ai_generated_questions
+                                      +-- ai_answer_logs
+\end{diagramblock}
 
 \subsection{توضیح مدل داده}
 مدل داده حول محور tenant و site شکل گرفته است. این دو موجودیت مرز اصلی چندمستاجری هستند. کاربران، سایت‌ها، دانش AI، مکالمات، پیام‌ها و گزارش‌ها باید در سطح tenant/site فیلتر شوند. جداول AI در migration موجود با کلیدهای خارجی به \code{tenants} و \code{sites} متصل شده‌اند و برای جست‌وجوی بهتر دارای ایندکس و \en{FULLTEXT KEY} هستند.
