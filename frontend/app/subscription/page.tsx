@@ -1,5 +1,5 @@
 // مسیر فایل: ai-chat-saas/frontend/app/subscription/page.tsx
-// هدف: نمایش پلن فعلی مشتری و مصرف محدودیت‌ها
+// هدف: نمایش حرفه‌ای وضعیت پلن و مصرف واقعی محدودیت‌ها
 
 "use client";
 
@@ -8,11 +8,24 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
 
+type UsageStatus =
+    | "normal"
+    | "warning"
+    | "reached"
+    | "exceeded"
+    | "unavailable";
+
 type UsageItem = {
     used: number;
     limit: number;
     remaining: number;
     percent: number;
+    near_limit: boolean;
+    reached: boolean;
+    over_limit: boolean;
+    over_by: number;
+    status: UsageStatus;
+    active?: number;
 };
 
 type PlanUsageData = {
@@ -27,6 +40,7 @@ type PlanUsageData = {
         description: string | null;
         price_monthly: number;
         is_active: boolean;
+        assigned: boolean;
         limits: {
             max_sites: number;
             max_agents: number;
@@ -42,17 +56,22 @@ type PlanUsageData = {
         sites: UsageItem;
         agents: UsageItem;
         monthly_conversations: UsageItem;
-        knowledge_items: {
-            used: number;
-        };
-        ai_suggestions_this_month: {
-            used: number;
-        };
+        knowledge_items: { used: number };
+        ai_suggestions_this_month: { used: number };
+        ai_auto_replies_this_month: { used: number };
     };
     period: {
         month_start: string;
         now: string;
     };
+};
+
+const usageStatusLabels: Record<UsageStatus, string> = {
+    normal: "عادی",
+    warning: "نزدیک سقف",
+    reached: "ظرفیت تکمیل",
+    exceeded: "عبور از سقف",
+    unavailable: "غیرفعال",
 };
 
 export default function SubscriptionPage() {
@@ -76,7 +95,11 @@ export default function SubscriptionPage() {
             const response = await apiRequest("/customer/plan-usage.php");
             setData(response);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "خطا در دریافت اطلاعات پلن");
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "خطا در دریافت اطلاعات پلن"
+            );
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -103,10 +126,11 @@ export default function SubscriptionPage() {
         <AppShell
             title="پلن و مصرف"
             kicker="Subscription"
-            description="مشاهده پلن فعلی، قابلیت‌های فعال و میزان مصرف سهمیه"
+            description="مشاهده پلن فعلی، قابلیت‌های فعال و میزان مصرف واقعی سهمیه"
             actions={
                 <button
                     className="btn secondary"
+                    type="button"
                     onClick={() => loadPlanUsage(true)}
                     disabled={refreshing}
                 >
@@ -114,133 +138,171 @@ export default function SubscriptionPage() {
                 </button>
             }
         >
-            {error && <div className="error">{error}</div>}
+            <div className="subscription-page">
+                {error && <div className="error">{error}</div>}
 
-            {loading || !data ? (
-                <section className="subscription-card">
-                    <p className="muted">در حال بارگذاری اطلاعات پلن...</p>
-                </section>
-            ) : (
-                <>
-                    <section className="subscription-hero">
-                        <div className="subscription-hero-top">
+                {loading || !data ? (
+                    <section className="subscription-card">
+                        <p className="muted">در حال بارگذاری اطلاعات پلن...</p>
+                    </section>
+                ) : (
+                    <>
+                        <section className="subscription-hero">
                             <div>
-                                <span className="soft-chip primary">پلن فعلی</span>
-
-                                <h2 className="subscription-plan-name">
-                                    {data.plan.name || "بدون پلن"}
-                                </h2>
-
-                                <p className="subscription-plan-description">
+                                <span className="subscription-chip is-primary">
+                                    پلن فعلی
+                                </span>
+                                <h2>{data.plan.name || "بدون پلن"}</h2>
+                                <p>
                                     {data.plan.description ||
-                                        "برای این پلن توضیحی ثبت نشده است. محدودیت‌ها و قابلیت‌های فعال در پایین نمایش داده شده‌اند."}
+                                        "برای این پلن توضیحی ثبت نشده است."}
                                 </p>
                             </div>
 
-                            <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                <span
-                    className={`soft-chip ${
-                        data.plan.is_active ? "success" : "danger"
-                    }`}
-                >
-                  {data.plan.is_active ? "پلن فعال" : "پلن غیرفعال"}
-                </span>
-
-                                <strong style={{ fontSize: 26 }}>
-                                    {Number(data.plan.price_monthly || 0).toLocaleString("fa-IR")}
+                            <div className="subscription-price">
+                                <span
+                                    className={`subscription-chip ${
+                                        data.plan.is_active
+                                            ? "is-success"
+                                            : "is-danger"
+                                    }`}
+                                >
+                                    {data.plan.is_active
+                                        ? "پلن فعال"
+                                        : "پلن غیرفعال"}
+                                </span>
+                                <strong>
+                                    {data.plan.price_monthly === 0
+                                        ? "رایگان"
+                                        : `${Number(
+                                            data.plan.price_monthly
+                                        ).toLocaleString("fa-IR")} تومان`}
                                 </strong>
-
-                                <span className="muted">هزینه ماهانه</span>
-                            </div>
-                        </div>
-                    </section>
-
-                    <div className="subscription-grid">
-                        <section className="subscription-card">
-                            <div className="subscription-card-header">
-                                <div>
-                                    <h2>مصرف سهمیه</h2>
-                                    <p className="muted" style={{ margin: "5px 0 0" }}>
-                                        محاسبه بر اساس محدودیت‌های پلن فعلی
-                                    </p>
-                                </div>
-
-                                <span className="soft-chip">ماه جاری</span>
-                            </div>
-
-                            <div className="usage-list">
-                                <UsageRow
-                                    title="سایت‌ها"
-                                    description="تعداد سایت‌هایی که برای این مشتری ساخته شده‌اند"
-                                    usage={data.usage.sites}
-                                />
-
-                                <UsageRow
-                                    title="پشتیبان‌ها"
-                                    description="تعداد agentهای فعال این مشتری"
-                                    usage={data.usage.agents}
-                                />
-
-                                <UsageRow
-                                    title="گفتگوهای ماهانه"
-                                    description="تعداد گفتگوهای ساخته‌شده در ماه جاری"
-                                    usage={data.usage.monthly_conversations}
-                                />
+                                <small>هزینه ماهانه</small>
                             </div>
                         </section>
 
-                        <section className="subscription-card">
-                            <div className="subscription-card-header">
-                                <div>
-                                    <h2>قابلیت‌های پلن</h2>
-                                    <p className="muted" style={{ margin: "5px 0 0" }}>
-                                        ویژگی‌هایی که برای حساب شما فعال هستند
-                                    </p>
+                        <div className="subscription-grid">
+                            <section className="subscription-card">
+                                <Header
+                                    title="مصرف سهمیه"
+                                    description="مقدار واقعی مصرف‌شده در برابر محدودیت پلن"
+                                    badge="ماه جاری"
+                                />
+
+                                <div className="subscription-usage-list">
+                                    <UsageRow
+                                        title="سایت‌ها"
+                                        description="تمام سایت‌های فعال و غیرفعال حساب"
+                                        usage={data.usage.sites}
+                                    />
+                                    <UsageRow
+                                        title="پشتیبان‌ها"
+                                        description={`تمام Agentها؛ ${Number(
+                                            data.usage.agents.active || 0
+                                        ).toLocaleString("fa-IR")} حساب فعال`}
+                                        usage={data.usage.agents}
+                                    />
+                                    <UsageRow
+                                        title="گفتگوهای ماهانه"
+                                        description="گفتگوهای جدید ایجادشده در ماه جاری"
+                                        usage={data.usage.monthly_conversations}
+                                    />
                                 </div>
-                            </div>
+                            </section>
 
-                            <div className="feature-grid">
-                                <FeatureCard
-                                    title="Knowledge Base"
-                                    description={`آیتم‌های ثبت‌شده: ${data.usage.knowledge_items.used}`}
-                                    enabled={data.plan.features.knowledge_base_enabled}
+                            <section className="subscription-card">
+                                <Header
+                                    title="قابلیت‌های پلن"
+                                    description="امکاناتی که بک‌اند واقعاً اجازه اجرای آن‌ها را می‌دهد"
                                 />
 
-                                <FeatureCard
-                                    title="AI Suggestion"
-                                    description={`پیشنهادهای ساخته‌شده این ماه: ${data.usage.ai_suggestions_this_month.used}`}
-                                    enabled={data.plan.features.ai_suggestions_enabled}
-                                />
+                                <div className="subscription-feature-grid">
+                                    <FeatureCard
+                                        title="Knowledge Base"
+                                        description={`آیتم‌های ثبت‌شده: ${Number(
+                                            data.usage.knowledge_items.used
+                                        ).toLocaleString("fa-IR")}`}
+                                        enabled={
+                                            data.plan.features
+                                                .knowledge_base_enabled
+                                        }
+                                    />
+                                    <FeatureCard
+                                        title="AI Suggestion"
+                                        description={`پیشنهادهای ماه: ${Number(
+                                            data.usage.ai_suggestions_this_month
+                                                .used
+                                        ).toLocaleString("fa-IR")}`}
+                                        enabled={
+                                            data.plan.features
+                                                .ai_suggestions_enabled
+                                        }
+                                    />
+                                    <FeatureCard
+                                        title="AI Auto Reply"
+                                        description={`پاسخ‌های خودکار ماه: ${Number(
+                                            data.usage.ai_auto_replies_this_month
+                                                .used
+                                        ).toLocaleString("fa-IR")}`}
+                                        enabled={
+                                            data.plan.features
+                                                .ai_auto_reply_enabled
+                                        }
+                                    />
+                                </div>
+                            </section>
+                        </div>
 
-                                <FeatureCard
-                                    title="AI Auto Reply"
-                                    description="پاسخ خودکار کامل؛ فعلاً برای نسخه‌های بعدی آماده می‌شود"
-                                    enabled={data.plan.features.ai_auto_reply_enabled}
+                        <section className="subscription-card">
+                            <Header
+                                title="اطلاعات حساب"
+                                description="وضعیت مشتری و بازه محاسبه مصرف"
+                            />
+
+                            <div className="subscription-mini-grid">
+                                <MiniTile
+                                    label="نام مشتری"
+                                    value={data.customer.name}
+                                />
+                                <MiniTile
+                                    label="وضعیت حساب"
+                                    value={data.customer.status}
+                                />
+                                <MiniTile
+                                    label="شروع بازه"
+                                    value={formatDate(data.period.month_start)}
+                                />
+                                <MiniTile
+                                    label="آخرین بروزرسانی"
+                                    value={formatDate(data.period.now)}
                                 />
                             </div>
                         </section>
-                    </div>
-
-                    <section className="subscription-card" style={{ marginTop: 18 }}>
-                        <div className="subscription-card-header">
-                            <div>
-                                <h2>اطلاعات حساب</h2>
-                                <p className="muted" style={{ margin: "5px 0 0" }}>
-                                    وضعیت کلی مشتری و بازه محاسبه مصرف
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="customer-mini-grid">
-                            <MiniTile label="نام مشتری" value={data.customer.name} />
-                            <MiniTile label="وضعیت حساب" value={data.customer.status} />
-                            <MiniTile label="شروع بازه مصرف" value={data.period.month_start} />
-                            <MiniTile label="آخرین بروزرسانی" value={data.period.now} />
-                        </div>
-                    </section>
-                </>
-            )}
+                    </>
+                )}
+            </div>
         </AppShell>
+    );
+}
+
+function Header({
+                    title,
+                    description,
+                    badge,
+                }: {
+    title: string;
+    description: string;
+    badge?: string;
+}) {
+    return (
+        <div className="subscription-card-header">
+            <div>
+                <h2>{title}</h2>
+                <p>{description}</p>
+            </div>
+            {badge && <span className="subscription-chip">{badge}</span>}
+        </div>
     );
 }
 
@@ -253,42 +315,46 @@ function UsageRow({
     description: string;
     usage: UsageItem;
 }) {
-    const isNearLimit = usage.percent >= 80;
-    const isFull = usage.percent >= 100;
+    const visualPercent = Math.min(Math.max(usage.percent, 0), 100);
 
     return (
-        <div className="usage-item">
-            <div className="usage-item-top">
+        <article
+            className={`subscription-usage-item status-${usage.status}`}
+        >
+            <div className="subscription-usage-top">
                 <div>
                     <strong>{title}</strong>
-                    <p className="muted" style={{ margin: "4px 0 0" }}>
-                        {description}
-                    </p>
+                    <p>{description}</p>
                 </div>
-
-                <span className={`soft-chip ${isFull ? "danger" : isNearLimit ? "" : "success"}`}>
-          {usage.used} / {usage.limit}
-        </span>
+                <span className="subscription-usage-count">
+                    {usage.used.toLocaleString("fa-IR")} /{" "}
+                    {usage.limit.toLocaleString("fa-IR")}
+                </span>
             </div>
 
-            <div className="usage-progress">
-                <div
-                    className="usage-progress-fill"
-                    style={{
-                        width: `${usage.percent}%`,
-                        background: isFull
-                            ? "linear-gradient(135deg, #ef4444, #f97316)"
-                            : isNearLimit
-                                ? "linear-gradient(135deg, #f59e0b, #f97316)"
-                                : undefined,
-                    }}
-                />
+            <div className="subscription-progress">
+                <span style={{ width: `${visualPercent}%` }} />
             </div>
 
-            <p className="muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
-                باقی‌مانده: {usage.remaining}
-            </p>
-        </div>
+            <div className="subscription-usage-foot">
+                <span>{usageStatusLabels[usage.status]}</span>
+                <span>
+                    {usage.over_limit
+                        ? `${usage.over_by.toLocaleString(
+                            "fa-IR"
+                        )} بیشتر از سقف`
+                        : `${usage.remaining.toLocaleString(
+                            "fa-IR"
+                        )} باقی‌مانده`}
+                </span>
+                <strong>
+                    {usage.percent.toLocaleString("fa-IR", {
+                        maximumFractionDigits: 1,
+                    })}
+                    ٪
+                </strong>
+            </div>
+        </article>
     );
 }
 
@@ -302,16 +368,17 @@ function FeatureCard({
     enabled: boolean;
 }) {
     return (
-        <div className="feature-card">
+        <article
+            className={`subscription-feature-card ${
+                enabled ? "is-enabled" : "is-disabled"
+            }`}
+        >
             <div>
                 <strong>{title}</strong>
                 <p>{description}</p>
             </div>
-
-            <span className={`soft-chip ${enabled ? "success" : "danger"}`}>
-        {enabled ? "فعال" : "غیرفعال"}
-      </span>
-        </div>
+            <span>{enabled ? "فعال" : "غیرفعال"}</span>
+        </article>
     );
 }
 
@@ -323,9 +390,25 @@ function MiniTile({
     value: string | number;
 }) {
     return (
-        <div className="customer-mini-tile">
-            <div className="customer-mini-label">{label}</div>
-            <div className="customer-mini-value">{value}</div>
+        <div className="subscription-mini-tile">
+            <span>{label}</span>
+            <strong>{value}</strong>
         </div>
     );
+}
+
+function formatDate(value: string) {
+    const date = new Date(value.replace(" ", "T"));
+
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return new Intl.DateTimeFormat("fa-IR", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(date);
 }

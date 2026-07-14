@@ -66,6 +66,14 @@ try {
     }
 
     $siteId = (int) $conversation['site_id'];
+    require_site_access($pdo, $user, $siteId);
+
+    require_site_plan_feature(
+        $pdo,
+        $siteId,
+        'ai_suggestions_enabled',
+        'AI Suggestions'
+    );
 
     require_site_plan_feature(
         $pdo,

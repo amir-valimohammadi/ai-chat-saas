@@ -208,6 +208,12 @@ export default function AppShell({
                 title: "مدیریت مشتری",
                 links: [
                     {
+                        href: "/sites",
+                        label: "سایت‌ها",
+                        icon: "◎",
+                        description: "دامنه‌ها و کد نصب",
+                    },
+                    {
                         href: "/reports",
                         label: "گزارش‌ها",
                         icon: "📊",

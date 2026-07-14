@@ -1,7 +1,7 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/widget/conversation-start.php
-// هدف: ایجاد یا بازیابی گفتگوی فعال برای بازدیدکننده + کنترل Origin + محدودسازی ورودی‌ها
+// هدف: ایجاد یا بازیابی گفتگو با کنترل اتمیک سقف ماهانه پلن
 
 require_once __DIR__ . '/../../includes/widget-cors.php';
 require_once __DIR__ . '/../../includes/response.php';
@@ -13,49 +13,55 @@ require_once __DIR__ . '/../../includes/rate-limit.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
         'success' => false,
-        'message' => 'Method not allowed'
+        'message' => 'Method not allowed',
     ], 405);
 }
 
 $input = get_json_input();
 
-$siteKey = trim($input['site_key'] ?? '');
+$siteKey = trim((string) ($input['site_key'] ?? ''));
 $visitorId = isset($input['visitor_id']) ? (int) $input['visitor_id'] : 0;
-$sourcePageUrl = trim($input['source_page_url'] ?? '');
-$sourcePageTitle = trim($input['source_page_title'] ?? '');
+$sourcePageUrl = trim((string) ($input['source_page_url'] ?? ''));
+$sourcePageTitle = trim((string) ($input['source_page_title'] ?? ''));
 
 if ($siteKey === '' || $visitorId <= 0) {
     json_response([
         'success' => false,
-        'message' => 'site_key and visitor_id are required'
+        'message' => 'site_key and visitor_id are required',
     ], 422);
 }
 
 if (!preg_match('/^[a-f0-9]{32,128}$/i', $siteKey)) {
     json_response([
         'success' => false,
-        'message' => 'Invalid site_key'
+        'message' => 'Invalid site_key',
     ], 422);
 }
 
 if (mb_strlen($sourcePageUrl, 'UTF-8') > 1000) {
     json_response([
         'success' => false,
-        'message' => 'Source page URL is too long'
+        'message' => 'Source page URL is too long',
     ], 422);
 }
 
 if (mb_strlen($sourcePageTitle, 'UTF-8') > 255) {
     json_response([
         'success' => false,
-        'message' => 'Source page title is too long'
+        'message' => 'Source page title is too long',
     ], 422);
 }
 
 if ($sourcePageUrl !== '') {
-    $sourceScheme = strtolower((string) parse_url($sourcePageUrl, PHP_URL_SCHEME));
+    $sourceScheme = strtolower((string) parse_url(
+        $sourcePageUrl,
+        PHP_URL_SCHEME
+    ));
 
-    if (!filter_var($sourcePageUrl, FILTER_VALIDATE_URL) || !in_array($sourceScheme, ['http', 'https'], true)) {
+    if (
+        !filter_var($sourcePageUrl, FILTER_VALIDATE_URL)
+        || !in_array($sourceScheme, ['http', 'https'], true)
+    ) {
         $sourcePageUrl = '';
     }
 }
@@ -63,7 +69,13 @@ if ($sourcePageUrl !== '') {
 enforce_rate_limit(
     $pdo,
     'widget_conversation_start',
-    rate_limit_identifier($siteKey . '|' . $visitorId . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown')),
+    rate_limit_identifier(
+        $siteKey
+        . '|'
+        . $visitorId
+        . '|'
+        . ($_SERVER['REMOTE_ADDR'] ?? 'unknown')
+    ),
     10,
     10 * 60,
     'Too many conversations started. Please try again later.'
@@ -73,6 +85,7 @@ try {
     $siteStmt = $pdo->prepare("
         SELECT
             sites.id,
+            sites.tenant_id,
             sites.domain
         FROM sites
         INNER JOIN tenants ON tenants.id = sites.tenant_id
@@ -83,7 +96,7 @@ try {
     ");
 
     $siteStmt->execute([
-        ':site_key' => $siteKey
+        ':site_key' => $siteKey,
     ]);
 
     $site = $siteStmt->fetch();
@@ -91,13 +104,14 @@ try {
     if (!$site) {
         json_response([
             'success' => false,
-            'message' => 'Site not found'
+            'message' => 'Site not found',
         ], 404);
     }
 
     validate_widget_origin_or_fail($site['domain']);
 
     $siteId = (int) $site['id'];
+    $tenantId = (int) $site['tenant_id'];
 
     $visitorStmt = $pdo->prepare("
         SELECT id
@@ -109,48 +123,62 @@ try {
 
     $visitorStmt->execute([
         ':visitor_id' => $visitorId,
-        ':site_id' => $siteId
+        ':site_id' => $siteId,
     ]);
 
     if (!$visitorStmt->fetch()) {
         json_response([
             'success' => false,
-            'message' => 'Visitor not found'
+            'message' => 'Visitor not found',
         ], 404);
     }
 
-    $conversationStmt = $pdo->prepare("
-        SELECT id, status
-        FROM conversations
-        WHERE site_id = :site_id
-          AND visitor_id = :visitor_id
-          AND status IN (
-              'new',
-              'open',
-              'in_progress',
-              'waiting_customer',
-              'follow_up',
-              'pending'
-          )
-        ORDER BY id DESC
-        LIMIT 1
-    ");
+    $findConversation = static function () use (
+        $pdo,
+        $siteId,
+        $visitorId
+    ) {
+        $stmt = $pdo->prepare("
+            SELECT id, status
+            FROM conversations
+            WHERE site_id = :site_id
+              AND visitor_id = :visitor_id
+              AND status IN (
+                  'new',
+                  'open',
+                  'in_progress',
+                  'waiting_customer',
+                  'follow_up',
+                  'pending'
+              )
+            ORDER BY id DESC
+            LIMIT 1
+        ");
 
-    $conversationStmt->execute([
-        ':site_id' => $siteId,
-        ':visitor_id' => $visitorId
-    ]);
+        $stmt->execute([
+            ':site_id' => $siteId,
+            ':visitor_id' => $visitorId,
+        ]);
 
-    $conversation = $conversationStmt->fetch();
+        return $stmt->fetch();
+    };
 
-    if ($conversation) {
-        $conversationId = (int) $conversation['id'];
-
+    $updateConversationSource = static function (int $conversationId) use (
+        $pdo,
+        $sourcePageUrl,
+        $sourcePageTitle
+    ): void {
         $updateStmt = $pdo->prepare("
             UPDATE conversations
             SET
-                source_page_url = COALESCE(NULLIF(:source_page_url, ''), source_page_url),
-                source_page_title = COALESCE(NULLIF(:source_page_title, ''), source_page_title)
+                source_page_url = COALESCE(
+                    NULLIF(:source_page_url, ''),
+                    source_page_url
+                ),
+                source_page_title = COALESCE(
+                    NULLIF(:source_page_title, ''),
+                    source_page_title
+                )
             WHERE id = :id
         ");
 
@@ -159,35 +187,61 @@ try {
             ':source_page_title' => $sourcePageTitle,
             ':id' => $conversationId,
         ]);
+    };
+
+    $conversation = $findConversation();
+
+    if ($conversation) {
+        $conversationId = (int) $conversation['id'];
+        $updateConversationSource($conversationId);
     } else {
-        ensure_monthly_conversation_limit($pdo, $siteId);
+        $pdo->beginTransaction();
 
-        $insertStmt = $pdo->prepare("
-            INSERT INTO conversations (
-                site_id,
-                visitor_id,
-                status,
-                source_page_url,
-                source_page_title,
-                last_message_at
-            ) VALUES (
-                :site_id,
-                :visitor_id,
-                'new',
-                :source_page_url,
-                :source_page_title,
-                NOW()
-            )
-        ");
+        lock_tenant_plan_scope($pdo, $tenantId);
 
-        $insertStmt->execute([
-            ':site_id' => $siteId,
-            ':visitor_id' => $visitorId,
-            ':source_page_url' => $sourcePageUrl !== '' ? $sourcePageUrl : null,
-            ':source_page_title' => $sourcePageTitle !== '' ? $sourcePageTitle : null,
-        ]);
+        // پس از Lock دوباره بررسی می‌شود تا دو درخواست هم‌زمان
+        // دو گفتگوی فعال برای یک بازدیدکننده نسازند.
+        $conversation = $findConversation();
 
-        $conversationId = (int) $pdo->lastInsertId();
+        if ($conversation) {
+            $conversationId = (int) $conversation['id'];
+            $updateConversationSource($conversationId);
+        } else {
+            ensure_monthly_conversation_limit($pdo, $siteId);
+
+            $insertStmt = $pdo->prepare("
+                INSERT INTO conversations (
+                    site_id,
+                    visitor_id,
+                    status,
+                    source_page_url,
+                    source_page_title,
+                    last_message_at
+                ) VALUES (
+                    :site_id,
+                    :visitor_id,
+                    'new',
+                    :source_page_url,
+                    :source_page_title,
+                    NOW()
+                )
+            ");
+
+            $insertStmt->execute([
+                ':site_id' => $siteId,
+                ':visitor_id' => $visitorId,
+                ':source_page_url' => $sourcePageUrl !== ''
+                    ? $sourcePageUrl
+                    : null,
+                ':source_page_title' => $sourcePageTitle !== ''
+                    ? $sourcePageTitle
+                    : null,
+            ]);
+
+            $conversationId = (int) $pdo->lastInsertId();
+        }
+
+        $pdo->commit();
     }
 
     json_response([
@@ -196,9 +250,13 @@ try {
             'id' => $conversationId,
             'site_id' => $siteId,
             'visitor_id' => $visitorId,
-        ]
+        ],
     ]);
-} catch (Exception $e) {
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
     $payload = [
         'success' => false,
         'message' => 'Failed to start conversation',

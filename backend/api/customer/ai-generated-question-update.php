@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/ai-crawler.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -95,7 +96,14 @@ try {
             'message' => 'Generated question not found'
         ], 404);
     }
-
+    if ($status !== 'archived') {
+        require_site_plan_feature(
+            $pdo,
+            (int) $existing['site_id'],
+            'knowledge_base_enabled',
+            'Knowledge Base'
+        );
+    }
     $stmt = $pdo->prepare("
         UPDATE ai_generated_questions
         SET

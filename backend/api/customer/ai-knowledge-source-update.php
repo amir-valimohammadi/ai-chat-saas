@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/ai-helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -95,7 +96,14 @@ try {
     }
 
     $site = ai_get_customer_site($pdo, $user, (int) $item['site_id']);
-
+    if ($status !== 'archived') {
+        require_site_plan_feature(
+            $pdo,
+            (int) $item['site_id'],
+            'knowledge_base_enabled',
+            'Knowledge Base'
+        );
+    }
     if (!$site) {
         json_response([
             'success' => false,

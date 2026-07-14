@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/ai-crawler.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -102,6 +103,12 @@ try {
 
     $tenantId = (int) $unanswered['tenant_id'];
     $siteId = (int) $unanswered['site_id'];
+    require_site_plan_feature(
+        $pdo,
+        $siteId,
+        'knowledge_base_enabled',
+        'Knowledge Base'
+    );
     $normalizedQuestion = ai_normalize_text($question);
 
     $pdo->beginTransaction();

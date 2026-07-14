@@ -1,17 +1,18 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/customer/plan-usage.php
-// هدف: نمایش پلن فعلی مشتری و میزان مصرف محدودیت‌ها
+// هدف: نمایش یکپارچه پلن و مصرف واقعی محدودیت‌ها
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response([
         'success' => false,
-        'message' => 'Method not allowed'
+        'message' => 'Method not allowed',
     ], 405);
 }
 
@@ -21,168 +22,60 @@ require_role($user, ['customer_admin']);
 $tenantId = (int) $user['tenant_id'];
 
 try {
-    $tenantStmt = $pdo->prepare("
-        SELECT
-            tenants.id,
-            tenants.name,
-            tenants.status,
-            tenants.plan_id,
-            plans.name AS plan_name,
-            plans.description AS plan_description,
-            plans.max_sites,
-            plans.max_agents,
-            plans.max_monthly_conversations,
-            plans.ai_suggestions_enabled,
-            plans.ai_auto_reply_enabled,
-            plans.knowledge_base_enabled,
-            plans.price_monthly,
-            plans.is_active AS plan_is_active
-        FROM tenants
-        LEFT JOIN plans ON plans.id = tenants.plan_id
-        WHERE tenants.id = :tenant_id
-        LIMIT 1
-    ");
-
-    $tenantStmt->execute([
-        ':tenant_id' => $tenantId,
-    ]);
-
-    $tenant = $tenantStmt->fetch();
-
-    if (!$tenant) {
-        json_response([
-            'success' => false,
-            'message' => 'Customer not found'
-        ], 404);
-    }
-
-    $sitesStmt = $pdo->prepare("
-        SELECT COUNT(*) AS total
-        FROM sites
-        WHERE tenant_id = :tenant_id
-    ");
-
-    $sitesStmt->execute([
-        ':tenant_id' => $tenantId,
-    ]);
-
-    $sitesData = $sitesStmt->fetch();
-
-    $agentsStmt = $pdo->prepare("
-        SELECT COUNT(*) AS total
-        FROM users
-        WHERE tenant_id = :tenant_id
-          AND role = 'agent'
-          AND is_active = 1
-    ");
-
-    $agentsStmt->execute([
-        ':tenant_id' => $tenantId,
-    ]);
-
-    $agentsData = $agentsStmt->fetch();
-
-    $monthlyConversationsStmt = $pdo->prepare("
-        SELECT COUNT(*) AS total
-        FROM conversations
-        INNER JOIN sites ON sites.id = conversations.site_id
-        WHERE sites.tenant_id = :tenant_id
-          AND conversations.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00')
-          AND conversations.created_at < DATE_ADD(DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00'), INTERVAL 1 MONTH)
-    ");
-
-    $monthlyConversationsStmt->execute([
-        ':tenant_id' => $tenantId,
-    ]);
-
-    $monthlyConversationsData = $monthlyConversationsStmt->fetch();
-
-    $knowledgeItemsStmt = $pdo->prepare("
-        SELECT COUNT(*) AS total
-        FROM knowledge_sources
-        INNER JOIN sites ON sites.id = knowledge_sources.site_id
-        WHERE sites.tenant_id = :tenant_id
-          AND knowledge_sources.status != 'archived'
-    ");
-
-    $knowledgeItemsStmt->execute([
-        ':tenant_id' => $tenantId,
-    ]);
-
-    $knowledgeItemsData = $knowledgeItemsStmt->fetch();
-
-    $aiSuggestionsStmt = $pdo->prepare("
-        SELECT COUNT(*) AS total
-        FROM ai_suggestions
-        INNER JOIN conversations ON conversations.id = ai_suggestions.conversation_id
-        INNER JOIN sites ON sites.id = conversations.site_id
-        WHERE sites.tenant_id = :tenant_id
-          AND ai_suggestions.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00')
-          AND ai_suggestions.created_at < DATE_ADD(DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00'), INTERVAL 1 MONTH)
-    ");
-
-    $aiSuggestionsStmt->execute([
-        ':tenant_id' => $tenantId,
-    ]);
-
-    $aiSuggestionsData = $aiSuggestionsStmt->fetch();
-
-    $maxSites = (int) ($tenant['max_sites'] ?? 0);
-    $maxAgents = (int) ($tenant['max_agents'] ?? 0);
-    $maxMonthlyConversations = (int) ($tenant['max_monthly_conversations'] ?? 0);
-
-    $usedSites = (int) ($sitesData['total'] ?? 0);
-    $usedAgents = (int) ($agentsData['total'] ?? 0);
-    $usedMonthlyConversations = (int) ($monthlyConversationsData['total'] ?? 0);
+    $plan = get_tenant_plan_limits($pdo, $tenantId, false);
+    $usage = get_tenant_plan_usage($pdo, $tenantId);
 
     json_response([
         'success' => true,
         'customer' => [
-            'id' => (int) $tenant['id'],
-            'name' => $tenant['name'],
-            'status' => $tenant['status'],
+            'id' => $plan['tenant_id'],
+            'name' => $plan['tenant_name'],
+            'status' => $plan['tenant_status'],
         ],
         'plan' => [
-            'id' => $tenant['plan_id'] !== null ? (int) $tenant['plan_id'] : null,
-            'name' => $tenant['plan_name'],
-            'description' => $tenant['plan_description'],
-            'price_monthly' => $tenant['price_monthly'] !== null ? (float) $tenant['price_monthly'] : 0,
-            'is_active' => (bool) ($tenant['plan_is_active'] ?? false),
+            'id' => $plan['plan_id'],
+            'name' => $plan['plan_name'],
+            'description' => $plan['plan_description'],
+            'price_monthly' => $plan['price_monthly'],
+            'is_active' => $plan['plan_is_active'],
+            'assigned' => $plan['plan_id'] !== null,
             'limits' => [
-                'max_sites' => $maxSites,
-                'max_agents' => $maxAgents,
-                'max_monthly_conversations' => $maxMonthlyConversations,
+                'max_sites' => $plan['max_sites'],
+                'max_agents' => $plan['max_agents'],
+                'max_monthly_conversations' => $plan['max_monthly_conversations'],
             ],
             'features' => [
-                'knowledge_base_enabled' => (bool) ($tenant['knowledge_base_enabled'] ?? false),
-                'ai_suggestions_enabled' => (bool) ($tenant['ai_suggestions_enabled'] ?? false),
-                'ai_auto_reply_enabled' => (bool) ($tenant['ai_auto_reply_enabled'] ?? false),
+                'knowledge_base_enabled' => $plan['knowledge_base_enabled'],
+                'ai_suggestions_enabled' => $plan['ai_suggestions_enabled'],
+                'ai_auto_reply_enabled' => $plan['ai_auto_reply_enabled'],
             ],
         ],
         'usage' => [
-            'sites' => [
-                'used' => $usedSites,
-                'limit' => $maxSites,
-                'remaining' => max($maxSites - $usedSites, 0),
-                'percent' => $maxSites > 0 ? min(round(($usedSites / $maxSites) * 100), 100) : 0,
-            ],
-            'agents' => [
-                'used' => $usedAgents,
-                'limit' => $maxAgents,
-                'remaining' => max($maxAgents - $usedAgents, 0),
-                'percent' => $maxAgents > 0 ? min(round(($usedAgents / $maxAgents) * 100), 100) : 0,
-            ],
-            'monthly_conversations' => [
-                'used' => $usedMonthlyConversations,
-                'limit' => $maxMonthlyConversations,
-                'remaining' => max($maxMonthlyConversations - $usedMonthlyConversations, 0),
-                'percent' => $maxMonthlyConversations > 0 ? min(round(($usedMonthlyConversations / $maxMonthlyConversations) * 100), 100) : 0,
-            ],
+            'sites' => build_plan_usage_item(
+                (int) $usage['sites'],
+                (int) $plan['max_sites']
+            ),
+            'agents' => array_merge(
+                build_plan_usage_item(
+                    (int) $usage['agents'],
+                    (int) $plan['max_agents']
+                ),
+                [
+                    'active' => (int) $usage['active_agents'],
+                ]
+            ),
+            'monthly_conversations' => build_plan_usage_item(
+                (int) $usage['monthly_conversations'],
+                (int) $plan['max_monthly_conversations']
+            ),
             'knowledge_items' => [
-                'used' => (int) ($knowledgeItemsData['total'] ?? 0),
+                'used' => (int) $usage['knowledge_items'],
             ],
             'ai_suggestions_this_month' => [
-                'used' => (int) ($aiSuggestionsData['total'] ?? 0),
+                'used' => (int) $usage['monthly_ai_suggestions'],
+            ],
+            'ai_auto_replies_this_month' => [
+                'used' => (int) $usage['monthly_ai_auto_replies'],
             ],
         ],
         'period' => [
@@ -190,10 +83,15 @@ try {
             'now' => date('Y-m-d H:i:s'),
         ],
     ]);
-} catch (Exception $e) {
-    json_response([
+} catch (Throwable $e) {
+    $payload = [
         'success' => false,
         'message' => 'Failed to load plan usage',
-        'error' => $e->getMessage()
-    ], 500);
+    ];
+
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+
+    json_response($payload, 500);
 }

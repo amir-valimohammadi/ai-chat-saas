@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/ai-helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -31,6 +32,12 @@ $isActive = array_key_exists('is_active', $input) ? ai_bool($input['is_active'])
 
 try {
     $site = ai_get_customer_site($pdo, $user, $siteId);
+    require_site_plan_feature(
+        $pdo,
+        $siteId,
+        'knowledge_base_enabled',
+        'Knowledge Base'
+    );
     $sourceValue = ai_validate_crawl_source($sourceType, $sourceValue, $site['domain']);
 
     $existingStmt = $pdo->prepare(" 

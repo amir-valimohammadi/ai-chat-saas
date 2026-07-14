@@ -1,0 +1,311 @@
+/* مسیر فایل: ai-chat-saas/frontend/styles/subscription.css */
+
+.subscription-page {
+    display: grid;
+    gap: 16px;
+}
+
+.subscription-hero,
+.subscription-card {
+    border: 1px solid var(--border-soft, #e2e8f0);
+    border-radius: 21px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.045);
+}
+
+.subscription-hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: flex-start;
+    padding: 21px;
+    background:
+        radial-gradient(
+            circle at 5% 10%,
+            rgba(99, 102, 241, 0.13),
+            transparent 38%
+        ),
+        #ffffff;
+}
+
+.subscription-hero h2 {
+    margin: 10px 0 0;
+    font-size: 25px;
+}
+
+.subscription-hero p {
+    max-width: 680px;
+    margin: 7px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.85;
+}
+
+.subscription-price {
+    min-width: 170px;
+    display: grid;
+    gap: 7px;
+    justify-items: end;
+}
+
+.subscription-price strong {
+    font-size: 23px;
+}
+
+.subscription-price small {
+    color: #64748b;
+}
+
+.subscription-chip {
+    width: fit-content;
+    padding: 6px 9px;
+    border-radius: 999px;
+    color: #475569;
+    background: #f1f5f9;
+    font-size: 10.5px;
+    font-weight: 900;
+}
+
+.subscription-chip.is-primary {
+    color: #4338ca;
+    background: #eef2ff;
+}
+
+.subscription-chip.is-success {
+    color: #166534;
+    background: #dcfce7;
+}
+
+.subscription-chip.is-danger {
+    color: #b91c1c;
+    background: #fee2e2;
+}
+
+.subscription-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 13px;
+}
+
+.subscription-card {
+    min-width: 0;
+    padding: 17px;
+}
+
+.subscription-card-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+}
+
+.subscription-card-header h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.subscription-card-header p {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+.subscription-usage-list,
+.subscription-feature-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.subscription-usage-item {
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 15px;
+    background: #ffffff;
+}
+
+.subscription-usage-item.status-warning {
+    border-color: #fed7aa;
+    background: #fffaf2;
+}
+
+.subscription-usage-item.status-reached,
+.subscription-usage-item.status-exceeded {
+    border-color: #fecaca;
+    background: #fff8f8;
+}
+
+.subscription-usage-item.status-unavailable {
+    opacity: 0.72;
+    background: #f8fafc;
+}
+
+.subscription-usage-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.subscription-usage-top strong {
+    font-size: 12.5px;
+}
+
+.subscription-usage-top p {
+    margin: 3px 0 0;
+    color: #64748b;
+    font-size: 10.5px;
+    line-height: 1.65;
+}
+
+.subscription-usage-count {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    border-radius: 999px;
+    color: #334155;
+    background: #f1f5f9;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.subscription-progress {
+    height: 9px;
+    margin-top: 11px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e2e8f0;
+}
+
+.subscription-progress span {
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    background: linear-gradient(135deg, #4f46e5, #2563eb);
+}
+
+.status-warning .subscription-progress span {
+    background: linear-gradient(135deg, #f59e0b, #f97316);
+}
+
+.status-reached .subscription-progress span,
+.status-exceeded .subscription-progress span {
+    background: linear-gradient(135deg, #ef4444, #f97316);
+}
+
+.subscription-usage-foot {
+    margin-top: 8px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    color: #64748b;
+    font-size: 10px;
+}
+
+.subscription-usage-foot strong {
+    margin-inline-start: auto;
+    color: #334155;
+}
+
+.subscription-feature-card {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 15px;
+}
+
+.subscription-feature-card strong {
+    font-size: 12px;
+}
+
+.subscription-feature-card p {
+    margin: 3px 0 0;
+    color: #64748b;
+    font-size: 10.5px;
+}
+
+.subscription-feature-card > span {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.subscription-feature-card.is-enabled {
+    border-color: #bbf7d0;
+    background: #f7fff9;
+}
+
+.subscription-feature-card.is-enabled > span {
+    color: #166534;
+    background: #dcfce7;
+}
+
+.subscription-feature-card.is-disabled {
+    background: #f8fafc;
+}
+
+.subscription-feature-card.is-disabled > span {
+    color: #b91c1c;
+    background: #fee2e2;
+}
+
+.subscription-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px;
+}
+
+.subscription-mini-tile {
+    min-width: 0;
+    padding: 11px;
+    display: grid;
+    gap: 4px;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+.subscription-mini-tile span {
+    color: #64748b;
+    font-size: 10px;
+}
+
+.subscription-mini-tile strong {
+    overflow-wrap: anywhere;
+    font-size: 11.5px;
+}
+
+@media (max-width: 900px) {
+    .subscription-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .subscription-mini-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .subscription-hero {
+        flex-direction: column;
+    }
+
+    .subscription-price {
+        min-width: 0;
+        justify-items: start;
+    }
+
+    .subscription-mini-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .subscription-usage-top {
+        flex-direction: column;
+    }
+}

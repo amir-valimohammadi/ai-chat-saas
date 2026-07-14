@@ -10,6 +10,8 @@ require_once __DIR__ . '/../../includes/ai-helpers.php';
 require_once __DIR__ . '/../../includes/ai-answer-engine.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
+
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -35,6 +37,19 @@ if ($question === '') {
 
 try {
     $site = ai_get_customer_site($pdo, $user, $siteId);
+    require_site_plan_feature(
+        $pdo,
+        (int) $site['id'],
+        'knowledge_base_enabled',
+        'Knowledge Base'
+    );
+
+    require_site_plan_feature(
+        $pdo,
+        (int) $site['id'],
+        'ai_suggestions_enabled',
+        'AI Suggestions'
+    );
 
     $settingsStmt = $pdo->prepare("
         SELECT *

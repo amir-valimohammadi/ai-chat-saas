@@ -8,6 +8,8 @@ require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/ai-helpers.php';
 require_once __DIR__ . '/../../includes/ai-answer-engine.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
+
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
 
@@ -105,6 +107,36 @@ try {
             'reason' => 'site_ai_mode_off'
         ]);
     }
+    $plan = get_tenant_plan_limits(
+        $pdo,
+        (int) $conversation['tenant_id'],
+        false
+    );
+
+    if ($plan['plan_id'] === null) {
+        json_response([
+            'success' => true,
+            'skipped' => true,
+            'reason' => 'plan_not_assigned',
+        ]);
+    }
+
+    if (!$plan['plan_is_active']) {
+        json_response([
+            'success' => true,
+            'skipped' => true,
+            'reason' => 'plan_inactive',
+        ]);
+    }
+
+    if (!$plan['ai_auto_reply_enabled']) {
+        json_response([
+            'success' => true,
+            'skipped' => true,
+            'reason' => 'plan_auto_reply_disabled',
+        ]);
+    }
+
 
     $messageStmt = $pdo->prepare("
         SELECT id, content

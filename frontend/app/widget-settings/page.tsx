@@ -124,8 +124,15 @@ export default function WidgetSettingsPage() {
             return;
         }
 
-        void loadSites();
-        // loadSites عمداً فقط یک‌بار پس از احراز هویت اجرا می‌شود.
+        const requestedSiteId = Number(
+            new URLSearchParams(window.location.search).get("site_id") ?? 0,
+        );
+
+        void loadSites(
+            requestedSiteId > 0
+                ? requestedSiteId
+                : undefined,
+        );        // loadSites عمداً فقط یک‌بار پس از احراز هویت اجرا می‌شود.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router]);
 

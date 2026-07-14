@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -20,12 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $user = require_auth($pdo);
 require_role($user, ['customer_admin']);
 
-require_plan_feature(
-    $pdo,
-    (int) $user['tenant_id'],
-    'knowledge_base_enabled',
-    'Knowledge Base'
-);
+
 
 $input = get_json_input();
 
@@ -96,7 +92,12 @@ try {
             'message' => 'Site not found'
         ], 404);
     }
-
+    require_site_plan_feature(
+        $pdo,
+        $siteId,
+        'knowledge_base_enabled',
+        'Knowledge Base'
+    );
     $stmt = $pdo->prepare("
         INSERT INTO knowledge_sources (
             site_id,

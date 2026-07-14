@@ -83,7 +83,7 @@ if (strlen($adminPassword) < 8) {
 
 try {
     $planStmt = $pdo->prepare("
-        SELECT id, name
+        SELECT id, name, max_sites
         FROM plans
         WHERE id = :id AND is_active = 1
         LIMIT 1
@@ -93,7 +93,14 @@ try {
         ':id' => $planId
     ]);
 
+
     $plan = $planStmt->fetch();
+    if ((int) $plan['max_sites'] < 1) {
+        json_response([
+            'success' => false,
+            'message' => 'Selected plan does not allow creating a site',
+        ], 422);
+    }
 
     if (!$plan) {
         json_response([
