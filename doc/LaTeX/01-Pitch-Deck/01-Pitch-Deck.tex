@@ -1,0 +1,542 @@
+\documentclass[aspectratio=169,12pt]{beamer}
+
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tikz}
+\usepackage{hyperref}
+\usetikzlibrary{positioning}
+
+\IfFontExistsTF{Vazirmatn}{
+  \setsansfont{Vazirmatn}
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \setsansfont{Tahoma}
+    \settextfont{Tahoma}
+  }{
+    \setsansfont{Arial}
+    \settextfont{Arial}
+  }
+}
+\IfFontExistsTF{Consolas}{
+  \setlatintextfont{Consolas}
+}{
+  \setlatintextfont{Courier New}
+}
+
+\definecolor{primary}{HTML}{1F4E79}
+\definecolor{accent}{HTML}{0F766E}
+\definecolor{dark}{HTML}{111827}
+\definecolor{muted}{HTML}{64748B}
+\definecolor{soft}{HTML}{EFF6FF}
+\definecolor{linegray}{HTML}{CBD5E1}
+\definecolor{danger}{HTML}{A61B1B}
+\definecolor{green}{HTML}{287D3C}
+\definecolor{warn}{HTML}{A15C00}
+
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{
+  \hfill
+  \color{muted}\scriptsize \insertframenumber/\inserttotalframenumber
+  \hspace{4mm}\vspace{2mm}
+}
+\setbeamertemplate{headline}{}
+\setbeamercolor{normal text}{fg=dark,bg=white}
+\setbeamercolor{frametitle}{fg=primary,bg=white}
+\setbeamerfont{frametitle}{size=\Large,series=\bfseries}
+\setbeamerfont{title}{size=\Huge,series=\bfseries}
+\setbeamerfont{subtitle}{size=\large}
+\setbeamerfont{normal text}{size=\normalsize}
+\setbeamersize{text margin left=9mm,text margin right=9mm}
+\setlength{\parskip}{4pt}
+\renewcommand{\arraystretch}{1.25}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+\newcommand{\tagbox}[1]{\colorbox{soft}{\strut\hspace{1.2mm}{\small #1}\hspace{1.2mm}}}
+\newcommand{\metric}[2]{%
+  \begin{minipage}{0.30\linewidth}
+  \centering
+  {\Large\bfseries\color{primary} #1}\\[-1mm]
+  {\scriptsize\color{muted} #2}
+  \end{minipage}
+}
+\newcommand{\baritem}[3]{%
+  \small #1\hfill #2\\[-1mm]
+  \begin{tikzpicture}
+    \fill[linegray] (0,0) rectangle (6.6,0.13);
+    \fill[#3] (0,0) rectangle (#2*0.066,0.13);
+  \end{tikzpicture}\par
+}
+
+\title{AI Chat SaaS}
+\subtitle{پلتفرم چت پشتیبانی چندمستاجری با دستیار هوش مصنوعی کنترل‌شده}
+\author{مبین یوسفی}
+\date{۱۵ جولای ۲۰۲۶}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \vspace{8mm}
+  {\Huge\bfseries\color{primary} AI Chat SaaS\par}
+  \vspace{4mm}
+  {\Large پلتفرم چت هوشمند برای وب‌سایت‌ها\par}
+  \vspace{3mm}
+  {\normalsize ترکیب چت انسانی، پاسخ پیشنهادی AI، پاسخ خودکار آفلاین، پایگاه دانش و مدیریت SaaS در یک محصول\par}
+  \vfill
+  \tagbox{Multi-Tenant SaaS}\hspace{2mm}
+  \tagbox{Embeddable Widget}\hspace{2mm}
+  \tagbox{Human + AI Support}\hspace{2mm}
+  \tagbox{Knowledge-Based AI}
+  \vspace{7mm}
+
+  {\small نسخه Pitch Deck \quad | \quad تهیه‌شده بر اساس کد و مستندات فنی پروژه}
+\end{frame}
+
+\begin{frame}{مسئله}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \textbf{کسب‌وکارها روی وب‌سایت مشتری از دست می‌دهند}
+      \begin{itemize}
+        \item سوال‌های تکراری درباره قیمت، خدمات، ارسال، رزرو و پشتیبانی.
+        \item تیم پشتیبانی همیشه آنلاین نیست.
+        \item چت‌های سنتی فقط صندوق پیام هستند؛ یادگیری و خودکارسازی ندارند.
+        \item ربات‌های کاملا خودکار برای پاسخ‌های حساس قابل اعتماد نیستند.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \textbf{اثر عملیاتی}
+      \vspace{3mm}
+
+      \baritem{سرعت پاسخ‌گویی}{75}{danger}
+      \baritem{پوشش خارج از ساعت کاری}{65}{danger}
+      \baritem{یکپارچگی دانش پاسخ‌ها}{55}{danger}
+      \baritem{کنترل انسانی روی AI}{40}{danger}
+
+      \vspace{3mm}
+      {\small\color{muted} مسئله اصلی فقط «داشتن chatbot» نیست؛ مسئله پاسخ سریع، قابل اعتماد و قابل کنترل در مسیر فروش و پشتیبانی است.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{راهکار}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.33\textwidth}
+      \textbf{\color{primary}۱. ویجت سایت}
+      \begin{itemize}
+        \item نصب با یک script tag
+        \item برندینگ اختصاصی
+        \item ذخیره مکالمه و visitor
+        \item ارسال پیام و پیوست
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \textbf{\color{primary}۲. پنل پشتیبانی}
+      \begin{itemize}
+        \item inbox مکالمات
+        \item پاسخ اپراتور و quick reply
+        \item حضور آنلاین/آفلاین
+        \item پیشنهاد پاسخ AI
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \textbf{\color{primary}۳. کنترل SaaS}
+      \begin{itemize}
+        \item مدیریت مشتریان و پلن‌ها
+        \item محدودیت سایت/اپراتور/گفتگو
+        \item گزارش‌ها و اعلان‌ها
+        \item مدیریت دانش و crawler
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{6mm}
+  \begin{center}
+    \Large\bfseries\color{accent}
+    نتیجه: پاسخ‌گویی سریع‌تر، کنترل انسانی حفظ‌شده، و مسیر روشن برای فروش اشتراکی.
+  \end{center}
+\end{frame}
+
+\begin{frame}{محصول در یک نگاه}
+  \begin{center}
+    \metric{۴}{نقش اصلی}\\[-1mm]
+    \vspace{3mm}
+    \metric{۸۹}{endpoint فعال PHP}
+    \metric{۳}{لایه محصول}
+    \metric{چندمستاجری}{از ابتدا}
+  \end{center}
+
+  \vspace{5mm}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \textbf{نقش‌ها}
+      \begin{itemize}
+        \item \code{super_admin}: مدیریت SaaS، پلن، مشتری و اعلان.
+        \item \code{customer_admin}: سایت، تیم، AI، دانش و گزارش.
+        \item \code{agent}: مکالمه، پاسخ، حضور و پیشنهاد AI.
+        \item visitor: کاربر وب‌سایت مشتری.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{جریان ارزش}
+      \begin{itemize}
+        \item نصب ویجت روی سایت مشتری.
+        \item شروع گفتگو و جمع‌آوری lead.
+        \item پاسخ انسانی یا AI بر اساس وضعیت حضور.
+        \item ثبت سوالات بی‌پاسخ برای بهبود دانش.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{فناوری}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.42\textwidth}
+      \textbf{Stack فعلی}
+      \begin{itemize}
+        \item Backend: PHP خام، PDO، MySQL.
+        \item Frontend: Next.js و React.
+        \item Widget: JavaScript مستقل با Shadow DOM.
+        \item Auth: JWT با \code{token_version}.
+        \item AI: موتور محلی/استخراجی بر اساس دانش مشتری.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \textbf{قابلیت‌های فنی کلیدی}
+      \begin{itemize}
+        \item APIهای جدا برای auth، widget، agent، customer و super-admin.
+        \item جداسازی داده با tenant، site و role.
+        \item rate limit دیتابیسی برای login و endpointهای عمومی.
+        \item upload امن با MIME، extension، payload scan و نام تصادفی.
+        \item crawler وب‌سایت برای تولید دانش قابل جست‌وجو.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{نوآوری}
+  \textbf{نقطه تمایز محصول، «AI کنترل‌شده برای پشتیبانی واقعی» است.}
+
+  \vspace{4mm}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.32\textwidth}
+      \textbf{\color{accent}دانش‌محور}
+      \begin{itemize}
+        \item پاسخ از محتوای تاییدشده مشتری.
+        \item دانش دستی + صفحات crawl شده.
+        \item امتیاز اطمینان و منبع پاسخ.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \textbf{\color{accent}انسان در کنترل}
+      \begin{itemize}
+        \item پیشنهاد پاسخ برای agent.
+        \item auto-reply فقط هنگام آفلاین بودن پشتیبانی.
+        \item fallback در اطمینان پایین.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \textbf{\color{accent}حلقه یادگیری}
+      \begin{itemize}
+        \item ثبت سوالات بی‌پاسخ.
+        \item تبدیل سوال به دانش.
+        \item بهبود کیفیت پاسخ با استفاده واقعی.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{معماری کلی}
+  \begin{center}
+  \begin{tikzpicture}[node distance=9mm, every node/.style={font=\scriptsize}]
+    \node[draw=primary, rounded corners, fill=soft, minimum width=29mm, minimum height=8mm] (visitor) {Visitor Website};
+    \node[draw=primary, rounded corners, fill=soft, left=14mm of visitor, minimum width=29mm, minimum height=8mm] (panel) {Next.js Panel};
+    \node[draw=accent, rounded corners, fill=white, below=10mm of visitor, minimum width=42mm, minimum height=9mm] (api) {PHP API Backend};
+    \node[draw=muted, rounded corners, fill=white, below left=9mm and 1mm of api, minimum width=30mm, minimum height=8mm] (db) {MySQL};
+    \node[draw=muted, rounded corners, fill=white, below=9mm of api, minimum width=30mm, minimum height=8mm] (ai) {AI Knowledge};
+    \node[draw=muted, rounded corners, fill=white, below right=9mm and 1mm of api, minimum width=30mm, minimum height=8mm] (storage) {Uploads};
+
+    \draw[->, thick, primary] (visitor) -- node[right]{\scriptsize widget API} (api);
+    \draw[->, thick, primary] (panel) |- node[left]{\scriptsize JWT API} (api);
+    \draw[->, thick, accent] (api) -- (db);
+    \draw[->, thick, accent] (api) -- (ai);
+    \draw[->, thick, accent] (api) -- (storage);
+  \end{tikzpicture}
+  \end{center}
+
+  \vspace{3mm}
+  \begin{center}
+  \tagbox{Tenant Isolation}\hspace{2mm}
+  \tagbox{Role-Based Access}\hspace{2mm}
+  \tagbox{Site Key + Origin Control}\hspace{2mm}
+  \tagbox{Plan Limits}
+  \end{center}
+\end{frame}
+
+\begin{frame}{بازار هدف}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.49\textwidth}
+      \textbf{مشتریان اولیه}
+      \begin{itemize}
+        \item فروشگاه‌های آنلاین.
+        \item کلینیک‌ها، سالن‌ها و کسب‌وکارهای رزروی.
+        \item مشاوران، بیمه، املاک و خدمات حرفه‌ای.
+        \item آموزشگاه‌ها و کسب‌وکارهای دوره‌محور.
+        \item SaaSها و آژانس‌های دیجیتال.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \textbf{دلیل خرید}
+      \begin{itemize}
+        \item کاهش leadهای از دست‌رفته.
+        \item پاسخ سریع به سوالات تکراری.
+        \item پشتیبانی خارج از ساعت کاری.
+        \item کنترل برند و تجربه مشتری.
+        \item گزارش‌پذیری و مدیریت تیم.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{5mm}
+  \begin{center}
+    \Large\bfseries\color{primary}
+    بازار هدف، هر کسب‌وکاری است که از وب‌سایت lead یا درخواست پشتیبانی دریافت می‌کند.
+  \end{center}
+\end{frame}
+
+\begin{frame}{رقبا و جایگاه}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.31\textwidth}
+      \textbf{Live Chat سنتی}
+      \begin{itemize}
+        \item پاسخ انسانی قوی.
+        \item خودکارسازی محدود.
+        \item دانش AI و حلقه یادگیری ندارد.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+      \textbf{Chatbot خالص}
+      \begin{itemize}
+        \item پاسخ خودکار قوی‌تر.
+        \item کنترل انسانی ضعیف‌تر.
+        \item ریسک پاسخ غیرقابل اعتماد.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.34\textwidth}
+      \textbf{\color{primary}AI Chat SaaS}
+      \begin{itemize}
+        \item چت انسانی + AI.
+        \item دانش مشتری: manual، crawl و unanswered loop.
+        \item SaaS چندمشتری با plan limits.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{4mm}
+  \begin{center}
+    \textbf{\color{accent}جایگاه:} بین ابزارهای live chat و chatbotهای کاملا خودکار؛ مناسب برای پشتیبانی قابل اعتماد کسب‌وکار.
+  \end{center}
+\end{frame}
+
+\begin{frame}{مزیت رقابتی}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \textbf{مزیت محصولی}
+      \begin{itemize}
+        \item ویجت قابل نصب روی سایت‌های خارجی.
+        \item پشتیبانی انسانی و AI در یک inbox.
+        \item AI grounded در دانش مشتری.
+        \item سوالات بی‌پاسخ به دانش آینده تبدیل می‌شوند.
+        \item پنل super-admin برای فروش SaaS آماده است.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{مزیت فنی}
+      \begin{itemize}
+        \item معماری tenant/site از ابتدا.
+        \item plan limits در backend.
+        \item امنیت پایه: JWT، RBAC، CORS، upload validation.
+        \item موتور AI محلی؛ هزینه کمتر و پاسخ قابل کنترل‌تر.
+        \item endpointهای جدا برای توسعه تدریجی.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{مدل درآمد}
+  \textbf{محصول برای فروش اشتراکی tiered آماده‌سازی شده است.}
+
+  \vspace{4mm}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.24\textwidth}
+      \textbf{Starter}\\
+      {\small یک سایت، مکالمه محدود، چت انسانی، ویجت پایه.}
+    \end{column}
+    \begin{column}{0.24\textwidth}
+      \textbf{Growth}\\
+      {\small چند agent، AI suggestion، دانش و quick replies.}
+    \end{column}
+    \begin{column}{0.24\textwidth}
+      \textbf{Pro}\\
+      {\small auto-reply، crawler، گزارش‌ها و مکالمه بیشتر.}
+    \end{column}
+    \begin{column}{0.24\textwidth}
+      \textbf{Agency}\\
+      {\small چند سایت/مشتری، white-label و سقف‌های بالاتر.}
+    \end{column}
+  \end{columns}
+
+  \vspace{2mm}
+  \begin{center}
+  \tagbox{Sites}\hspace{2mm}
+  \tagbox{Agents}\hspace{2mm}
+  \tagbox{Monthly Conversations}\hspace{2mm}
+  \tagbox{AI Suggestions}\hspace{2mm}
+  \tagbox{Auto Reply}\hspace{2mm}
+  \tagbox{Crawler}
+  \end{center}
+\end{frame}
+
+\begin{frame}{وضعیت فعلی محصول}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.50\textwidth}
+      \textbf{\color{green}آماده برای دمو}
+      \begin{itemize}
+        \item نقش‌های SaaS و ورود JWT.
+        \item customer onboarding و plan management.
+        \item ویجت قابل نصب و چت زنده.
+        \item inbox اپراتور، پیام، پیوست و وضعیت گفتگو.
+        \item AI suggestion و auto-reply آفلاین.
+        \item knowledge base، crawler و unanswered loop.
+        \item گزارش‌ها، اعلان‌ها و تنظیمات ویجت.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \textbf{\color{warn}قبل از عرضه گسترده}
+      \begin{itemize}
+        \item تکمیل schema/migration پایه.
+        \item تست خودکار جریان‌های حیاتی.
+        \item hardening production و CORS.
+        \item بررسی SSL در crawler.
+        \item billing/payment integration.
+        \item monitoring، backup و error tracking.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{دموی پیشنهادی}
+  \begin{enumerate}
+    \item شروع از super-admin dashboard: مشتریان، پلن‌ها و وضعیت SaaS.
+    \item ساخت/نمایش مشتری، سایت و site key.
+    \item نصب ویجت روی سایت تست و شروع مکالمه visitor.
+    \item مشاهده مکالمه در پنل agent و ارسال پاسخ انسانی.
+    \item تولید AI suggestion برای agent.
+    \item آفلاین کردن پشتیبانی و نمایش AI auto-reply.
+    \item افزودن دانش، crawl وب‌سایت و review سوالات بی‌پاسخ.
+    \item نمایش گزارش‌ها و usage plan.
+  \end{enumerate}
+
+  \vspace{4mm}
+  \begin{center}
+    \textbf{\color{primary}پیام دمو:} محصول فقط chatbot نیست؛ یک سیستم عملیاتی کامل برای فروش SaaS پشتیبانی هوشمند است.
+  \end{center}
+\end{frame}
+
+\begin{frame}{نقشه راه}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.32\textwidth}
+      \textbf{فاز ۱: Production Hardening}
+      \begin{itemize}
+        \item schema کامل و migration runner
+        \item تست امنیت و API
+        \item monitoring و backup
+        \item تنظیمات production
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \textbf{فاز ۲: Commercial Launch}
+      \begin{itemize}
+        \item billing و پرداخت
+        \item onboarding خودکار
+        \item trial و plan upgrade
+        \item داشبورد رشد مشتری
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \textbf{فاز ۳: Scale}
+      \begin{itemize}
+        \item background jobs برای crawl
+        \item analytics پیشرفته
+        \item white-label agency
+        \item integrations و API عمومی
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{تیم و قابلیت اجرا}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \textbf{توانمندی‌های پیاده‌سازی‌شده}
+      \begin{itemize}
+        \item طراحی backend چندمستاجری.
+        \item پیاده‌سازی پنل مدیریتی Next.js.
+        \item توسعه ویجت مستقل و قابل embed.
+        \item طراحی جریان AI دانش‌محور.
+        \item طراحی امنیت پایه و plan limits.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{نیازهای تکمیل تیمی}
+      \begin{itemize}
+        \item DevOps/Cloud برای production.
+        \item QA برای تست خودکار و regression.
+        \item فروش B2B و onboarding مشتری.
+        \item طراحی محصول برای billing و growth.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{5mm}
+  \begin{center}
+    \tagbox{Engineering Prototype Ready}\hspace{2mm}
+    \tagbox{Demo Ready}\hspace{2mm}
+    \tagbox{Commercialization Next}
+  \end{center}
+\end{frame}
+
+\begin{frame}{درخواست نهایی}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.52\textwidth}
+      \textbf{درخواست}
+      \begin{itemize}
+        \item حمایت برای تبدیل نسخه دمو به نسخه production-ready.
+        \item تامین منابع برای تست، DevOps، امنیت و عرضه تجاری.
+        \item دسترسی به شبکه مشتریان اولیه برای pilot.
+        \item همراهی در مسیر ثبت، ارائه و تجاری‌سازی.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \textbf{خروجی مورد انتظار}
+      \begin{itemize}
+        \item pilot با چند کسب‌وکار واقعی.
+        \item تبدیل محصول به سرویس اشتراکی.
+        \item آماده‌سازی برای فروش B2B و agency.
+        \item توسعه مزیت AI بومی و کنترل‌شده.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \vspace{7mm}
+  \begin{center}
+    {\Large\bfseries\color{primary} AI Chat SaaS: پشتیبانی وب‌سایت، همیشه فعال؛ با انسان در کنترل و AI در خدمت پاسخ‌گویی.}
+  \end{center}
+\end{frame}
+
+\end{document}
