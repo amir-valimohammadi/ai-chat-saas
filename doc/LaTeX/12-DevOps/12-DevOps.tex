@@ -1,0 +1,574 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[a4paper,top=25mm,bottom=25mm,left=22mm,right=22mm]{geometry}
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{fancyvrb}
+
+\IfFontExistsTF{Vazirmatn}{
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \settextfont{Tahoma}
+  }{
+    \settextfont{Arial}
+  }
+}
+\IfFontExistsTF{Consolas}{
+  \setlatintextfont{Consolas}
+}{
+  \setlatintextfont{Courier New}
+}
+
+\definecolor{primary}{HTML}{1F4E79}
+\definecolor{softgray}{HTML}{F3F6F8}
+\definecolor{warn}{HTML}{A15C00}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=primary,
+  urlcolor=primary,
+  citecolor=primary,
+  pdftitle={مستند DevOps سامانه AI Chat SaaS},
+  pdfauthor={Mobin Yousefi}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{مستند DevOps}
+\lhead{AI Chat SaaS}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\Large\bfseries\color{primary}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{primary}}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{primary}}{\thesubsubsection}{0.7em}{}
+\setlist[itemize]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.35}
+\setlength{\LTpre}{6pt}
+\setlength{\LTpost}{6pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlength{\headheight}{15pt}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+\newenvironment{codeblock}{\VerbatimEnvironment\begin{latin}\begin{Verbatim}[fontsize=\small,frame=single,rulecolor=\color{softgray}]}{\end{Verbatim}\end{latin}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{22mm}
+{\Huge\bfseries\color{primary} مستند DevOps سامانه AI Chat SaaS\par}
+\vspace{10mm}
+{\Large بخش ۱۲ راهنمای مستندات پروژه\par}
+\vspace{20mm}
+{\large \textbf{نسخه سند:} 1.0\par}
+\vspace{3mm}
+{\large \textbf{تاریخ تدوین:} ۱۵ جولای ۲۰۲۶\par}
+\vspace{3mm}
+{\large \textbf{تهیه‌کننده:} مبین یوسفی\par}
+\vspace{3mm}
+{\large \textbf{مسیر خروجی:} \code{doc/LaTeX/12-DevOps/12-DevOps.tex}\par}
+\vspace{3mm}
+{\large \textbf{منابع بررسی‌شده:} \code{Rahnama.md}، \code{ArchitectureForMobin.md}، \code{ReportForSale.md}، \code{README.md} و کدهای پروژه\par}
+\vfill
+{\large مستند راهبری توسعه، build، deployment، rollback، monitoring، logging و آماده‌سازی production}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{هدف و دامنه سند}
+این سند فرآیندهای DevOps سامانه \en{AI Chat SaaS} را برای توسعه، build، release، deployment، rollback، monitoring و نگهداری عملیاتی توضیح می‌دهد. سند بر اساس وضعیت واقعی repository نوشته شده است: backend با PHP خام، frontend با Next.js، widget به‌صورت JavaScript قابل انتشار، پایگاه داده MySQL و تنظیمات محیطی مبتنی بر \code{.env}.
+
+در وضعیت فعلی، فایل رسمی برای Docker، Docker Compose، Kubernetes یا CI/CD در repository وجود ندارد. بنابراین این سند دو بخش را هم‌زمان پوشش می‌دهد: وضعیت موجود و الگوی پیشنهادی برای production. هرجا قابلیت هنوز پیاده‌سازی نشده، صریحا با عنوان «پیشنهادی» یا «نیازمند تکمیل» مشخص شده است.
+
+\section{نمای کلی اجزای قابل استقرار}
+\begin{longtable}{R{34mm} R{60mm} R{58mm}}
+\toprule
+\textbf{جزء} & \textbf{مسیر/فناوری} & \textbf{مسئولیت عملیاتی} \\
+\midrule
+\endhead
+Backend API & \code{backend/}، PHP، PDO، MySQL & سرو APIها، احراز هویت، ویجت، پنل، AI، upload و دسترسی دیتابیس. \\
+Frontend Panel & \code{frontend/}، Next.js، React & پنل super admin، customer admin و agent؛ build و اجرای Node/Next. \\
+Widget & \code{widget/dist/widget.js} & فایل JavaScript قابل embed روی سایت مشتری؛ باید از دامنه یا CDN پایدار سرو شود. \\
+Database & MySQL با migrationهای SQL & نگهداری tenantها، کاربران، سایت‌ها، گفتگوها، دانش AI، rate limit و audit. \\
+Uploads & \code{backend/uploads} یا \code{UPLOAD_STORAGE_ROOT} & نگهداری پیوست‌ها و تصاویر؛ نیازمند backup و hardening وب‌سرور. \\
+Test Shop & \code{test-shop/} و \code{widget/test.html} & محیط تست/دمو برای نصب ویجت و سناریوهای نمایشی. \\
+\bottomrule
+\end{longtable}
+
+\section{وضعیت فعلی Repository}
+\subsection{فایل‌ها و ابزارهای موجود}
+\begin{itemize}
+  \item \code{frontend/package.json}: شامل اسکریپت‌های \code{dev}، \code{build}، \code{start} و \code{lint}.
+  \item \code{frontend/next.config.ts}: هدرهای امنیتی frontend را تعریف می‌کند.
+  \item \code{backend/.env.example}: نمونه متغیرهای محیطی backend، دیتابیس، JWT، upload و CORS.
+  \item \code{backend/.htaccess}: جلوگیری از directory listing، محافظت از فایل‌های env/sql/log/backup و خاموش کردن display errors در mod\_php.
+  \item \code{backend/database/migrations/2026_07_07_ai_knowledge_tables.sql}: migration مربوط به جدول‌های دانش AI.
+  \item \code{backend/api/test-db.php}: health check ساده برای اتصال دیتابیس و شمارش جدول \code{plans}.
+  \item \code{widget/src/widget.js} و \code{widget/dist/widget.js}: سورس و خروجی قابل انتشار ویجت.
+\end{itemize}
+
+\subsection{فایل‌ها و فرآیندهای غایب}
+\begin{itemize}
+  \item \code{Dockerfile} و \code{docker-compose.yml} در repository وجود ندارد.
+  \item pipeline رسمی CI/CD مانند GitHub Actions، GitLab CI یا Jenkinsfile وجود ندارد.
+  \item migration runner خودکار دیده نشد؛ migrationها باید فعلا دستی یا با اسکریپت جدا اجرا شوند.
+  \item health check جامع برای همه سرویس‌ها وجود ندارد؛ فقط \code{test-db.php} برای دیتابیس موجود است.
+  \item monitoring، tracing و centralized logging در repo پیاده‌سازی نشده‌اند.
+\end{itemize}
+
+\section{محیط‌های عملیاتی}
+\begin{longtable}{R{30mm} R{58mm} R{66mm}}
+\toprule
+\textbf{محیط} & \textbf{هدف} & \textbf{قواعد پیشنهادی} \\
+\midrule
+\endhead
+Local & توسعه روی ماشین برنامه‌نویس & \code{APP_ENV=local}، \code{APP_DEBUG=true}، دیتابیس محلی، CORS برای localhost. \\
+Staging & تست قبل از انتشار & داده تست، دامنه جدا، \code{APP_DEBUG=false}، اجرای migration و smoke test. \\
+Production & سرویس واقعی مشتریان & HTTPS اجباری، رازهای قوی، backup، monitoring، محدودیت CORS و rollback آماده. \\
+\bottomrule
+\end{longtable}
+
+\subsection{متغیرهای محیطی backend}
+متغیرهای اصلی از \code{backend/.env} خوانده می‌شوند. فایل \code{.env} نباید commit شود و فقط \code{.env.example} باید در repository باقی بماند.
+
+\begin{codeblock}
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://app.example.com
+FRONTEND_URL=https://app.example.com
+API_URL=https://api.example.com/backend/api
+WIDGET_SCRIPT_URL=https://cdn.example.com/widget.js
+
+DB_HOST=127.0.0.1
+DB_NAME=ai_chat_saas
+DB_USER=ai_chat_saas_user
+DB_PASS=strong-password
+
+JWT_SECRET=long-random-secret-at-least-32-characters
+PANEL_ALLOWED_ORIGINS=https://app.example.com
+WIDGET_ALLOWED_ORIGINS=https://customer-one.com
+WIDGET_ALLOW_EMPTY_ORIGIN=false
+
+UPLOAD_STORAGE_ROOT=/var/www/ai-chat-saas-storage
+UPLOAD_PUBLIC_URL=https://api.example.com
+\end{codeblock}
+
+\subsection{متغیرهای frontend}
+frontend از \code{NEXT_PUBLIC_API_BASE_URL} استفاده می‌کند. اگر این مقدار تنظیم نشود، مقدار local زیر استفاده می‌شود:
+\begin{codeblock}
+http://localhost/ai-chat-saas/backend/api
+\end{codeblock}
+
+برای production:
+\begin{codeblock}
+NEXT_PUBLIC_API_BASE_URL=https://api.example.com/backend/api
+\end{codeblock}
+
+\section{اجرای محلی}
+\subsection{پیش‌نیازها}
+\begin{itemize}
+  \item PHP با افزونه‌های PDO و MySQL.
+  \item MySQL یا MariaDB.
+  \item Node.js و npm برای frontend.
+  \item وب‌سرور محلی مانند Apache/XAMPP/WAMP یا PHP built-in server برای backend.
+\end{itemize}
+
+\subsection{راه‌اندازی backend}
+\begin{enumerate}
+  \item فایل \code{backend/.env.example} به \code{backend/.env} کپی و مقادیر دیتابیس تنظیم شود.
+  \item دیتابیس \code{ai_chat_saas} ساخته شود.
+  \item schema پایه و migrationهای موجود اجرا شوند. در repo فعلی migration دانش AI در \code{backend/database/migrations} قرار دارد.
+  \item API از طریق وب‌سرور محلی در مسیری مانند \code{http://localhost/ai-chat-saas/backend/api} سرو شود.
+  \item اتصال دیتابیس با endpoint زیر تست شود:
+\end{enumerate}
+
+\begin{codeblock}
+GET /backend/api/test-db.php
+\end{codeblock}
+
+\subsection{راه‌اندازی frontend}
+\begin{codeblock}
+cd frontend
+npm install
+npm run dev
+\end{codeblock}
+
+برای build production:
+\begin{codeblock}
+cd frontend
+npm ci
+npm run build
+npm run start
+\end{codeblock}
+
+\subsection{راه‌اندازی widget}
+ویجت فعلی ابزار build جداگانه ندارد و فایل قابل انتشار در \code{widget/dist/widget.js} موجود است. در محیط توسعه می‌توان از \code{widget/test.html} یا embed زیر استفاده کرد:
+
+\begin{codeblock}
+<script
+  src="https://cdn.example.com/widget.js"
+  data-site-key="SITE_PUBLIC_KEY"
+  data-api-base="https://api.example.com/backend/api">
+</script>
+\end{codeblock}
+
+\section{Git و Branch Strategy}
+\subsection{قواعد پایه Git}
+\begin{itemize}
+  \item شاخه اصلی پایدار باید \code{main} یا \code{master} باشد.
+  \item تغییرات مستقیم روی شاخه production ممنوع باشد.
+  \item هر قابلیت یا اصلاح با branch جدا و merge request انجام شود.
+  \item فایل‌های \code{.env}، dump دیتابیس، uploadها، logها و buildهای موقت commit نشوند.
+  \item پیام commit باید کوتاه، دقیق و قابل ردیابی باشد.
+\end{itemize}
+
+\subsection{Git Flow پیشنهادی}
+\begin{longtable}{R{34mm} R{100mm}}
+\toprule
+\textbf{Branch} & \textbf{کاربرد} \\
+\midrule
+\endhead
+\code{main} & نسخه production یا آماده release. فقط از طریق merge request و پس از تایید. \\
+\code{develop} & تجمیع تغییرات آماده staging. اگر تیم کوچک است، می‌تواند حذف شود و فقط feature branch به main merge شود. \\
+\code{feature/*} & توسعه قابلیت جدید مانند \code{feature/ai-crawl-monitoring}. \\
+\code{fix/*} & رفع bugهای عادی. \\
+\code{hotfix/*} & اصلاح فوری production با مسیر کوتاه‌تر و release سریع. \\
+\code{release/*} & آماده‌سازی نسخه، freeze تغییرات، اجرای تست و اصلاحات پایانی. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Merge Request}
+هر merge request باید حداقل شامل موارد زیر باشد:
+\begin{itemize}
+  \item شرح تغییر و دلیل آن.
+  \item فهرست endpointها یا صفحات تحت تاثیر.
+  \item وضعیت migration دیتابیس.
+  \item نتیجه build/lint/test.
+  \item ریسک rollback.
+  \item تایید اینکه secret یا داده حساس commit نشده است.
+\end{itemize}
+
+\section{Versioning و Release}
+برای محصول SaaS، نسخه‌بندی پیشنهادی \en{Semantic Versioning} است:
+\begin{codeblock}
+MAJOR.MINOR.PATCH
+1.4.2
+\end{codeblock}
+
+\begin{itemize}
+  \item \code{MAJOR}: تغییر ناسازگار در API، دیتابیس یا قرارداد widget.
+  \item \code{MINOR}: قابلیت جدید سازگار با نسخه قبل.
+  \item \code{PATCH}: bug fix، hardening یا تغییر بدون اثر روی قرارداد عمومی.
+\end{itemize}
+
+هر release باید tag داشته باشد:
+\begin{codeblock}
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+\end{codeblock}
+
+\section{Build و Artifact}
+\subsection{Backend}
+backend فعلی build ندارد، اما artifact آن باید شامل فایل‌های PHP، \code{backend/api}، \code{backend/includes}، \code{backend/config}، \code{backend/public}، migrationها و فایل \code{.htaccess} باشد. فایل‌های زیر نباید وارد artifact شوند:
+\begin{itemize}
+  \item \code{backend/.env}
+  \item \code{backend/uploads}
+  \item \code{backend/storage/logs}
+  \item dumpهای SQL، logها و backupها.
+\end{itemize}
+
+\subsection{Frontend}
+frontend باید با npm build شود:
+\begin{codeblock}
+cd frontend
+npm ci
+npm run build
+\end{codeblock}
+
+Artifact frontend شامل \code{.next}، \code{public}، \code{package.json} و \code{package-lock.json} است. برای اجرای production:
+\begin{codeblock}
+npm run start
+\end{codeblock}
+
+\subsection{Widget}
+در وضعیت فعلی، \code{widget/dist/widget.js} artifact نهایی ویجت است. اگر minify/bundle رسمی اضافه شود، باید خروجی dist در CI تولید و checksum آن ثبت شود. URL نهایی ویجت باید با \code{WIDGET_SCRIPT_URL} هماهنگ باشد.
+
+\section{Docker و Docker Compose}
+\subsection{وضعیت فعلی}
+در repository فایل \code{Dockerfile} یا \code{docker-compose.yml} وجود ندارد. بنابراین deployment فعلی احتمالا به وب‌سرور سنتی PHP و سرویس Node برای Next.js وابسته است.
+
+\subsection{طرح پیشنهادی Docker}
+برای production یا staging قابل تکرار، سه container اصلی پیشنهاد می‌شود:
+\begin{itemize}
+  \item \code{backend-php}: PHP-FPM یا Apache/PHP برای APIها.
+  \item \code{frontend-next}: Node.js برای اجرای Next.js.
+  \item \code{mysql}: دیتابیس فقط برای local/staging؛ در production بهتر است سرویس managed یا VM جدا باشد.
+\end{itemize}
+
+نمونه ساختار پیشنهادی:
+\begin{codeblock}
+docker/
+  backend/Dockerfile
+  frontend/Dockerfile
+  nginx/default.conf
+docker-compose.yml
+\end{codeblock}
+
+\subsection{طرح پیشنهادی Docker Compose}
+\begin{codeblock}
+services:
+  backend:
+    build: ./docker/backend
+    env_file: ./backend/.env
+    volumes:
+      - ./backend:/var/www/backend
+      - uploads:/var/www/storage/uploads
+
+  frontend:
+    build: ./docker/frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: https://api.example.com/backend/api
+
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: ai_chat_saas
+      MYSQL_USER: app
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: root-secret
+
+volumes:
+  uploads:
+\end{codeblock}
+
+این نمونه در repo فعلی وجود ندارد و باید قبل از استفاده واقعی با نیازهای مسیر فایل، وب‌سرور و SSL تطبیق داده شود.
+
+\section{Kubernetes}
+Kubernetes برای MVP ضروری نیست، اما برای SaaS با چند مشتری و نیاز به مقیاس‌پذیری می‌تواند در فاز بعدی استفاده شود. اجزای پیشنهادی:
+\begin{itemize}
+  \item \code{Deployment} برای frontend و backend.
+  \item \code{Service} جدا برای frontend و backend.
+  \item \code{Ingress} با TLS و routing دامنه‌ها.
+  \item \code{Secret} برای \code{JWT_SECRET}، \code{DB_PASS} و کلیدهای API.
+  \item \code{ConfigMap} برای URLها و تنظیمات غیرحساس.
+  \item \code{PersistentVolume} یا object storage برای uploadها.
+  \item \code{CronJob} برای backup، cleanup و taskهای دوره‌ای.
+\end{itemize}
+
+تا زمانی که load و تیم عملیاتی کوچک است، deployment روی VM با Docker Compose ساده‌تر و کم‌ریسک‌تر از Kubernetes است.
+
+\section{CI/CD}
+\subsection{وضعیت فعلی}
+pipeline رسمی در repository وجود ندارد. بنابراین اجرای build، lint، migration و deploy فعلا باید دستی یا با ابزار بیرونی انجام شود.
+
+\subsection{Pipeline پیشنهادی}
+\begin{enumerate}
+  \item Checkout کد.
+  \item نصب dependencyهای frontend با \code{npm ci}.
+  \item اجرای lint frontend با \code{npm run lint}.
+  \item اجرای build frontend با \code{npm run build}.
+  \item بررسی syntax فایل‌های PHP.
+  \item اجرای تست‌های backend/frontend در صورت اضافه شدن.
+  \item ساخت artifact backend، frontend و widget.
+  \item deploy به staging.
+  \item اجرای migration روی staging.
+  \item smoke test شامل login، health check دیتابیس، widget config و یک endpoint محافظت‌شده.
+  \item approval دستی برای production.
+  \item deploy production با نسخه tag شده.
+  \item post-deploy health check و مانیتورینگ خطا.
+\end{enumerate}
+
+\subsection{نمونه دستورات CI}
+\begin{codeblock}
+cd frontend
+npm ci
+npm run lint
+npm run build
+
+php -l backend/api/auth/login.php
+php -l backend/includes/jwt.php
+\end{codeblock}
+
+برای بررسی همه فایل‌های PHP، در CI می‌توان از اسکریپت shell/PowerShell استفاده کرد. این اسکریپت باید روی همه فایل‌های \code{backend/**/*.php} اجرا شود و در صورت خطای syntax pipeline را متوقف کند.
+
+\section{Deployment}
+\subsection{Deployment پیشنهادی روی VM}
+\begin{enumerate}
+  \item دریافت artifact نسخه مشخص از CI یا checkout tag.
+  \item نصب dependencyهای frontend با \code{npm ci --omit=dev} یا استفاده از artifact build شده.
+  \item کپی backend به مسیر وب‌سرور.
+  \item قرار دادن \code{backend/.env} امن خارج از repository یا تزریق از secret manager.
+  \item اجرای migrationهای دیتابیس با backup قبل از migration.
+  \item تنظیم \code{UPLOAD_STORAGE_ROOT} و permission مناسب.
+  \item restart سرویس Node/Next و PHP/Apache/Nginx در صورت نیاز.
+  \item اجرای smoke test.
+\end{enumerate}
+
+\subsection{مسیرهای پیشنهادی production}
+\begin{longtable}{R{42mm} R{88mm}}
+\toprule
+\textbf{دامنه/مسیر} & \textbf{کاربرد} \\
+\midrule
+\endhead
+\code{https://app.example.com} & frontend پنل Next.js. \\
+\code{https://api.example.com/backend/api} & PHP API. \\
+\code{https://cdn.example.com/widget.js} & فایل static ویجت. \\
+\code{/var/www/ai-chat-saas/backend} & کد backend روی سرور. \\
+\code{/var/www/ai-chat-saas/frontend} & کد یا artifact frontend. \\
+\code{/var/www/ai-chat-saas-storage} & upload storage خارج از مسیر اجرای کد. \\
+\bottomrule
+\end{longtable}
+
+\section{Database Migration}
+در repo فعلی فقط migration دانش AI دیده شد و migration runner مرکزی وجود ندارد. برای production باید سیاست زیر اجرا شود:
+\begin{itemize}
+  \item هر تغییر schema در فایل SQL نسخه‌دار داخل \code{backend/database/migrations} ثبت شود.
+  \item قبل از اجرای migration در production، backup دیتابیس گرفته شود.
+  \item migration ابتدا در staging اجرا شود.
+  \item migrationهای destructive باید plan rollback یا اسکریپت جبران داشته باشند.
+  \item جدول \code{schema_migrations} برای ثبت migrationهای اجراشده اضافه شود.
+\end{itemize}
+
+نمونه اجرای دستی:
+\begin{codeblock}
+mysql -u app -p ai_chat_saas < backend/database/migrations/2026_07_07_ai_knowledge_tables.sql
+\end{codeblock}
+
+\section{Rollback}
+\subsection{اصول rollback}
+Rollback باید قبل از deploy طراحی شود، نه بعد از شکست. برای هر release باید موارد زیر مشخص باشد:
+\begin{itemize}
+  \item tag نسخه قبلی سالم.
+  \item artifact نسخه قبلی backend، frontend و widget.
+  \item وضعیت migration و امکان rollback دیتابیس.
+  \item سازگاری نسخه قدیمی frontend با API و دیتابیس جدید.
+  \item backup قبل از migration.
+\end{itemize}
+
+\subsection{سناریوهای rollback}
+\begin{longtable}{R{38mm} R{64mm} R{48mm}}
+\toprule
+\textbf{سناریو} & \textbf{اقدام} & \textbf{ریسک} \\
+\midrule
+\endhead
+خرابی frontend & بازگرداندن artifact قبلی Next.js و restart سرویس. & پایین، اگر API تغییر نکرده باشد. \\
+خرابی backend & بازگرداندن کد PHP قبلی و پاک‌سازی cache وب‌سرور در صورت وجود. & متوسط، وابسته به migration. \\
+خرابی widget & بازگرداندن \code{widget.js} قبلی در CDN و کاهش cache TTL. & متوسط، چون روی سایت مشتری cache می‌شود. \\
+خرابی migration & restore backup یا اجرای migration جبرانی. & بالا، باید از قبل تست شود. \\
+مشکل env/secret & بازگرداندن env قبلی از secret manager و restart سرویس‌ها. & متوسط، نیازمند audit. \\
+\bottomrule
+\end{longtable}
+
+\section{Monitoring}
+\subsection{Health Check}
+در حال حاضر \code{backend/api/test-db.php} health check ساده دیتابیس است. برای production بهتر است endpoint اختصاصی \code{/health} اضافه شود که بدون افشای اطلاعات حساس موارد زیر را بررسی کند:
+\begin{itemize}
+  \item دسترسی PHP runtime.
+  \item اتصال دیتابیس با query سبک.
+  \item writable بودن storage upload در صورت نیاز.
+  \item وضعیت نسخه build.
+  \item عدم نمایش stack trace یا جزئیات secret.
+\end{itemize}
+
+نمونه پاسخ پیشنهادی:
+\begin{codeblock}
+{
+  "success": true,
+  "status": "ok",
+  "version": "1.0.0",
+  "checks": {
+    "database": "ok",
+    "storage": "ok"
+  }
+}
+\end{codeblock}
+
+\subsection{شاخص‌های مانیتورینگ}
+\begin{itemize}
+  \item نرخ خطاهای HTTP 5xx و 4xx.
+  \item latency endpointهای login، conversation list، message send و AI reply.
+  \item تعداد گفتگوهای ایجادشده در دقیقه.
+  \item تعداد رخدادهای rate limit.
+  \item خطاهای upload و حجم storage.
+  \item مصرف CPU/RAM دیپلوی frontend و backend.
+  \item اندازه دیتابیس و سرعت رشد جدول‌های messages، conversations و audit logs.
+  \item تعداد خطاهای crawler و AI search.
+\end{itemize}
+
+\section{Logging}
+\subsection{وضعیت فعلی}
+backend از \code{error_log} برای خطاهای امنیتی و runtime استفاده می‌کند. audit مدیریتی نیز در جدول \code{admin_audit_logs} ذخیره می‌شود. در repository، مسیرهای \code{backend/storage/logs} در \code{.gitignore} قرار دارند.
+
+\subsection{پیشنهاد production}
+\begin{itemize}
+  \item لاگ PHP، وب‌سرور، Node/Next و دیتابیس به log aggregator مرکزی ارسال شود.
+  \item logها ساختاریافته و شامل request id، user id، tenant id و endpoint باشند.
+  \item secret، password، token و Authorization header هرگز در log ذخیره نشوند.
+  \item retention لاگ‌ها بر اساس سیاست تجاری و حریم خصوصی تعریف شود.
+  \item alert برای رشد خطای 5xx، شکست login غیرعادی، rate limit شدید و خطاهای upload فعال شود.
+\end{itemize}
+
+\section{Tracing}
+Tracing توزیع‌شده در repo فعلی پیاده‌سازی نشده است. با توجه به معماری فعلی، ابتدا logging ساختاریافته و request id کافی است. در مرحله بعد می‌توان \en{OpenTelemetry} یا ابزار مشابه را برای ردیابی مسیر درخواست بین frontend، backend و دیتابیس اضافه کرد.
+
+حداقل طراحی پیشنهادی:
+\begin{itemize}
+  \item تولید \code{X-Request-Id} در reverse proxy اگر client نفرستاده باشد.
+  \item عبور دادن request id به PHP و Next.js logs.
+  \item ثبت request id در error log و audit context.
+  \item نمایش request id در پاسخ خطای production برای پشتیبانی، بدون افشای جزئیات فنی.
+\end{itemize}
+
+\section{Auto Deploy}
+Auto deploy فعلا در repo پیاده‌سازی نشده است. پیشنهاد:
+\begin{itemize}
+  \item merge به \code{develop}: deploy خودکار به staging.
+  \item tag با الگوی \code{v*}: ساخت release artifact.
+  \item deploy production فقط بعد از approval دستی.
+  \item smoke test خودکار پس از deploy.
+  \item rollback دستی اما سریع با artifact نسخه قبلی.
+\end{itemize}
+
+\section{Backup و نگهداری}
+\begin{itemize}
+  \item backup روزانه دیتابیس و نگهداری چند نسخه زمانی.
+  \item backup هماهنگ upload storage با دیتابیس.
+  \item تست restore حداقل ماهانه.
+  \item پاک‌سازی دوره‌ای logها، فایل‌های موقت و rate limitهای منقضی.
+  \item مانیتور فضای دیسک upload و backup.
+  \item نگهداری نسخه schema و migrationهای اجراشده.
+\end{itemize}
+
+\section{چک‌لیست Release Production}
+\begin{enumerate}
+  \item branch یا tag release مشخص شده است.
+  \item frontend با \code{npm ci} و \code{npm run build} موفق build شده است.
+  \item فایل‌های PHP syntax check شده‌اند.
+  \item migrationها در staging اجرا و تایید شده‌اند.
+  \item backup دیتابیس و upload storage گرفته شده است.
+  \item \code{APP_ENV=production} و \code{APP_DEBUG=false} تنظیم شده است.
+  \item \code{JWT_SECRET} و \code{DB_PASS} از secret امن تامین شده‌اند.
+  \item \code{PANEL_ALLOWED_ORIGINS} و \code{WIDGET_ALLOW_EMPTY_ORIGIN=false} کنترل شده‌اند.
+  \item health check و smoke test پس از deploy موفق هستند.
+  \item برنامه rollback و artifact نسخه قبلی آماده است.
+\end{enumerate}
+
+\section{جمع‌بندی}
+DevOps فعلی پروژه برای توسعه و دمو قابل استفاده است، اما برای production نیازمند تکمیل است. اجزای اصلی محصول مشخص و قابل deploy هستند: backend PHP، frontend Next.js، widget static، MySQL و upload storage. با این حال، نبود Docker، نبود pipeline رسمی CI/CD، نبود migration runner، نبود monitoring/tracing مرکزی و نبود health check جامع باید قبل از عرضه گسترده برطرف شود. مسیر پیشنهادی، ابتدا استانداردسازی env و release دستی قابل تکرار، سپس Docker Compose برای staging/production کوچک، و در نهایت CI/CD، monitoring و در صورت نیاز Kubernetes است.
+
+\end{document}
