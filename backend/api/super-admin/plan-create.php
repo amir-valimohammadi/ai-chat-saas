@@ -1,7 +1,7 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/super-admin/plan-create.php
-// هدف: ساخت پلن جدید توسط Super Admin
+// هدف: ساخت امن پلن جدید توسط Super Admin
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
@@ -10,110 +10,85 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    json_response([
-        'success' => false,
-        'message' => 'Method not allowed'
-    ], 405);
+    json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 }
 
 $user = require_auth($pdo);
 require_role($user, ['super_admin']);
-
 $input = get_json_input();
 
-$name = trim($input['name'] ?? '');
-$description = trim($input['description'] ?? '');
+function plan_bool(array $input, string $key, bool $default): bool
+{
+    if (!array_key_exists($key, $input)) {
+        return $default;
+    }
 
-$maxSites = isset($input['max_sites']) ? (int) $input['max_sites'] : 1;
-$maxAgents = isset($input['max_agents']) ? (int) $input['max_agents'] : 1;
-$maxMonthlyConversations = isset($input['max_monthly_conversations'])
-    ? (int) $input['max_monthly_conversations']
-    : 30;
-
-$aiSuggestionsEnabled = !empty($input['ai_suggestions_enabled']) ? 1 : 0;
-$aiAutoReplyEnabled = !empty($input['ai_auto_reply_enabled']) ? 1 : 0;
-$knowledgeBaseEnabled = !empty($input['knowledge_base_enabled']) ? 1 : 0;
-
-$priceMonthly = isset($input['price_monthly']) ? (float) $input['price_monthly'] : 0;
-$isActive = isset($input['is_active']) ? (bool) $input['is_active'] : true;
-
-if ($name === '') {
-    json_response([
-        'success' => false,
-        'message' => 'Plan name is required'
-    ], 422);
+    $value = filter_var($input[$key], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    return $value === null ? $default : $value;
 }
 
-if ($maxSites < 1) {
-    json_response([
-        'success' => false,
-        'message' => 'Max sites must be at least 1'
-    ], 422);
-}
+$name = trim((string) ($input['name'] ?? ''));
+$description = trim((string) ($input['description'] ?? ''));
+$maxSites = filter_var($input['max_sites'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 10000]]);
+$maxAgents = filter_var($input['max_agents'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100000]]);
+$maxMonthlyConversations = filter_var($input['max_monthly_conversations'] ?? 500, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 100000000]]);
+$priceMonthly = is_numeric($input['price_monthly'] ?? 0) ? (float) $input['price_monthly'] : -1;
 
-if ($maxAgents < 0) {
-    json_response([
-        'success' => false,
-        'message' => 'Max agents cannot be negative'
-    ], 422);
+if ($name === '' || mb_strlen($name, 'UTF-8') > 100) {
+    json_response(['success' => false, 'message' => 'نام پلن الزامی است و حداکثر ۱۰۰ کاراکتر دارد.'], 422);
 }
-
-if ($maxMonthlyConversations < 0) {
-    json_response([
-        'success' => false,
-        'message' => 'Monthly conversations cannot be negative'
-    ], 422);
+if (mb_strlen($description, 'UTF-8') > 1000) {
+    json_response(['success' => false, 'message' => 'توضیحات پلن حداکثر ۱۰۰۰ کاراکتر است.'], 422);
+}
+if ($maxSites === false || $maxAgents === false || $maxMonthlyConversations === false) {
+    json_response(['success' => false, 'message' => 'یکی از محدودیت‌های پلن معتبر نیست.'], 422);
+}
+if (!is_finite($priceMonthly) || $priceMonthly < 0 || $priceMonthly > 9999999999.99) {
+    json_response(['success' => false, 'message' => 'قیمت ماهانه معتبر نیست.'], 422);
 }
 
 try {
+    $duplicateStmt = $pdo->prepare("SELECT id FROM plans WHERE LOWER(name) = LOWER(:name) LIMIT 1");
+    $duplicateStmt->execute([':name' => $name]);
+
+    if ($duplicateStmt->fetch()) {
+        json_response(['success' => false, 'message' => 'پلنی با این نام قبلاً ثبت شده است.'], 409);
+    }
+
     $stmt = $pdo->prepare("
         INSERT INTO plans (
-            name,
-            description,
-            max_sites,
-            max_agents,
-            max_monthly_conversations,
-            ai_suggestions_enabled,
-            ai_auto_reply_enabled,
-            knowledge_base_enabled,
-            price_monthly,
-            is_active
+            name, description, max_sites, max_agents, max_monthly_conversations,
+            ai_suggestions_enabled, ai_auto_reply_enabled, knowledge_base_enabled,
+            price_monthly, is_active
         ) VALUES (
-            :name,
-            :description,
-            :max_sites,
-            :max_agents,
-            :max_monthly_conversations,
-            :ai_suggestions_enabled,
-            :ai_auto_reply_enabled,
-            :knowledge_base_enabled,
-            :price_monthly,
-            :is_active
+            :name, :description, :max_sites, :max_agents, :max_monthly_conversations,
+            :ai_suggestions_enabled, :ai_auto_reply_enabled, :knowledge_base_enabled,
+            :price_monthly, :is_active
         )
     ");
 
     $stmt->execute([
         ':name' => $name,
         ':description' => $description !== '' ? $description : null,
-        ':max_sites' => $maxSites,
-        ':max_agents' => $maxAgents,
-        ':max_monthly_conversations' => $maxMonthlyConversations,
-        ':ai_suggestions_enabled' => $aiSuggestionsEnabled,
-        ':ai_auto_reply_enabled' => $aiAutoReplyEnabled,
-        ':knowledge_base_enabled' => $knowledgeBaseEnabled,
-        ':price_monthly' => $priceMonthly,
-        ':is_active' => $isActive ? 1 : 0,
+        ':max_sites' => (int) $maxSites,
+        ':max_agents' => (int) $maxAgents,
+        ':max_monthly_conversations' => (int) $maxMonthlyConversations,
+        ':ai_suggestions_enabled' => plan_bool($input, 'ai_suggestions_enabled', true) ? 1 : 0,
+        ':ai_auto_reply_enabled' => plan_bool($input, 'ai_auto_reply_enabled', false) ? 1 : 0,
+        ':knowledge_base_enabled' => plan_bool($input, 'knowledge_base_enabled', true) ? 1 : 0,
+        ':price_monthly' => round($priceMonthly, 2),
+        ':is_active' => plan_bool($input, 'is_active', true) ? 1 : 0,
     ]);
 
     json_response([
         'success' => true,
-        'message' => 'Plan created successfully',
-        'plan_id' => (int) $pdo->lastInsertId()
+        'message' => 'پلن با موفقیت ساخته شد.',
+        'plan_id' => (int) $pdo->lastInsertId(),
     ], 201);
-} catch (Exception $e) {
-    json_response([
-        'success' => false,
-        'message' => 'Failed to create plan',
-        'error' => $e->getMessage()
-    ], 500);
+} catch (Throwable $e) {
+    $payload = ['success' => false, 'message' => 'ساخت پلن ناموفق بود.'];
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+    json_response($payload, 500);
 }
