@@ -1,0 +1,1243 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{fancyvrb}
+
+\providecommand{\UseMathForPositioningText}{}
+
+\IfFontExistsTF{Vazirmatn}{
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \settextfont{Tahoma}
+  }{
+    \settextfont{Arial}
+  }
+}
+
+\IfFontExistsTF{Consolas}{
+  \setmonofont{Consolas}
+}{
+  \setmonofont{Courier New}
+}
+
+\IfFontExistsTF{Arial}{
+  \setlatintextfont{Arial}
+}{
+  \setlatintextfont{Times New Roman}
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={AI Chat SaaS Algorithms Documentation},
+  pdfauthor={Mobin Yousefi}
+}
+
+\definecolor{HeaderBlue}{HTML}{1E3A8A}
+\definecolor{BorderGray}{HTML}{CBD5E1}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{7pt}
+\setlength{\headheight}{15pt}
+\emergencystretch=3em
+\sloppy
+\renewcommand{\arraystretch}{1.45}
+\setlist[itemize]{rightmargin=1.2cm,itemsep=3pt,topsep=4pt}
+\setlist[enumerate]{rightmargin=1.2cm,itemsep=3pt,topsep=4pt}
+
+\titleformat{\section}{\Large\bfseries\color{HeaderBlue}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{مستند الگوریتم‌ها \lr{AI Chat SaaS}}
+\lhead{نسخه \lr{1.0}}
+\cfoot{\thepage}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+
+\newenvironment{algoblock}
+{%
+  \VerbatimEnvironment
+  \begin{latin}
+  \begin{Verbatim}[
+    fontsize=\small,
+    frame=single,
+    rulecolor=\color{BorderGray},
+    baselinestretch=1,
+    xleftmargin=0.2cm,
+    xrightmargin=0.2cm
+  ]%
+}
+{%
+  \end{Verbatim}
+  \end{latin}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2.2cm}
+{\Huge\bfseries مستند الگوریتم‌ها \en{AI Chat SaaS}\par}
+\vspace{0.7cm}
+{\Large\bfseries \en{Algorithms Documentation}\par}
+\vspace{1.3cm}
+{\large تشریح الگوریتم‌های کلیدی سامانه چت پشتیبانی چندمستاجری، موتور دانش هوش مصنوعی، خزنده سایت، کنترل دسترسی، محدودیت پلن، نرخ درخواست و اعتبارسنجی فایل\par}
+\vfill
+\begin{tabular}{rl}
+\textbf{نام پروژه:} & \en{AI Chat SaaS} \\
+\textbf{نوع سند:} & مستند الگوریتم‌ها \\
+\textbf{نسخه سند:} & \en{1.0} \\
+\textbf{تاریخ:} & ۱۴ جولای ۲۰۲۶ \\
+\textbf{نویسنده/تهیه‌کننده:} & مبین یوسفی \\
+\textbf{مسیر سند:} & \code{doc/LaTeX/06-Algorithms/06-Algorithms.tex} \\
+\end{tabular}
+\vfill
+{\small این سند مطابق بخش «مستند الگوریتم‌ها» در \code{Rahnama.md} و بر پایه کدهای واقعی پروژه، \code{ArchitectureForMobin.md} و \code{ReportForSale.md} تهیه شده است.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{هدف و دامنه سند}
+این سند الگوریتم‌های اصلی پروژه \en{AI Chat SaaS} را به‌صورت فنی، قابل بررسی و قابل ارائه مستند می‌کند. مطابق راهنمای \code{Rahnama.md}، برای هر الگوریتم موارد زیر ارائه شده است:
+\begin{itemize}
+  \item هدف الگوریتم
+  \item ورودی‌ها
+  \item خروجی‌ها
+  \item شبه‌کد
+  \item فلوچارت متنی
+  \item پیچیدگی زمانی و فضایی
+  \item مزایا
+  \item محدودیت‌ها
+\end{itemize}
+
+تمرکز سند روی الگوریتم‌هایی است که هسته فنی محصول را می‌سازند: احراز هویت JWT، کنترل دسترسی چندمستاجری، ایجاد مکالمه widget، محدودیت پلن، rate limiting، خزیدن محتوای سایت، آماده‌سازی دانش، جست‌وجو و رتبه‌بندی پاسخ AI، پاسخ خودکار AI، پیشنهاد پاسخ برای agent و اعتبارسنجی امن فایل.
+
+\section{خلاصه الگوریتم‌های کلیدی}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4.2cm} p{6.2cm} p{4cm}}
+\toprule
+\textbf{الگوریتم} & \textbf{فایل‌های اصلی} & \textbf{نقش در محصول} \\
+\midrule
+احراز هویت JWT و revoke & \code{jwt.php}، \code{auth.php} & حفاظت از APIهای پنل و کنترل نشست کاربران. \\
+کنترل دسترسی سایت & \code{site-access.php} & جداسازی tenant/site و جلوگیری از دسترسی غیرمجاز agentها. \\
+شروع مکالمه widget & \code{conversation-start.php} & ایجاد یا بازیابی مکالمه فعال visitor. \\
+محدودیت پلن & \code{plan-limits.php} & اعمال سقف سایت، agent، مکالمه و قابلیت‌های AI. \\
+Rate limiting & \code{rate-limit.php} & جلوگیری از brute force و spam در login/widget/AI. \\
+خزنده دانش سایت & \code{ai-crawl-start.php}، \code{ai-crawler.php} & ساخت knowledge base از صفحات سایت مشتری. \\
+پردازش متن و term extraction & \code{ai-crawler.php}، \code{ai-answer-engine.php} & آماده‌سازی متن، توکن، intent و term برای جست‌وجو. \\
+بازیابی و رتبه‌بندی پاسخ AI & \code{ai-answer-engine.php} & پیدا کردن بهترین پاسخ از دانش دستی و crawled content. \\
+پاسخ خودکار AI & \code{ai-reply.php} & پاسخ مستقیم در widget هنگام آفلاین بودن پشتیبانی. \\
+پیشنهاد پاسخ agent & \code{ai-suggestion-generate.php} & ساخت draft برای human agent با confidence و source. \\
+اعتبارسنجی upload & \code{upload.php} & جلوگیری از فایل خطرناک و ذخیره امن attachment. \\
+\bottomrule
+\end{longtable}
+
+\newpage
+\section{الگوریتم ۱: احراز هویت JWT و ابطال توکن}
+\subsection{هدف}
+هدف این الگوریتم تولید و اعتبارسنجی توکن JWT با امضای \en{HS256} و کنترل ابطال نشست‌ها با \code{token_version} است. این الگوریتم باعث می‌شود APIهای پنل بدون session سمت سرور کار کنند، اما همچنان تغییر رمز یا logout-all بتواند توکن‌های قبلی را از اعتبار خارج کند.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item در زمان تولید: شناسه کاربر، tenant، ایمیل، نقش، \code{token_version} و زمان انقضا.
+  \item در زمان اعتبارسنجی: مقدار header از نوع \code{Authorization: Bearer <token>}.
+  \item تنظیمات: \code{JWT_SECRET}، issuer، audience و حداکثر TTL.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item در تولید: رشته JWT امضاشده.
+  \item در اعتبارسنجی موفق: payload و سپس اطلاعات کاربر فعال.
+  \item در خطا: پاسخ \code{401}، \code{403} یا \code{500} بسته به نوع خطا.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm JWT_AUTHENTICATION
+Input: Authorization header, database connection
+Output: authenticated user or error
+
+1. Extract Bearer token from Authorization header
+2. Split token into header, payload, signature
+3. Base64URL-decode header and payload
+4. Verify header.typ == JWT and header.alg == HS256
+5. Recompute HMAC-SHA256(header.payload, JWT_SECRET)
+6. Compare expected signature with token signature using constant-time compare
+7. Validate exp, iat, nbf, jti, max TTL, issuer and audience
+8. Load user by payload.sub from database
+9. Reject if user is inactive
+10. Compare payload.token_version with users.token_version
+11. Compare token email/role with current database values
+12. If user is not super_admin, require active tenant
+13. Return normalized user object
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Start
+  |
+  v
+Read Bearer Token
+  |
+  v
+Decode JWT Parts -> Validate Signature -> Validate Time Claims
+  |
+  v
+Load User From DB
+  |
+  +-- inactive / missing / revoked --> Reject
+  |
+  v
+Check Tenant Status For Non-SuperAdmin
+  |
+  v
+Authenticated User
+\end{algoblock}
+
+\subsection{پیچیدگی}
+پیچیدگی زمانی این الگوریتم \en{O(1)} نسبت به اندازه دیتابیس است، چون فقط یک کاربر با کلید اصلی خوانده می‌شود. پیچیدگی فضایی نیز \en{O(1)} است. هزینه رمزنگاری HMAC نسبت به طول توکن خطی است، اما طول توکن محدود به ۴۰۹۶ کاراکتر است.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item stateless بودن احراز هویت.
+  \item امکان revoke عملی با \code{token_version}.
+  \item کنترل issuer، audience، TTL و clock skew.
+  \item استفاده از \code{hash_equals} برای مقایسه امن امضا.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item امنیت کاملا به محرمانه و قوی بودن \code{JWT_SECRET} وابسته است.
+  \item blacklist مجزا برای \code{jti} وجود ندارد؛ ابطال در سطح کاربر با \code{token_version} انجام می‌شود.
+  \item refresh token مستقل در کد فعلی دیده نمی‌شود.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۲: کنترل دسترسی چندمستاجری به سایت}
+\subsection{هدف}
+هدف الگوریتم، تعیین این است که کاربر لاگین‌شده اجازه دسترسی به یک \code{site_id} را دارد یا نه. این الگوریتم هسته جداسازی tenantها و جلوگیری از \en{IDOR} در endpointهای agent و customer است.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item کاربر احرازشده شامل \code{id}، \code{role} و \code{tenant_id}.
+  \item شناسه سایت \code{site_id}.
+  \item جداول \code{sites} و \code{agent_site_access}.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item مقدار boolean در \code{user_can_access_site}.
+  \item یا پاسخ \code{403} در \code{require_site_access}.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm SITE_ACCESS
+Input: user, site_id
+Output: allowed or denied
+
+1. If user.role == super_admin:
+       return allowed
+2. If user.role == customer_admin:
+       Find site where site.id = site_id and site.tenant_id = user.tenant_id
+       If found return allowed else denied
+3. If user.role == agent:
+       Join sites with agent_site_access
+       Require:
+          sites.id = site_id
+          sites.tenant_id = user.tenant_id
+          agent_site_access.user_id = user.id
+       If found return allowed else denied
+4. For any other role:
+       return denied
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Start
+  |
+  v
+Check Role
+  |
+  +-- super_admin --------> Allow
+  |
+  +-- customer_admin -----> Site belongs to tenant? -> Allow/Deny
+  |
+  +-- agent --------------> Assigned in agent_site_access? -> Allow/Deny
+  |
+  +-- other --------------> Deny
+\end{algoblock}
+
+\subsection{پیچیدگی}
+برای هر نقش فقط یک query محدود با \code{LIMIT 1} اجرا می‌شود؛ بنابراین پیچیدگی عملی \en{O(1)} با فرض وجود index روی \code{sites.id}، \code{sites.tenant_id} و \code{agent_site_access.user_id/site_id} است. فضای مصرفی \en{O(1)} است.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item منطق ساده و قابل audit.
+  \item جداسازی روشن بین super admin، customer admin و agent.
+  \item مناسب برای SaaS چندمستاجری.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item اگر endpointی این helper را فراخوانی نکند، کنترل دسترسی از دست می‌رود؛ بنابراین audit endpointها مهم است.
+  \item سطح دسترسی agent فقط بر اساس site است و permission جزئی‌تر مثل فقط مشاهده/فقط پاسخ در کد فعلی دیده نمی‌شود.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۳: شروع یا بازیابی مکالمه در Widget}
+\subsection{هدف}
+این الگوریتم در endpoint \code{widget/conversation-start.php} یک مکالمه فعال برای visitor ایجاد یا بازیابی می‌کند. اگر visitor قبلا مکالمه باز داشته باشد، همان مکالمه برگردانده می‌شود؛ در غیر این صورت محدودیت ماهانه پلن بررسی و مکالمه جدید ساخته می‌شود.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item \code{site_key}
+  \item \code{visitor_id}
+  \item \code{source_page_url} و \code{source_page_title}
+  \item origin درخواست widget
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item شناسه مکالمه فعال، \code{site_id} و \code{visitor_id}.
+  \item خطاهای validation، rate limit، site/visitor not found یا plan limit.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm START_OR_REUSE_WIDGET_CONVERSATION
+Input: site_key, visitor_id, source_page_url, source_page_title
+Output: conversation object
+
+1. Require POST method
+2. Validate site_key format and visitor_id
+3. Validate source page fields length and URL scheme
+4. Apply rate limit for site_key + visitor_id + remote IP
+5. Load active site by site_key and active tenant
+6. Validate widget origin against site domain
+7. Verify visitor belongs to site
+8. Search latest active conversation for site + visitor
+9. If active conversation exists:
+       update source page fields if provided
+       return existing conversation
+10. Else:
+       ensure monthly conversation limit for site tenant
+       insert new conversation with status = new
+       return new conversation
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Request
+  |
+  v
+Validate Input + Rate Limit
+  |
+  v
+Find Active Site + Validate Origin
+  |
+  v
+Verify Visitor Belongs To Site
+  |
+  v
+Active Conversation Exists?
+  | yes                         | no
+  v                             v
+Update Source Fields        Check Monthly Plan Limit
+  |                             |
+  v                             v
+Return Existing             Insert Conversation
+                                |
+                                v
+                           Return New
+\end{algoblock}
+
+\subsection{پیچیدگی}
+با index مناسب روی \code{site_key}، \code{visitor_id} و ستون‌های مکالمه شامل \code{site_id}، \code{visitor_id} و \code{status}، پیچیدگی هر درخواست \en{O(1)} است. شمارش ماهانه در الگوریتم محدودیت پلن می‌تواند نسبت به تعداد مکالمات ماه جاری tenant خطی باشد، اما با index زمانی و \code{site_id} بهینه می‌شود.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item جلوگیری از ساخت مکالمه تکراری برای یک visitor.
+  \item حفظ context مکالمه فعال.
+  \item اعمال origin validation و rate limit در مسیر عمومی.
+  \item اتصال مستقیم به مدل درآمدی از طریق monthly conversation limit.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item مکالمه فعال با وضعیت‌ها تعریف می‌شود؛ اگر وضعیت‌ها در آینده تغییر کنند باید این لیست به‌روزرسانی شود.
+  \item در ترافیک خیلی بالا، ساخت همزمان مکالمه برای یک visitor می‌تواند نیازمند constraint یا transaction دقیق‌تر باشد.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۴: اعمال محدودیت‌های پلن}
+\subsection{هدف}
+هدف این الگوریتم اعمال محدودیت‌های تجاری پلن روی قابلیت‌های محصول است: تعداد سایت‌ها، تعداد agentها، تعداد مکالمات ماهانه و قابلیت‌های AI.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item \code{tenant_id} یا \code{site_id}.
+  \item کلید قابلیت مانند \code{ai_suggestions_enabled}.
+  \item جداول \code{tenants}، \code{plans}، \code{sites}، \code{users} و \code{conversations}.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item ادامه عملیات در صورت مجاز بودن.
+  \item پاسخ \code{403} یا \code{404} در صورت نبود پلن، غیرفعال بودن tenant/plan یا رسیدن به سقف.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm ENFORCE_PLAN_LIMIT
+Input: tenant_id or site_id, limit type
+Output: allowed or rejected
+
+1. Load tenant joined with assigned plan
+2. Reject if tenant not found or inactive
+3. Reject if plan missing or inactive
+4. For feature flag:
+       if plan[feature_key] is false -> reject
+5. For monthly conversations:
+       count conversations for all tenant sites in current month
+       if count >= max_monthly_conversations -> reject
+6. For agents:
+       count active users where role = agent
+       if count >= max_agents -> reject
+7. For sites:
+       count sites for tenant
+       if count >= max_sites -> reject
+8. Otherwise allow
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Start
+  |
+  v
+Load Tenant + Plan
+  |
+  +-- missing/inactive --> Reject
+  |
+  v
+Select Limit Type
+  |
+  +-- Feature Flag --> Check Boolean --> Allow/Reject
+  +-- Monthly Conversations --> Count Current Month --> Allow/Reject
+  +-- Agents --> Count Active Agents --> Allow/Reject
+  +-- Sites --> Count Sites --> Allow/Reject
+\end{algoblock}
+
+\subsection{پیچیدگی}
+بار اصلی الگوریتم در countهاست. با index مناسب، پیچیدگی عملی نزدیک به \en{O(log n)} برای lookup و count index-based است. بدون index، count می‌تواند \en{O(n)} نسبت به تعداد کاربران، سایت‌ها یا مکالمات tenant باشد. فضای مصرفی \en{O(1)} است.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item اتصال مستقیم قابلیت‌های محصول به مدل درآمدی SaaS.
+  \item قابل استفاده مجدد در endpointهای مختلف.
+  \item کنترل قابلیت‌های AI و محدودیت‌های مصرفی از سمت backend.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item باید audit شود که همه endpointهای حساس واقعا helperهای پلن را فراخوانی کنند.
+  \item countهای پرتکرار در مقیاس بالا بهتر است cache یا aggregate شوند.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۵: محدودسازی نرخ درخواست}
+\subsection{هدف}
+این الگوریتم از brute force، spam و مصرف بیش از حد endpointهای عمومی یا حساس جلوگیری می‌کند. داده‌ها در جدول \code{api_rate_limits} ذخیره می‌شوند.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item نام action مانند \code{widget_ai_reply}.
+  \item identifier ساخته‌شده از IP، user agent و اطلاعات اضافی مثل \code{site_key}.
+  \item \code{maxAttempts} و \code{windowSeconds}.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item اجازه ادامه درخواست.
+  \item یا پاسخ \code{429} همراه با \code{Retry-After}.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm RATE_LIMIT
+Input: action, identifier, max_attempts, window_seconds
+Output: allowed or HTTP 429
+
+1. If max_attempts <= 0 or window_seconds <= 0:
+       allow
+2. Build identifier_hash = SHA256(identifier)
+3. Build rate_key = SHA256(action + identifier)
+4. With 5% probability, delete up to 200 expired records
+5. Load record by rate_key
+6. If no record:
+       insert record with hits = 1 and expires_at = now + window
+       allow
+7. If record expired:
+       reset hits = 1 and expires_at = now + window
+       allow
+8. If hits >= max_attempts:
+       return 429 with retry_after_seconds
+9. Else:
+       increment hits
+       allow
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Request
+  |
+  v
+Build Rate Key
+  |
+  v
+Record Exists?
+  | no                         | yes
+  v                            v
+Insert hits=1              Expired?
+  |                            | yes
+  v                            v
+Allow                     Reset hits=1 -> Allow
+                               |
+                               no
+                               v
+                         hits >= max?
+                         | yes       | no
+                         v           v
+                       Reject 429   Increment + Allow
+\end{algoblock}
+
+\subsection{پیچیدگی}
+lookup و update با index روی \code{rate_key} عملا \en{O(1)} است. cleanup احتمالی حداکثر ۲۰۰ رکورد حذف می‌کند و با احتمال ۵ درصد اجرا می‌شود؛ بنابراین هزینه متوسط کنترل‌شده است. فضای مصرفی نسبت به تعداد action/identifier فعال \en{O(k)} است.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item ساده، قابل فهم و مناسب MVP.
+  \item استفاده از hash برای identifier و جلوگیری از ذخیره مستقیم IP/user agent کامل.
+  \item پشتیبانی از window و retry-after.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item fixed window است و نسبت به sliding window دقت کمتری در مرز پنجره دارد.
+  \item در ترافیک بسیار بالا، update همزمان یک رکورد می‌تواند contention ایجاد کند.
+  \item برای distributed deployment بهتر است Redis یا rate limiter متمرکز استفاده شود.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۶: خزیدن سایت و ساخت دانش}
+\subsection{هدف}
+این الگوریتم صفحات سایت مشتری را از منابع تعریف‌شده دریافت می‌کند و دانش قابل جست‌وجو برای AI می‌سازد. خروجی آن جداول \code{ai_pages}، \code{ai_content_chunks}، \code{ai_terms} و \code{ai_generated_questions} است.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item \code{site_id} و کاربر customer admin.
+  \item منابع فعال در \code{ai_crawl_sources}: نوع \code{url}، \code{path_prefix} یا \code{sitemap}.
+  \item تنظیمات \code{max_pages_per_crawl}، \code{max_depth} و \code{crawl_enabled}.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item \code{crawl_run_id}
+  \item تعداد URLها، صفحات موفق، صفحات ناموفق، chunks، terms و generated questions.
+  \item داده ذخیره‌شده در جداول AI.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm CRAWL_SITE_KNOWLEDGE
+Input: site_id, active crawl sources, AI settings
+Output: crawl summary and stored knowledge
+
+1. Authenticate customer_admin and load site for tenant
+2. Load AI settings; reject if crawl_enabled is false
+3. Clamp max_pages to [1, 100] and max_depth to [0, 3]
+4. Load active crawl sources
+5. Insert ai_crawl_runs row with status = running
+6. Build base URL from site domain
+7. For each source:
+       if type = url: add absolute URL to queue
+       if type = path_prefix: add seed prefix URL to queue
+       if type = sitemap: fetch sitemap and extract <loc> URLs
+8. While queue is not empty and fetched_pages < max_pages:
+       pop next URL
+       skip if URL hash already visited
+       skip if host does not belong to site domain
+       fetch HTML
+       if fetch failed: count failed and continue
+       extract readable content and links
+       if text length < 80: mark ignored and continue
+       store page knowledge:
+          upsert ai_pages
+          delete old chunks for page
+          split text into chunks
+          extract terms for each chunk
+          generate template questions
+       if current depth < max_depth:
+          normalize links and add same-domain links to queue
+9. Update crawl run status = completed with counters
+10. Update crawl sources last_crawled_at
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Start Crawl
+  |
+  v
+Validate User + Site + Settings
+  |
+  v
+Build URL Queue From Sources
+  |
+  v
+Queue Loop
+  |
+  +-- visited/outside-domain --> Skip
+  |
+  +-- fetch failed -----------> Count Failed
+  |
+  +-- short text -------------> Ignore
+  |
+  v
+Extract + Store Page Knowledge
+  |
+  v
+Add Discovered Links If Depth Allows
+  |
+  v
+Update Crawl Run Summary
+\end{algoblock}
+
+\subsection{پیچیدگی}
+اگر تعداد صفحات خزیده‌شده \en{P}، تعداد لینک‌های بررسی‌شده \en{L} و طول کل متن‌ها \en{T} باشد، پیچیدگی زمانی کلی تقریبا \en{O(P + L + T)} به‌علاوه هزینه شبکه است. قطعه‌بندی و استخراج term نسبت به طول متن خطی است. فضای مصرفی صف و مجموعه visited برابر \en{$O(P + L_q)$} است که \en{$L_q$} لینک‌های داخل صف است، اما با \code{max_pages_per_crawl} محدود می‌شود.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item ساخت دانش از سایت مشتری بدون نیاز به ورود دستی همه FAQها.
+  \item محدودسازی دامنه برای جلوگیری از crawl خارج از سایت مشتری.
+  \item ثبت summary برای ارزیابی کیفیت crawl.
+  \item تولید chunk، term و سوال قالبی برای بهبود retrieval.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item crawl در درخواست HTTP اجرا می‌شود و برای سایت‌های بزرگ ممکن است timeout شود.
+  \item SSL verification در fetch فعلی غیرفعال است و برای production باید بازبینی شود.
+  \item جاوااسکریپت client-side صفحات render نمی‌شود؛ فقط HTML دریافت‌شده تحلیل می‌شود.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۷: نرمال‌سازی، قطعه‌بندی و استخراج واژه‌های مهم}
+\subsection{هدف}
+این الگوریتم متن خام HTML را به واحدهای قابل جست‌وجو تبدیل می‌کند: متن نرمال، chunkهای محدود، termهای پرتکرار و سوال‌های قالبی. این مرحله پایه کیفیت پاسخ‌دهی AI است.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item HTML یا متن تمیز صفحه.
+  \item metadata مانند title و main heading.
+  \item intent/category تشخیص‌داده‌شده.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item متن نرمال‌شده.
+  \item آرایه chunks با طول تقریبی ۸۰ تا ۶۵۰ کاراکتر.
+  \item حداکثر ۴۰ term برتر برای هر chunk.
+  \item سوال‌های template-based برای هر chunk.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm PREPARE_TEXT_KNOWLEDGE
+Input: clean_text, title, heading, category, intent
+Output: chunks, terms, generated_questions
+
+1. Normalize text:
+       decode HTML entities
+       unify Arabic/Persian characters
+       collapse repeated whitespace
+2. Split text by lines
+3. For each line:
+       detect short heading-like lines
+       accumulate body lines under current heading
+       when body exceeds max length, emit chunk
+4. If no chunks created:
+       split by sentences and build chunks
+5. For each chunk:
+       lower-case and remove punctuation
+       split into words
+       remove stop words and short words
+       count frequency
+       score term = frequency * 10
+       add boost if term appears in title or heading
+       keep top 40 terms
+6. Generate template questions based on intent
+7. Store chunks, terms and questions
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Raw Text
+  |
+  v
+Normalize
+  |
+  v
+Line-Based Chunking
+  |
+  +-- no chunk --> Sentence-Based Fallback
+  |
+  v
+Term Extraction + Scoring
+  |
+  v
+Question Template Generation
+  |
+  v
+Persist Knowledge Units
+\end{algoblock}
+
+\subsection{پیچیدگی}
+نرمال‌سازی، chunking و term extraction نسبت به طول متن \en{O(T)} است. مرتب‌سازی termها اگر تعداد termهای متمایز \en{U} باشد \en{O(U log U)} است. چون خروجی termها به ۴۰ محدود می‌شود، فضای نهایی کنترل‌شده است.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item ساده، قابل توضیح و مناسب متن فارسی و انگلیسی.
+  \item حفظ heading به‌عنوان زمینه chunk.
+  \item تولید سوال‌های احتمالی برای افزایش شانس تطبیق سوال visitor.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item stemming، lemmatization و embedding وجود ندارد.
+  \item تشخیص heading بر اساس heuristic ساده انجام می‌شود.
+  \item سوال‌های تولیدی template-based هستند و تنوع زبانی محدود دارند.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۸: بازیابی و رتبه‌بندی پاسخ AI}
+\subsection{هدف}
+هدف این الگوریتم یافتن بهترین پاسخ از میان دانش دستی، سوال‌های تولیدشده و chunks خزیده‌شده است. این الگوریتم در \code{ai_find_best_answer()} پیاده‌سازی شده و هسته AI فعال محصول محسوب می‌شود.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item آبجکت site شامل \code{id} و \code{tenant_id}.
+  \item سوال visitor یا agent.
+  \item جداول \code{knowledge_sources}، \code{ai_generated_questions}، \code{ai_content_chunks} و \code{ai_terms}.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item \code{success}
+  \item \code{confidence_score}
+  \item پاسخ استخراجی
+  \item منابع برتر و candidateهای برتر
+  \item شناسه chunk، question یا knowledge source تطبیق‌یافته
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm FIND_BEST_AI_ANSWER
+Input: site, question
+Output: answer result with confidence and sources
+
+1. Normalize question
+2. Extract non-stopword tokens, max 12 unique tokens
+3. Detect question intent and category
+4. If question is too short or tokens are empty:
+       return no_answer
+5. Search manual knowledge_sources by token LIKE conditions
+6. Search ai_generated_questions by token LIKE conditions
+7. Search ai_content_chunks by token LIKE conditions
+8. Collect chunk IDs from candidates
+9. Load term boosts for matched terms in candidate chunks
+10. For each manual knowledge candidate:
+       score = 0.45 * question_match
+             + 0.35 * answer_match
+             + 0.20 * all_text_match
+       add manual knowledge boost
+       add approved and FAQ boost
+       add exact-ish question boost
+11. For each generated question candidate:
+       score = 0.60 * question_match + 0.25 * answer_match
+       add intent/category boost
+       add term boost
+       add stored question score boost
+12. For each content chunk candidate:
+       score = 0.75 * content_match
+       add intent/category boost
+       add term boost
+       add importance score boost
+13. Clamp scores to 100
+14. Sort candidates by score descending
+15. If no candidate:
+       return no_answer
+16. Build extractive reply from best candidate answer_text
+17. Return answer, confidence_score, top sources and best candidates
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Question
+  |
+  v
+Normalize + Tokenize + Intent Detection
+  |
+  v
+Search 3 Sources
+  |
+  +-- Manual Knowledge
+  +-- Generated Questions
+  +-- Content Chunks
+  |
+  v
+Score + Boost Candidates
+  |
+  v
+Sort Descending
+  |
+  +-- no candidate --> No Answer
+  |
+  v
+Build Extractive Reply
+  |
+  v
+Return Answer + Confidence + Sources
+\end{algoblock}
+
+\subsection{پیچیدگی}
+اگر تعداد توکن‌ها \en{K}، candidateهای دستی \en{M}، سوال‌های تولیدی \en{Q} و chunks \en{C} باشد، scoring تقریبا \en{O(K(M+Q+C))} است. هر query در کد به \code{LIMIT 50} محدود شده، بنابراین در عمل \en{M,Q,C <= 50} و هزینه کنترل‌شده است. مرتب‌سازی روی حداکثر حدود ۱۵۰ candidate انجام می‌شود: \en{O(N log N)}.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item قابل توضیح و قابل debug.
+  \item اولویت دادن به دانش دستی تاییدشده.
+  \item کاهش وابستگی به API خارجی.
+  \item ثبت sources برای audit و بهبود کیفیت.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item جست‌وجو برداری و embedding ندارد؛ سوال‌های پارافرایز پیچیده ممکن است score پایین بگیرند.
+  \item SQL \code{LIKE} برای متن‌های بزرگ در مقیاس بالا کافی نیست.
+  \item پاسخ تولیدی extractive است و توان ترکیب چند منبع را به شکل LLM ندارد.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۹: پاسخ خودکار AI در Widget}
+\subsection{هدف}
+این الگوریتم تصمیم می‌گیرد آیا AI اجازه دارد مستقیم به visitor پاسخ دهد یا باید fallback ارسال شود یا عملیات skip شود. این الگوریتم با احتیاط طراحی شده تا وقتی پشتیبان انسانی آنلاین است، AI مداخله مستقیم نکند.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item \code{site_key}، \code{visitor_id}، \code{conversation_id} و \code{message_id}.
+  \item آخرین پیام visitor.
+  \item تنظیمات \code{ai_site_settings}.
+  \item وضعیت آنلاین بودن customer admin یا agent.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item پیام AI در جدول \code{messages} با \code{sender_type = ai}.
+  \item یا skip با reason مشخص.
+  \item لاگ در \code{ai_answer_logs}.
+  \item ثبت unanswered در صورت score پایین.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm WIDGET_AI_AUTO_REPLY
+Input: site_key, visitor_id, conversation_id, message_id
+Output: AI message, fallback, or skipped result
+
+1. Validate request method and input IDs
+2. Validate site_key format
+3. Apply rate limit for widget_ai_reply
+4. Load conversation joined with active site and active tenant
+5. Validate widget origin
+6. Skip if conversation is closed
+7. Skip if site.ai_mode == off
+8. Load visitor message and verify sender_type = visitor
+9. Skip if ai_answer_logs already has auto_reply/fallback for message_id
+10. Load ai_site_settings
+11. Skip if assistant_enabled is false
+12. Skip if auto_reply_enabled is false
+13. Count online support users in last 2 minutes
+14. Skip if support is online
+15. Call FIND_BEST_AI_ANSWER
+16. If result success and score >= min_auto_reply_score:
+       reply_mode = auto_reply
+       reply_text = result.answer
+17. Else:
+       reply_mode = fallback
+       reply_text = fallback_message
+       insert ai_unanswered_questions
+18. Insert AI message into messages
+19. Insert ai_answer_logs
+20. Update conversation status and last_message_at
+21. Commit transaction and return result
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Widget AI Request
+  |
+  v
+Validate + Rate Limit + Origin
+  |
+  v
+Closed / AI Off / Assistant Disabled / Auto Disabled?
+  |
+  +-- yes --> Skip
+  |
+  v
+Already Replied?
+  |
+  +-- yes --> Skip
+  |
+  v
+Support Online?
+  |
+  +-- yes --> Skip
+  |
+  v
+Find Best Answer
+  |
+  v
+score >= threshold?
+  | yes                  | no
+  v                      v
+Insert AI Answer     Insert Fallback + Unanswered
+  |                      |
+  v                      v
+Log + Update Conversation
+\end{algoblock}
+
+\subsection{پیچیدگی}
+پیچیدگی اصلی همان الگوریتم \code{FIND_BEST_AI_ANSWER} است. بررسی‌های قبل از آن lookupهای محدود و \en{O(1)} هستند. فضای مصرفی \en{O(N)} برای candidateهای AI است که در کد محدود شده‌اند.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item جلوگیری از پاسخ مستقیم AI هنگام آنلاین بودن پشتیبانی انسانی.
+  \item جلوگیری از پاسخ تکراری برای یک پیام visitor.
+  \item fallback کنترل‌شده و ثبت سوال بی‌پاسخ برای بهبود دانش.
+  \item تصمیم‌گیری مبتنی بر confidence threshold.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item آنلاین بودن پشتیبانی با window دو دقیقه‌ای محاسبه می‌شود؛ اگر presence دقیق نباشد تصمیم AI هم متاثر می‌شود.
+  \item اگر fallback ارسال شود، visitor ممکن است پاسخ عمومی بگیرد نه پاسخ دقیق.
+  \item برای جلوگیری کامل از race condition پاسخ تکراری، constraint دیتابیسی روی message/mode می‌تواند مفید باشد.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۱۰: تولید پیشنهاد پاسخ برای Agent}
+\subsection{هدف}
+این الگوریتم برای agent یا customer admin یک پاسخ پیشنهادی تولید می‌کند، اما پاسخ را مستقیم برای visitor ارسال نمی‌کند. این طراحی human-in-the-loop است و با کنترل plan، role و دسترسی site اجرا می‌شود.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item \code{conversation_id}
+  \item کاربر احرازشده با نقش \code{customer_admin} یا \code{agent}
+  \item آخرین پیام visitor در مکالمه
+  \item تنظیمات \code{min_suggestion_score}
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item رکورد pending در \code{ai_suggestions}.
+  \item confidence عددی بین ۰.۰۵ و ۱.۰۰.
+  \item sources و debug metadata.
+  \item لاگ در \code{ai_answer_logs}.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm GENERATE_AGENT_AI_SUGGESTION
+Input: conversation_id, authenticated user
+Output: pending AI suggestion
+
+1. Require POST, authenticated user and allowed role
+2. Validate conversation_id
+3. Load conversation joined with site
+4. Require plan feature ai_suggestions_enabled
+5. Require user access to site
+6. Reject if conversation is closed
+7. Reject if site.ai_mode == off
+8. Load latest visitor message for conversation
+9. Load AI settings and min_suggestion_score
+10. Call FIND_BEST_AI_ANSWER
+11. If score >= min_suggestion_score:
+       suggested_reply = result.answer
+       reply_mode = suggestion
+12. Else:
+       suggested_reply = fallback_message
+       reply_mode = no_answer
+       insert ai_unanswered_questions if not duplicate
+13. Convert confidence_score to 0.05..1.00 range
+14. If pending suggestion exists for message:
+       update it
+15. Else:
+       insert new pending ai_suggestions row
+16. Insert ai_answer_logs
+17. Return suggestion payload
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Agent Request
+  |
+  v
+Auth + Role + Site Access + Plan Feature
+  |
+  v
+Load Conversation + Latest Visitor Message
+  |
+  v
+Find Best Answer
+  |
+  v
+score >= min_suggestion_score?
+  | yes                         | no
+  v                             v
+Use Answer                  Use Fallback + Save Unanswered
+  |                             |
+  v                             v
+Upsert Pending Suggestion
+  |
+  v
+Log and Return
+\end{algoblock}
+
+\subsection{پیچیدگی}
+پیچیدگی اصلی متعلق به retrieval/ranking است. سایر عملیات شامل چند lookup و upsert محدود است. در عمل با candidate limitهای موجود، زمان پاسخ برای مکالمه معمولی کنترل‌شده است.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item کاهش زمان پاسخ agent بدون حذف کنترل انسانی.
+  \item ثبت accepted/edited/rejected در جریان‌های بعدی برای تحلیل کیفیت.
+  \item استفاده از همان موتور پاسخ‌دهی مشترک با auto reply.
+  \item جلوگیری از دسترسی غیرمجاز با role، site access و plan feature.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item فقط آخرین پیام visitor را مبنای تولید پیشنهاد قرار می‌دهد.
+  \item اگر knowledge base ضعیف باشد، خروجی fallback خواهد بود.
+  \item کیفیت پیشنهاد به score rule-based وابسته است.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۱۱: اعتبارسنجی و ذخیره امن فایل پیوست}
+\subsection{هدف}
+این الگوریتم فایل‌های ارسالی visitor یا agent را قبل از ذخیره بررسی می‌کند تا فایل‌های خطرناک، اجرایی، HTML/SVG/script، PDF دارای active content و تصویر نامعتبر وارد سیستم نشود.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item آرایه فایل upload شده از \code{$_FILES}.
+  \item کانال ذخیره‌سازی مانند \code{visitor}، \code{agent} یا shared.
+  \item تنظیمات \code{UPLOAD_MAX_BYTES} و \code{UPLOAD_MAX_IMAGE_PIXELS}.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item metadata فایل ذخیره‌شده: نام اصلی، نام ذخیره‌شده، مسیر، URL، MIME و اندازه.
+  \item یا خطای validation با کد مناسب.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm SECURE_CHAT_ATTACHMENT_UPLOAD
+Input: uploaded file, channel
+Output: saved attachment metadata or rejection
+
+1. Validate upload array shape and upload error code
+2. Require tmp_name and is_uploaded_file
+3. Read actual file size
+4. Reject if size <= 0 or size > max allowed bytes
+5. Sanitize original file name
+6. Reject if any extension part is dangerous
+7. Extract final extension and require it in allowed list
+8. Scan file content prefix/full limited content:
+       reject MZ executable
+       reject PHP/script/svg/html/shebang payload
+9. Detect MIME type with finfo
+10. Require MIME type matches extension allowlist
+11. If image:
+       validate getimagesize
+       validate image MIME
+       reject oversized dimensions
+12. If PDF:
+       require %PDF- signature
+       reject JavaScript, OpenAction, embedded files, launch actions, XFA
+13. Normalize upload channel
+14. Create upload directories by channel and date
+15. Ensure .htaccess and index.html protection files
+16. Generate random stored file name
+17. Verify target directory stays under upload root
+18. Move uploaded file and chmod 0644
+19. Return public payload metadata
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Upload File
+  |
+  v
+Validate Upload Status + Size + Name
+  |
+  v
+Extension Allowlist + Dangerous Extension Check
+  |
+  v
+Content Payload Scan
+  |
+  v
+MIME Validation
+  |
+  +-- image --> Dimension Validation
+  |
+  +-- pdf ----> Signature + Active Content Validation
+  |
+  v
+Create Protected Directory
+  |
+  v
+Random File Name + Path Safety Check
+  |
+  v
+Move File + Return Metadata
+\end{algoblock}
+
+\subsection{پیچیدگی}
+پیچیدگی زمانی نسبت به اندازه فایل \en{O(S)} است، چون محتوای فایل تا سقف اندازه مجاز scan می‌شود. فضای مصرفی \en{$O(S_{scan})$} است، اما \en{$S_{scan}$} با \code{UPLOAD_MAX_BYTES} محدود می‌شود. بررسی MIME و تصویر هزینه ثابت یا وابسته به parser داخلی دارد.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item چندلایه بودن اعتبارسنجی: extension، MIME، content و ابعاد.
+  \item رد فایل‌های دوپسوندی مثل \code{file.php.jpg}.
+  \item محافظت directory با \code{.htaccess}.
+  \item نام ذخیره‌شده random و غیرقابل حدس.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item جایگزین آنتی‌ویروس سازمانی نیست.
+  \item scan کامل فایل برای حجم‌های بسیار بالا مناسب نیست؛ اما حجم upload فعلی محدود است.
+  \item رفتار \code{.htaccess} فقط در وب‌سرورهای سازگار مثل Apache اثر کامل دارد.
+\end{itemize}
+
+\newpage
+\section{الگوریتم ۱۲: چرخه سوال بی‌پاسخ و بهبود دانش}
+\subsection{هدف}
+این الگوریتم باعث می‌شود شکست AI به داده قابل اقدام تبدیل شود. وقتی score پاسخ پایین است، سوال در صف \code{ai_unanswered_questions} ذخیره می‌شود تا customer admin آن را بررسی و به knowledge base اضافه کند.
+
+\subsection{ورودی}
+\begin{itemize}
+  \item سوال visitor.
+  \item نتیجه \code{FIND_BEST_AI_ANSWER}.
+  \item \code{conversation_id}، \code{message_id}، \code{tenant_id} و \code{site_id}.
+  \item تصمیم admin برای reviewed، ignored یا added to knowledge.
+\end{itemize}
+
+\subsection{خروجی}
+\begin{itemize}
+  \item رکورد unanswered با score و sources.
+  \item رکورد جدید knowledge در صورت اضافه‌شدن به پایگاه دانش.
+  \item بهبود پاسخ‌دهی در پرسش‌های آینده.
+\end{itemize}
+
+\subsection{شبه‌کد}
+\begin{algoblock}
+Algorithm UNANSWERED_IMPROVEMENT_LOOP
+Input: low confidence question and admin decision
+Output: improved knowledge base
+
+1. During AI answer attempt:
+       if score < threshold:
+          insert ai_unanswered_questions
+          include normalized question, detected intent/category,
+          best score and best sources
+2. Customer admin opens unanswered list
+3. Admin reviews question and source context
+4. If question should be ignored:
+       update status = ignored
+5. If question was handled externally:
+       update status = reviewed
+6. If question should improve AI:
+       create knowledge source from question and answer
+       update unanswered status = added_to_knowledge
+7. Future AI searches include this manual knowledge
+8. Manual knowledge receives scoring boost and can beat raw chunks
+\end{algoblock}
+
+\subsection{فلوچارت}
+\begin{algoblock}
+Low Confidence AI Result
+  |
+  v
+Store Unanswered Question
+  |
+  v
+Admin Review
+  |
+  +-- Ignore -----------> status = ignored
+  |
+  +-- Reviewed ---------> status = reviewed
+  |
+  +-- Add Knowledge ----> create knowledge source
+                          status = added_to_knowledge
+                          future answers improve
+\end{algoblock}
+
+\subsection{پیچیدگی}
+ثبت سوال بی‌پاسخ \en{O(1)} است. نمایش لیست unanswered به تعداد رکوردهای سایت و فیلتر status وابسته است. اضافه‌کردن knowledge نیز \en{O(1)} است. اثر این الگوریتم در آینده با retrieval سنجیده می‌شود.
+
+\subsection{مزایا}
+\begin{itemize}
+  \item تبدیل خطای AI به فرایند بهبود مستمر.
+  \item افزایش کیفیت دانش دستی که در رتبه‌بندی boost دارد.
+  \item مناسب برای demo چون مسیر یادگیری سیستم قابل نمایش است.
+\end{itemize}
+
+\subsection{محدودیت‌ها}
+\begin{itemize}
+  \item به اقدام customer admin وابسته است.
+  \item اگر سوال‌ها بررسی نشوند، صف unanswered فقط رشد می‌کند.
+  \item اضافه‌کردن دانش اشتباه می‌تواند کیفیت پاسخ‌های آینده را کاهش دهد.
+\end{itemize}
+
+\section{جمع‌بندی فنی}
+الگوریتم‌های پروژه \en{AI Chat SaaS} روی چند اصل طراحی شده‌اند: جداسازی tenant و site، کنترل نقش و دسترسی، کاهش ریسک AI با threshold و fallback، استفاده از دانش تاییدشده مشتری، ثبت لاگ و قابلیت بهبود تدریجی. موتور AI فعلی به‌صورت rule-based و extractive کار می‌کند و از الگوریتم‌های قابل توضیح برای جست‌وجو، امتیازدهی و رتبه‌بندی استفاده می‌کند.
+
+برای ارزیابی فنی، مهم‌ترین نقاط قابل تاکید عبارت‌اند از:
+\begin{itemize}
+  \item الگوریتم اختصاصی retrieval و scoring برای پاسخ‌گویی از دانش مشتری.
+  \item چرخه کامل crawl، chunk، term، generated question و answer ranking.
+  \item کنترل human-in-the-loop از طریق پیشنهاد پاسخ agent.
+  \item fallback و unanswered queue برای جلوگیری از پاسخ‌سازی بی‌پایه.
+  \item الگوریتم‌های امنیتی عملی شامل JWT revoke، site access، rate limit و secure upload.
+\end{itemize}
+
+\end{document}

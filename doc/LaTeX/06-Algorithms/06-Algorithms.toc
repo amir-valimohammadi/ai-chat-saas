@@ -1,0 +1,111 @@
+\contentsline {section}{\numberline {1}هدف و دامنه سند}{5}{section.1}%
+\contentsline {section}{\numberline {2}خلاصه الگوریتم‌های کلیدی}{5}{section.2}%
+\contentsline {section}{\numberline {3}الگوریتم ۱: احراز هویت JWT و ابطال توکن}{7}{section.3}%
+\contentsline {subsection}{\numberline {3.1}هدف}{7}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}ورودی}{7}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}خروجی}{7}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}شبه‌کد}{7}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}فلوچارت}{8}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}پیچیدگی}{8}{subsection.3.6}%
+\contentsline {subsection}{\numberline {3.7}مزایا}{8}{subsection.3.7}%
+\contentsline {subsection}{\numberline {3.8}محدودیت‌ها}{8}{subsection.3.8}%
+\contentsline {section}{\numberline {4}الگوریتم ۲: کنترل دسترسی چندمستاجری به سایت}{9}{section.4}%
+\contentsline {subsection}{\numberline {4.1}هدف}{9}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}ورودی}{9}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}خروجی}{9}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}شبه‌کد}{9}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}فلوچارت}{9}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}پیچیدگی}{10}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}مزایا}{10}{subsection.4.7}%
+\contentsline {subsection}{\numberline {4.8}محدودیت‌ها}{10}{subsection.4.8}%
+\contentsline {section}{\numberline {5}الگوریتم ۳: شروع یا بازیابی مکالمه در Widget}{11}{section.5}%
+\contentsline {subsection}{\numberline {5.1}هدف}{11}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}ورودی}{11}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}خروجی}{11}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}شبه‌کد}{11}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}فلوچارت}{12}{subsection.5.5}%
+\contentsline {subsection}{\numberline {5.6}پیچیدگی}{12}{subsection.5.6}%
+\contentsline {subsection}{\numberline {5.7}مزایا}{12}{subsection.5.7}%
+\contentsline {subsection}{\numberline {5.8}محدودیت‌ها}{12}{subsection.5.8}%
+\contentsline {section}{\numberline {6}الگوریتم ۴: اعمال محدودیت‌های پلن}{13}{section.6}%
+\contentsline {subsection}{\numberline {6.1}هدف}{13}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}ورودی}{13}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}خروجی}{13}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}شبه‌کد}{13}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}فلوچارت}{14}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.6}پیچیدگی}{14}{subsection.6.6}%
+\contentsline {subsection}{\numberline {6.7}مزایا}{14}{subsection.6.7}%
+\contentsline {subsection}{\numberline {6.8}محدودیت‌ها}{14}{subsection.6.8}%
+\contentsline {section}{\numberline {7}الگوریتم ۵: محدودسازی نرخ درخواست}{15}{section.7}%
+\contentsline {subsection}{\numberline {7.1}هدف}{15}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}ورودی}{15}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}خروجی}{15}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}شبه‌کد}{15}{subsection.7.4}%
+\contentsline {subsection}{\numberline {7.5}فلوچارت}{16}{subsection.7.5}%
+\contentsline {subsection}{\numberline {7.6}پیچیدگی}{16}{subsection.7.6}%
+\contentsline {subsection}{\numberline {7.7}مزایا}{16}{subsection.7.7}%
+\contentsline {subsection}{\numberline {7.8}محدودیت‌ها}{16}{subsection.7.8}%
+\contentsline {section}{\numberline {8}الگوریتم ۶: خزیدن سایت و ساخت دانش}{17}{section.8}%
+\contentsline {subsection}{\numberline {8.1}هدف}{17}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}ورودی}{17}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}خروجی}{17}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}شبه‌کد}{17}{subsection.8.4}%
+\contentsline {subsection}{\numberline {8.5}فلوچارت}{18}{subsection.8.5}%
+\contentsline {subsection}{\numberline {8.6}پیچیدگی}{18}{subsection.8.6}%
+\contentsline {subsection}{\numberline {8.7}مزایا}{19}{subsection.8.7}%
+\contentsline {subsection}{\numberline {8.8}محدودیت‌ها}{19}{subsection.8.8}%
+\contentsline {section}{\numberline {9}الگوریتم ۷: نرمال‌سازی، قطعه‌بندی و استخراج واژه‌های مهم}{20}{section.9}%
+\contentsline {subsection}{\numberline {9.1}هدف}{20}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}ورودی}{20}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}خروجی}{20}{subsection.9.3}%
+\contentsline {subsection}{\numberline {9.4}شبه‌کد}{20}{subsection.9.4}%
+\contentsline {subsection}{\numberline {9.5}فلوچارت}{21}{subsection.9.5}%
+\contentsline {subsection}{\numberline {9.6}پیچیدگی}{21}{subsection.9.6}%
+\contentsline {subsection}{\numberline {9.7}مزایا}{21}{subsection.9.7}%
+\contentsline {subsection}{\numberline {9.8}محدودیت‌ها}{21}{subsection.9.8}%
+\contentsline {section}{\numberline {10}الگوریتم ۸: بازیابی و رتبه‌بندی پاسخ AI}{22}{section.10}%
+\contentsline {subsection}{\numberline {10.1}هدف}{22}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}ورودی}{22}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}خروجی}{22}{subsection.10.3}%
+\contentsline {subsection}{\numberline {10.4}شبه‌کد}{22}{subsection.10.4}%
+\contentsline {subsection}{\numberline {10.5}فلوچارت}{23}{subsection.10.5}%
+\contentsline {subsection}{\numberline {10.6}پیچیدگی}{24}{subsection.10.6}%
+\contentsline {subsection}{\numberline {10.7}مزایا}{24}{subsection.10.7}%
+\contentsline {subsection}{\numberline {10.8}محدودیت‌ها}{24}{subsection.10.8}%
+\contentsline {section}{\numberline {11}الگوریتم ۹: پاسخ خودکار AI در Widget}{25}{section.11}%
+\contentsline {subsection}{\numberline {11.1}هدف}{25}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}ورودی}{25}{subsection.11.2}%
+\contentsline {subsection}{\numberline {11.3}خروجی}{25}{subsection.11.3}%
+\contentsline {subsection}{\numberline {11.4}شبه‌کد}{25}{subsection.11.4}%
+\contentsline {subsection}{\numberline {11.5}فلوچارت}{26}{subsection.11.5}%
+\contentsline {subsection}{\numberline {11.6}پیچیدگی}{27}{subsection.11.6}%
+\contentsline {subsection}{\numberline {11.7}مزایا}{27}{subsection.11.7}%
+\contentsline {subsection}{\numberline {11.8}محدودیت‌ها}{27}{subsection.11.8}%
+\contentsline {section}{\numberline {12}الگوریتم ۱۰: تولید پیشنهاد پاسخ برای Agent}{28}{section.12}%
+\contentsline {subsection}{\numberline {12.1}هدف}{28}{subsection.12.1}%
+\contentsline {subsection}{\numberline {12.2}ورودی}{28}{subsection.12.2}%
+\contentsline {subsection}{\numberline {12.3}خروجی}{28}{subsection.12.3}%
+\contentsline {subsection}{\numberline {12.4}شبه‌کد}{28}{subsection.12.4}%
+\contentsline {subsection}{\numberline {12.5}فلوچارت}{29}{subsection.12.5}%
+\contentsline {subsection}{\numberline {12.6}پیچیدگی}{29}{subsection.12.6}%
+\contentsline {subsection}{\numberline {12.7}مزایا}{29}{subsection.12.7}%
+\contentsline {subsection}{\numberline {12.8}محدودیت‌ها}{30}{subsection.12.8}%
+\contentsline {section}{\numberline {13}الگوریتم ۱۱: اعتبارسنجی و ذخیره امن فایل پیوست}{31}{section.13}%
+\contentsline {subsection}{\numberline {13.1}هدف}{31}{subsection.13.1}%
+\contentsline {subsection}{\numberline {13.2}ورودی}{31}{subsection.13.2}%
+\contentsline {subsection}{\numberline {13.3}خروجی}{31}{subsection.13.3}%
+\contentsline {subsection}{\numberline {13.4}شبه‌کد}{31}{subsection.13.4}%
+\contentsline {subsection}{\numberline {13.5}فلوچارت}{32}{subsection.13.5}%
+\contentsline {subsection}{\numberline {13.6}پیچیدگی}{32}{subsection.13.6}%
+\contentsline {subsection}{\numberline {13.7}مزایا}{32}{subsection.13.7}%
+\contentsline {subsection}{\numberline {13.8}محدودیت‌ها}{33}{subsection.13.8}%
+\contentsline {section}{\numberline {14}الگوریتم ۱۲: چرخه سوال بی‌پاسخ و بهبود دانش}{34}{section.14}%
+\contentsline {subsection}{\numberline {14.1}هدف}{34}{subsection.14.1}%
+\contentsline {subsection}{\numberline {14.2}ورودی}{34}{subsection.14.2}%
+\contentsline {subsection}{\numberline {14.3}خروجی}{34}{subsection.14.3}%
+\contentsline {subsection}{\numberline {14.4}شبه‌کد}{34}{subsection.14.4}%
+\contentsline {subsection}{\numberline {14.5}فلوچارت}{35}{subsection.14.5}%
+\contentsline {subsection}{\numberline {14.6}پیچیدگی}{35}{subsection.14.6}%
+\contentsline {subsection}{\numberline {14.7}مزایا}{35}{subsection.14.7}%
+\contentsline {subsection}{\numberline {14.8}محدودیت‌ها}{35}{subsection.14.8}%
+\contentsline {section}{\numberline {15}جمع‌بندی فنی}{35}{section.15}%
