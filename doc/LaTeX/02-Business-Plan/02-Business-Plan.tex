@@ -1,0 +1,487 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[a4paper,top=25mm,bottom=25mm,left=22mm,right=22mm]{geometry}
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{fancyvrb}
+
+\IfFontExistsTF{Vazirmatn}{
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \settextfont{Tahoma}
+  }{
+    \settextfont{Arial}
+  }
+}
+\IfFontExistsTF{Consolas}{
+  \setlatintextfont{Consolas}
+}{
+  \setlatintextfont{Courier New}
+}
+
+\definecolor{primary}{HTML}{1F4E79}
+\definecolor{softgray}{HTML}{F3F6F8}
+\definecolor{accent}{HTML}{0F766E}
+\definecolor{danger}{HTML}{A61B1B}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=primary,
+  urlcolor=primary,
+  citecolor=primary,
+  pdftitle={Business Plan سامانه AI Chat SaaS},
+  pdfauthor={Mobin Yousefi}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Business Plan}
+\lhead{AI Chat SaaS}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\Large\bfseries\color{primary}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries\color{primary}}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{primary}}{\thesubsubsection}{0.7em}{}
+\setlist[itemize]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=4pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.35}
+\setlength{\LTpre}{6pt}
+\setlength{\LTpost}{6pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\setlength{\headheight}{15pt}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{\detokenize{#1}}}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+\newenvironment{bizblock}{\VerbatimEnvironment\begin{latin}\begin{Verbatim}[fontsize=\small,frame=single,rulecolor=\color{softgray}]}{\end{Verbatim}\end{latin}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{20mm}
+{\Huge\bfseries\color{primary} Business Plan سامانه AI Chat SaaS\par}
+\vspace{8mm}
+{\Large برنامه تجاری پلتفرم چت پشتیبانی هوشمند چندمستاجری\par}
+\vspace{18mm}
+{\large \textbf{نسخه سند:} 1.0\par}
+\vspace{3mm}
+{\large \textbf{تاریخ تدوین:} ۱۵ جولای ۲۰۲۶\par}
+\vspace{3mm}
+{\large \textbf{تهیه‌کننده:} مبین یوسفی\par}
+\vspace{3mm}
+{\large \textbf{مسیر خروجی:} \code{doc/LaTeX/02-Business-Plan/02-Business-Plan.tex}\par}
+\vspace{3mm}
+{\large \textbf{منابع بررسی‌شده:} \code{Rahnama.md}، \code{ArchitectureForMobin.md}، \code{ReportForSale.md}، \code{Roadmap.md} و کدهای پروژه\par}
+\vfill
+{\large سند ارزیابی ارزش اقتصادی، بازار، مدل درآمد، برنامه رشد و مسیر تجاری‌سازی محصول}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{خلاصه مدیریتی}
+\en{AI Chat SaaS} یک پلتفرم چندمستاجری برای چت پشتیبانی و پاسخ‌گویی هوشمند در وب‌سایت‌ها است. محصول به کسب‌وکارها امکان می‌دهد یک ویجت چت روی سایت خود نصب کنند، مکالمات بازدیدکنندگان را در پنل مدیریتی ببینند، با اپراتور انسانی پاسخ دهند، از پیشنهادهای هوش مصنوعی استفاده کنند و در زمان آفلاین بودن تیم پشتیبانی، پاسخ خودکار کنترل‌شده از دانش تاییدشده کسب‌وکار ارائه دهند.
+
+این پروژه فقط یک chatbot نیست؛ یک سیستم SaaS کامل با سه لایه متصل است: ویجت عمومی سایت، پنل عملیات پشتیبانی و کنترل‌پنل مالک پلتفرم برای مدیریت مشتریان، سایت‌ها، پلن‌ها، گزارش‌ها و اعلان‌ها. در کد فعلی، ساختار چندمستاجری، نقش‌های کاربری، پلن‌بندی، محدودیت مصرف، امنیت پایه، مدیریت دانش، crawler وب‌سایت، پیشنهاد پاسخ AI و auto-reply آفلاین پیاده‌سازی شده‌اند.
+
+هدف تجاری محصول، فروش اشتراکی به کسب‌وکارهایی است که از وب‌سایت خود lead، سوال پشتیبانی یا درخواست فروش دریافت می‌کنند. ارزش اصلی محصول در ترکیب سه قابلیت است: پاسخ سریع انسانی، AI کنترل‌شده بر اساس دانش خود مشتری و حلقه یادگیری از سوالات بی‌پاسخ.
+
+\section{معرفی شرکت}
+این بخش فعلا به‌صورت خلاصه و طبق درخواست کارفرما نوشته می‌شود و متن کامل معرفی شرکت بعدا توسط مالک پروژه تکمیل خواهد شد.
+
+شرکت/تیم اولیه شامل دو برنامه‌نویس است که طراحی، تحلیل، پیاده‌سازی و مستندسازی محصول \en{AI Chat SaaS} را انجام داده‌اند. تمرکز تیم روی ساخت یک محصول SaaS قابل فروش در حوزه پشتیبانی هوشمند وب‌سایت، اتوماسیون پاسخ‌گویی و مدیریت مکالمات مشتریان است.
+
+\section{معرفی محصول}
+\subsection{ماهیت محصول}
+محصول یک پلتفرم B2B SaaS برای چت پشتیبانی وب‌سایت است. هر مشتری می‌تواند یک یا چند سایت ثبت کند، ویجت اختصاصی خود را روی سایت نصب کند، تیم پشتیبانی خود را بسازد، دانش اختصاصی خود را وارد کند و پاسخ‌های انسانی یا AI را از داخل پنل مدیریت کند.
+
+\subsection{لایه‌های محصول}
+\begin{longtable}{R{36mm} R{112mm}}
+\toprule
+\textbf{لایه} & \textbf{شرح} \\
+\midrule
+\endhead
+ویجت سایت & فایل JavaScript قابل نصب با \code{site_key}. شامل چت شناور، برندینگ، فرم visitor، ارسال پیام، پیوست، تاریخچه پیام و نمایش وضعیت آنلاین/آفلاین. \\
+پنل پشتیبانی & پنل Next.js برای customer admin و agent. شامل inbox مکالمات، جزئیات گفتگو، پاسخ انسانی، quick reply، پیوست، وضعیت حضور، پیشنهاد AI و مدیریت وضعیت گفتگو. \\
+کنترل‌پنل SaaS & بخش super admin برای مدیریت مشتریان، tenantها، سایت‌ها، پلن‌ها، کاربران، اعلان‌ها، گزارش‌ها و سلامت کلی پلتفرم. \\
+لایه AI & موتور پاسخ‌گویی دانش‌محور بر اساس دانش دستی، محتوای crawl شده، سوالات تولیدشده و سوالات بی‌پاسخ. \\
+\bottomrule
+\end{longtable}
+
+\subsection{ارزش پیشنهادی}
+\begin{itemize}
+  \item کاهش leadها و سوالات از دست‌رفته در وب‌سایت.
+  \item پاسخ‌گویی سریع‌تر بدون حذف کنترل انسانی.
+  \item پشتیبانی خارج از ساعت کاری با auto-reply کنترل‌شده.
+  \item تبدیل سوالات بی‌پاسخ به دانش قابل استفاده برای آینده.
+  \item امکان فروش پلنی بر اساس سایت، اپراتور، مکالمه، AI و گزارش‌ها.
+\end{itemize}
+
+\section{بازار هدف}
+\subsection{بخش‌های مشتری}
+محصول برای کسب‌وکارهایی مناسب است که وب‌سایت آن‌ها کانال فروش، جذب lead یا پشتیبانی است:
+\begin{itemize}
+  \item فروشگاه‌های آنلاین و کسب‌وکارهای تجارت الکترونیک.
+  \item کلینیک‌ها، سالن‌ها، مراکز رزرو و خدمات حضوری.
+  \item شرکت‌های SaaS و نرم‌افزاری.
+  \item آموزشگاه‌ها، موسسات آموزشی و فروشندگان دوره.
+  \item مشاوران، آژانس‌ها، املاک، بیمه و خدمات حرفه‌ای.
+  \item آژانس‌های دیجیتال که می‌توانند سرویس چت را برای مشتریان خود resell کنند.
+\end{itemize}
+
+\subsection{نیازهای اصلی بازار}
+\begin{longtable}{R{45mm} R{93mm}}
+\toprule
+\textbf{نیاز} & \textbf{پاسخ محصول} \\
+\midrule
+\endhead
+پاسخ سریع به بازدیدکننده & ویجت چت، inbox اپراتور، quick replies و typing/presence. \\
+پوشش خارج از ساعت کاری & AI auto-reply وقتی پشتیبانی آنلاین نیست و confidence کافی است. \\
+اعتماد به AI & پاسخ از دانش مشتری، حد آستانه اطمینان، fallback و ثبت سوالات بی‌پاسخ. \\
+مدیریت تیم & نقش agent، assignment، site access و وضعیت حضور. \\
+فروش SaaS & tenant، plan، limits، super admin و گزارش‌های مصرف. \\
+برندینگ & تنظیم brand name، color، logo و welcome message برای هر سایت. \\
+\bottomrule
+\end{longtable}
+
+\section{تحلیل مشتری}
+\subsection{پرسونای مشتری}
+\begin{longtable}{R{36mm} R{48mm} R{58mm}}
+\toprule
+\textbf{پرسونا} & \textbf{مشکل اصلی} & \textbf{دلیل خرید} \\
+\midrule
+\endhead
+مالک فروشگاه آنلاین & سوالات تکراری درباره قیمت، ارسال، موجودی و بازگشت کالا & کاهش سوالات تکراری، افزایش پاسخ‌گویی و حفظ lead. \\
+مدیر پشتیبانی SaaS & نیاز به inbox و پاسخ سریع برای بازدیدکنندگان سایت & ترکیب human chat و AI suggestion. \\
+کسب‌وکار رزروی & سوال درباره زمان، قیمت، خدمات و آدرس & پاسخ سریع و جمع‌آوری اطلاعات تماس. \\
+آژانس دیجیتال & نیاز به محصول قابل فروش برای مشتریان متعدد & white-label/agency و مدیریت چند سایت/مشتری. \\
+\bottomrule
+\end{longtable}
+
+\subsection{فرآیند خرید}
+فرآیند خرید احتمالی برای مشتریان اولیه فروش‌محور است: دمو، نصب روی یک سایت تست، فعال‌سازی ویجت، افزودن دانش اولیه، اجرای پایلوت، سپس تبدیل به اشتراک ماهانه. در فازهای بعدی، با اضافه شدن billing و self-service onboarding، مسیر خرید می‌تواند به trial خودکار و پرداخت آنلاین تبدیل شود.
+
+\section{اندازه بازار}
+در repository و مستندات فعلی داده آماری خارجی برای اندازه بازار وجود ندارد؛ بنابراین این بخش به‌صورت تحلیلی و مبتنی بر منطق بازار هدف نوشته می‌شود. بازار قابل هدف محصول شامل سه دسته هم‌پوشان است:
+\begin{itemize}
+  \item بازار live chat و customer support software.
+  \item بازار AI chatbot و automation برای پاسخ‌گویی.
+  \item بازار ابزارهای lead capture و فروش وب‌سایت.
+\end{itemize}
+
+برای ورود اولیه، تمرکز پیشنهادی روی \en{SAM} کوچک‌تر و قابل دسترس است: کسب‌وکارهای آنلاین، خدماتی و آژانس‌هایی که وب‌سایت فعال دارند، سوالات تکراری دریافت می‌کنند و بودجه ماهانه برای ابزار پشتیبانی دارند. معیارهای اعتبارسنجی بازار در ۱۲ ماه اول باید به‌جای اتکا به اعداد کلان، روی شاخص‌های عملی زیر باشد:
+\begin{itemize}
+  \item تعداد دموهای برگزارشده.
+  \item نرخ تبدیل دمو به پایلوت.
+  \item نرخ تبدیل پایلوت به پرداخت.
+  \item میانگین درآمد ماهانه هر مشتری.
+  \item نرخ فعال‌سازی ویجت و مصرف واقعی مکالمات.
+  \item نرخ نگهداشت مشتری در ۳ و ۶ ماه.
+\end{itemize}
+
+\section{رقبا}
+\subsection{دسته‌های رقیب}
+\begin{longtable}{R{42mm} R{52mm} R{54mm}}
+\toprule
+\textbf{دسته} & \textbf{مزیت معمول} & \textbf{ضعف در برابر محصول} \\
+\midrule
+\endhead
+Live Chat سنتی & inbox قوی و جریان انسانی جاافتاده & AI دانش‌محور، unanswered loop و auto-reply کنترل‌شده محدودتر است. \\
+Chatbot خالص & اتوماسیون زیاد و پاسخ سریع & کنترل انسانی و اعتماد در پاسخ‌های حساس کمتر است. \\
+Helpdesk کامل & ticketing، SLA و فرآیندهای سازمانی & نصب سبک روی سایت و AI اختصاصی ممکن است پیچیده‌تر یا گران‌تر باشد. \\
+ابزارهای فرم/lead capture & راه‌اندازی ساده و جمع‌آوری اطلاعات تماس & مکالمه زنده، AI و مدیریت دانش ندارند. \\
+\bottomrule
+\end{longtable}
+
+\subsection{جایگاه پیشنهادی}
+جایگاه محصول باید چنین تعریف شود: «پلتفرم چت زنده و AI برای کسب‌وکارهایی که می‌خواهند پاسخ‌گویی سریع داشته باشند، اما کنترل انسانی و دانش تاییدشده را حفظ کنند.» محصول نباید صرفا به‌عنوان chatbot معرفی شود؛ مزیت واقعی آن ترکیب live chat، AI کنترل‌شده، دانش مشتری و مدل SaaS چندمستاجری است.
+
+\section{مزیت رقابتی}
+\begin{itemize}
+  \item معماری چندمستاجری از ابتدا در backend و مدل داده دیده شده است.
+  \item پلن‌ها و محدودیت‌های مصرف در محصول وجود دارد و مسیر درآمد اشتراکی را ساده می‌کند.
+  \item AI فعال محصول بر دانش داخلی مشتری متکی است و هر پاسخ به منابع دانش و score وابسته است.
+  \item auto-reply فقط در شرایط کنترل‌شده انجام می‌شود: سایت فعال، tenant فعال، AI فعال، پشتیبانی آفلاین، عدم تکرار پاسخ و confidence کافی.
+  \item سوالات بی‌پاسخ ذخیره می‌شوند و به چرخه بهبود دانش تبدیل می‌گردند.
+  \item ویجت از Shadow DOM استفاده می‌کند تا CSS سایت میزبان آن را خراب نکند.
+  \item امنیت پایه مانند JWT، RBAC، site access، CORS جدا، origin validation، rate limit و upload validation پیاده‌سازی شده است.
+\end{itemize}
+
+\section{مدل درآمد}
+\subsection{اهرم‌های قیمت‌گذاری}
+\begin{itemize}
+  \item تعداد سایت‌های هر مشتری.
+  \item تعداد agentها.
+  \item سقف مکالمات ماهانه.
+  \item فعال بودن AI suggestions.
+  \item فعال بودن AI auto-reply.
+  \item پایگاه دانش و crawler.
+  \item گزارش‌های پیشرفته.
+  \item white-label و agency/reseller.
+\end{itemize}
+
+\subsection{پلن‌های پیشنهادی}
+\begin{longtable}{R{28mm} R{38mm} R{76mm}}
+\toprule
+\textbf{پلن} & \textbf{مشتری هدف} & \textbf{قابلیت‌ها} \\
+\midrule
+\endhead
+Starter & کسب‌وکار کوچک & یک سایت، مکالمه محدود، چت انسانی، ویجت پایه و branding ساده. \\
+Growth & تیم کوچک & چند agent، quick replies، knowledge base و AI suggestions. \\
+Pro & کسب‌وکار پرترافیک & auto-reply، crawler، گزارش‌ها، سقف مکالمه بالاتر و چند سایت. \\
+Business & تیم حرفه‌ای & analytics پیشرفته، SLA، integration، دپارتمان و automation. \\
+Agency & آژانس/نماینده & چند مشتری/سایت، white-label، سقف بالا و کنترل reseller. \\
+\bottomrule
+\end{longtable}
+
+\subsection{درآمدهای تکمیلی}
+علاوه بر اشتراک ماهانه، درآمدهای تکمیلی می‌تواند شامل راه‌اندازی اولیه، طراحی دانش پایه، پکیج آموزش، پشتیبانی اختصاصی، سفارشی‌سازی ویجت، integration با CRM/e-commerce و فروش white-label باشد.
+
+\section{استراتژی فروش}
+\subsection{فاز اول: فروش مستقیم و پایلوت}
+در ۶ تا ۱۲ ماه اول، فروش باید با دمو و پایلوت کنترل‌شده انجام شود. دلیل آن این است که محصول هنوز نیازمند تکمیل production readiness، billing و تست‌های خودکار است. مشتریان اولیه بهتر است کسب‌وکارهایی باشند که:
+\begin{itemize}
+  \item وب‌سایت فعال و ترافیک واقعی دارند.
+  \item سوالات تکراری و قابل مستندسازی دارند.
+  \item تصمیم‌گیرنده سریع و تیم کوچک دارند.
+  \item حاضر به همکاری برای بهبود محصول هستند.
+\end{itemize}
+
+\subsection{فاز دوم: فروش اشتراکی}
+پس از تکمیل billing، onboarding و پایدارسازی، مسیر self-service فعال می‌شود:
+\begin{enumerate}
+  \item ثبت‌نام و trial.
+  \item ساخت اولین سایت.
+  \item دریافت script ویجت.
+  \item افزودن دانش یا crawl وب‌سایت.
+  \item تست AI و فعال‌سازی.
+  \item ارتقا به پلن پولی.
+\end{enumerate}
+
+\subsection{کانال‌های فروش}
+\begin{itemize}
+  \item فروش مستقیم B2B به فروشگاه‌ها و خدمات محلی.
+  \item همکاری با آژانس‌های طراحی سایت و دیجیتال مارکتینگ.
+  \item فروش white-label به نمایندگان.
+  \item محتوای آموزشی درباره کاهش سوالات تکراری و AI در پشتیبانی.
+  \item دموهای صنعت‌محور برای فروشگاه، کلینیک، آموزشگاه و SaaS.
+\end{itemize}
+
+\section{استراتژی بازاریابی}
+\subsection{پیام اصلی}
+پیام بازاریابی پیشنهادی:
+\begin{quote}
+«وب‌سایت خود را به یک کانال پشتیبانی و فروش همیشه فعال تبدیل کنید؛ با چت انسانی، AI کنترل‌شده و دانشی که با هر سوال بهتر می‌شود.»
+\end{quote}
+
+\subsection{موقعیت‌سازی}
+محصول باید به‌عنوان «AI-assisted live chat platform» معرفی شود، نه chatbot عمومی. تاکید روی اعتماد، کنترل انسانی، دانش اختصاصی مشتری، ویجت سریع و SaaS-ready بودن است.
+
+\subsection{اقدامات بازاریابی}
+\begin{itemize}
+  \item ساخت landing page با دمو زنده ویجت.
+  \item تولید case study برای پایلوت‌های اولیه.
+  \item تهیه ویدئوی ۲ دقیقه‌ای نصب ویجت و پاسخ AI.
+  \item تولید محتوای مقایسه‌ای: live chat سنتی، chatbot خالص و AI Chat SaaS.
+  \item بسته‌های عمودی برای فروشگاه آنلاین، کلینیک، آموزشگاه و آژانس.
+  \item ارائه رایگان setup اولیه برای مشتریان pilot.
+\end{itemize}
+
+\section{برنامه توسعه}
+برنامه توسعه از \code{Roadmap.md} استخراج شده و در سه افق زمانی تنظیم می‌شود.
+
+\subsection{۶ ماه اول}
+\begin{longtable}{R{28mm} R{110mm}}
+\toprule
+\textbf{ماه} & \textbf{تمرکز} \\
+\midrule
+\endhead
+ماه ۱ & تکمیل migrations، seed data، مستند setup/deploy، hardening production، تست‌های حیاتی و محیط دمو. \\
+ماه ۲ & بهبود inbox: فیلتر، جست‌وجو، tag، internal notes، visitor profile و بهبود empty stateها. \\
+ماه ۳ & ارتقای AI: semantic search/embedding، پاسخ grounded، source preview و analytics بازخورد AI. \\
+ماه ۴ & بهبود crawler و دانش: background jobs، progress UI، scheduled recrawl، import PDF/DOCX/CSV و knowledge quality dashboard. \\
+ماه ۵ & monetization و integration: billing، self-service signup، webhooks، export به CRM/Google Sheets و شروع یک پیام‌رسان. \\
+ماه ۶ & differentiation: vertical templates، agency/white-label، advanced reports، demo mode و sales materials. \\
+\bottomrule
+\end{longtable}
+
+\subsection{اولویت‌های محصولی}
+\begin{itemize}
+  \item Production readiness و trust controls قبل از جذب مشتری پولی.
+  \item real-time messaging یا SSE/WebSocket برای تجربه چت مدرن.
+  \item AI retrieval بهتر با embeddings و hybrid search.
+  \item background crawling برای جلوگیری از timeout.
+  \item billing و self-service onboarding برای مقیاس فروش.
+  \item integration با CRM، e-commerce و کانال‌های پیام‌رسان.
+\end{itemize}
+
+\section{ساختار تیم}
+\subsection{تیم فعلی}
+تیم فعلی طبق اطلاعات ارائه‌شده شامل دو برنامه‌نویس است که پروژه را طراحی و پیاده‌سازی کرده‌اند. نقش‌های دقیق، سوابق، نام شرکت و توضیحات رسمی تیم بعدا توسط مالک پروژه تکمیل می‌شود.
+
+\subsection{ساختار پیشنهادی در ۱۲ ماه اول}
+\begin{longtable}{R{40mm} R{88mm} R{24mm}}
+\toprule
+\textbf{نقش} & \textbf{مسئولیت} & \textbf{زمان جذب} \\
+\midrule
+\endhead
+Backend/Full-stack Developer & ادامه توسعه API، plan limits، billing، integration و تست‌ها. & فوری/فعلی \\
+Frontend Developer & بهبود پنل، onboarding، UX، dashboard و real-time UI. & ۳ ماه اول \\
+DevOps/Cloud Engineer & deployment، monitoring، backup، CI/CD و security hardening. & ۳ ماه اول \\
+QA Engineer & تست API، widget، flowهای چندنقشی و regression. & ۳ تا ۶ ماه \\
+Product/Growth & بسته‌بندی پلن‌ها، onboarding، تحلیل مشتری و roadmap تجاری. & ۶ ماه \\
+Sales/Customer Success & دمو، pilot، آموزش مشتری و نگهداشت. & ۶ تا ۱۲ ماه \\
+\bottomrule
+\end{longtable}
+
+\section{برنامه استخدام}
+استخدام باید وابسته به milestone باشد:
+\begin{enumerate}
+  \item قبل از مشتری پولی: DevOps/QA پاره‌وقت یا قراردادی برای کاهش ریسک production.
+  \item پس از ۳ تا ۵ pilot فعال: frontend/product برای بهبود activation و onboarding.
+  \item پس از اولین درآمد تکرارشونده: sales/customer success برای رشد پایدار.
+  \item پس از افزایش بار فنی: backend دوم یا AI engineer برای embeddings، jobs و integrations.
+\end{enumerate}
+
+\section{هزینه‌ها}
+\subsection{دسته‌های هزینه}
+\begin{itemize}
+  \item توسعه نرم‌افزار و نگهداری فنی.
+  \item زیرساخت hosting، دیتابیس، storage، CDN و monitoring.
+  \item هزینه AI در صورت اضافه شدن LLM/embeddings خارجی.
+  \item فروش و بازاریابی.
+  \item پشتیبانی مشتری و onboarding.
+  \item حقوقی، حسابداری، ثبت برند/شرکت و مستندات قراردادی.
+\end{itemize}
+
+\subsection{سناریوی هزینه ماهانه}
+اعداد زیر نمونه برنامه‌ریزی هستند و باید با قیمت‌های واقعی بازار، حقوق تیم و هزینه زیرساخت نهایی جایگزین شوند.
+
+\begin{longtable}{R{52mm} R{36mm} R{58mm}}
+\toprule
+\textbf{دسته هزینه} & \textbf{فاز MVP/Pilot} & \textbf{فاز رشد اولیه} \\
+\midrule
+\endhead
+زیرساخت و ابزارها & کم تا متوسط & متوسط و افزایشی با مصرف \\
+توسعه فنی & اصلی‌ترین هزینه & اصلی‌ترین هزینه \\
+QA و امنیت & محدود ولی ضروری & باید منظم شود \\
+بازاریابی و فروش & کم، دمو محور & رو به رشد \\
+پشتیبانی مشتری & توسط تیم اصلی & نیازمند نقش اختصاصی \\
+\bottomrule
+\end{longtable}
+
+\section{پیش‌بینی درآمد}
+\subsection{فرضیات}
+برای پیش‌بینی درآمد، سه فرض کلیدی باید مشخص شود:
+\begin{itemize}
+  \item \en{ARPA}: میانگین درآمد ماهانه هر مشتری.
+  \item تعداد مشتریان فعال پرداخت‌کننده.
+  \item نرخ churn و نرخ تبدیل trial/pilot به مشتری پولی.
+\end{itemize}
+
+به دلیل نبود داده واقعی فروش در پروژه، جدول زیر یک سناریوی پایه برای برنامه‌ریزی است، نه گزارش عملکرد قطعی.
+
+\begin{longtable}{R{28mm} R{32mm} R{32mm} R{38mm} R{32mm}}
+\toprule
+\textbf{سال} & \textbf{مشتری فعال هدف} & \textbf{ARPA ماهانه فرضی} & \textbf{MRR پایان سال} & \textbf{وضعیت} \\
+\midrule
+\endhead
+سال ۱ & ۱۰ تا ۳۰ & پایین/ورود به بازار & محدود & pilot و اعتبارسنجی \\
+سال ۲ & ۵۰ تا ۱۵۰ & متوسط & رشد اولیه & self-service و فروش مستقیم \\
+سال ۳ & ۲۰۰ تا ۵۰۰ & متوسط تا بالا & قابل توجه & integrations و agency \\
+سال ۴ & ۷۰۰ تا ۱۵۰۰ & پلن‌های متنوع & مقیاس‌پذیر & vertical packs و analytics \\
+سال ۵ & ۲۰۰۰+ & ترکیب SaaS و agency & بلوغ تجاری & توسعه بازار و enterprise \\
+\bottomrule
+\end{longtable}
+
+\subsection{فرمول درآمد}
+\begin{bizblock}
+MRR = Active Paying Customers * Average Revenue Per Account
+ARR = MRR * 12
+Gross Margin = (Revenue - Direct Infrastructure/AI Costs) / Revenue
+\end{bizblock}
+
+\section{نقطه سر به سر}
+نقطه سر به سر زمانی رخ می‌دهد که درآمد ماهانه تکرارشونده از هزینه‌های ثابت و مستقیم ماهانه عبور کند. با توجه به ماهیت SaaS، هزینه‌های اصلی در ابتدا نیروی فنی و توسعه است و با رشد مشتری، هزینه زیرساخت، AI و پشتیبانی افزایش می‌یابد.
+
+\subsection{روش محاسبه}
+\begin{bizblock}
+Break-even Customers =
+Monthly Fixed Costs / (ARPA - Variable Cost Per Customer)
+\end{bizblock}
+
+\subsection{تحلیل کیفی}
+برای رسیدن سریع‌تر به نقطه سر به سر، محصول باید:
+\begin{itemize}
+  \item روی مشتریانی تمرکز کند که ارزش پاسخ‌گویی سریع برایشان واضح است.
+  \item setup اولیه را ساده کند تا هزینه onboarding پایین بیاید.
+  \item از پلن‌های بالاتر برای AI auto-reply، crawler و گزارش‌ها درآمد بگیرد.
+  \item هزینه AI را با پاسخ‌گویی دانش‌محور، cache و حد آستانه کنترل کند.
+  \item churn را با گزارش ارزش، analytics و بهبود کیفیت AI کاهش دهد.
+\end{itemize}
+
+\section{تحلیل ریسک}
+\begin{longtable}{R{42mm} R{68mm} R{44mm}}
+\toprule
+\textbf{ریسک} & \textbf{اثر} & \textbf{راهکار کاهش} \\
+\midrule
+\endhead
+آمادگی production ناکامل & کاهش اعتماد مشتری و سرمایه‌گذار & تکمیل migration، تست، monitoring، backup و hardening. \\
+کیفیت پاسخ AI & پاسخ نامناسب یا fallback زیاد & embeddings، source preview، feedback loop و knowledge quality dashboard. \\
+رقابت با ابزارهای جاافتاده & سختی فروش به مشتریان آشنا با رقبا & تمرکز روی AI کنترل‌شده، فارسی/RTL، vertical packs و قیمت رقابتی. \\
+هزینه onboarding & کاهش حاشیه سود در مشتریان کوچک & self-service wizard، templates و crawler بهتر. \\
+نبود billing خودکار & سختی مقیاس فروش & payment integration، trial و invoice history. \\
+ریسک امنیتی multi-tenant & آسیب جدی به اعتماد & تست IDOR/RBAC، audit، MFA و hardening. \\
+Crawler synchronous & timeout و تجربه نامطمئن & background jobs، queue و progress UI. \\
+وابستگی به دو برنامه‌نویس & ریسک عملیاتی و نگهداری & مستندسازی، تست، جذب نیرو و انتقال دانش. \\
+\bottomrule
+\end{longtable}
+
+\section{برنامه پنج‌ساله}
+\subsection{سال اول: تثبیت و اعتبارسنجی}
+تمرکز روی آماده‌سازی production، تکمیل schema، تست‌های حیاتی، پایلوت با مشتریان واقعی، اصلاح تجربه onboarding، تکمیل مستندات استقرار و ساخت شواهد اولیه ارزش محصول است. خروجی کلیدی سال اول، محصول قابل اتکا برای فروش محدود و چند case study اولیه است.
+
+\subsection{سال دوم: فروش اولیه و خودکارسازی}
+تمرکز روی billing، self-service signup، trial، real-time messaging، بهبود inbox، بسته‌بندی پلن‌ها، onboarding wizard و رشد فروش مستقیم است. محصول باید از فروش کاملا دستی به فروش نیمه‌خودکار برسد.
+
+\subsection{سال سوم: تمایز AI و integrations}
+تمرکز روی semantic search، grounded generative responses، analytics پیشرفته AI، integrations با CRM/e-commerce و messaging channels است. هدف، تبدیل محصول از live chat هوشمند به پلتفرم پشتیبانی و فروش متصل به workflow مشتری است.
+
+\subsection{سال چهارم: رشد agency و vertical}
+تمرکز روی white-label، reseller controls، vertical-specific AI packs، automation builder و گزارش‌های تخصصی است. کانال آژانس می‌تواند رشد تعداد سایت‌های فعال را سریع‌تر کند.
+
+\subsection{سال پنجم: بلوغ SaaS و enterprise readiness}
+تمرکز روی enterprise security، compliance readiness، data retention controls، SLA، multi-region hosting، marketplace integrations و تحلیل‌های مدیریتی مثل MRR/ARR/churn/gross margin است. هدف این مرحله، تبدیل محصول به پلتفرم SaaS پایدار و قابل گسترش در بازارهای بزرگ‌تر است.
+
+\section{شاخص‌های کلیدی موفقیت}
+\begin{itemize}
+  \item تعداد سایت‌های فعال نصب‌کننده ویجت.
+  \item تعداد مکالمات ماهانه.
+  \item نرخ پاسخ AI و نرخ fallback.
+  \item نرخ پذیرش AI suggestion توسط agent.
+  \item تعداد سوالات بی‌پاسخ تبدیل‌شده به دانش.
+  \item نرخ تبدیل دمو به پایلوت و پایلوت به پرداخت.
+  \item MRR و ARR.
+  \item churn و دلیل churn.
+  \item میانگین زمان پاسخ اول و زمان حل گفتگو.
+  \item هزینه زیرساخت و AI به ازای هر مشتری.
+\end{itemize}
+
+\section{جمع‌بندی}
+\en{AI Chat SaaS} از نظر فنی پایه‌های یک محصول SaaS واقعی را دارد: ویجت قابل نصب، پنل پشتیبانی، super-admin، مدیریت tenant، پلن‌ها، دانش، crawler، AI suggestion، auto-reply و کنترل‌های امنیتی پایه. از نظر تجاری، محصول در بازاری قرار می‌گیرد که نیاز آن روشن است: کسب‌وکارها می‌خواهند به بازدیدکنندگان سایت سریع‌تر پاسخ دهند، بدون اینکه کنترل پاسخ‌های حساس را کاملا به AI واگذار کنند.
+
+مسیر درست تجاری‌سازی، شروع با پایلوت‌های کنترل‌شده، تکمیل production readiness، سپس اضافه کردن billing، self-service onboarding و قابلیت‌های تمایزدهنده AI است. در صورت اجرای درست برنامه پنج‌ساله، محصول می‌تواند از یک MVP قابل دمو به یک پلتفرم SaaS قابل فروش و قابل توسعه تبدیل شود.
+
+\end{document}
