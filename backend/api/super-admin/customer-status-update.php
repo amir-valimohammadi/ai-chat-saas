@@ -1,11 +1,12 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/super-admin/customer-status-update.php
-// هدف: تغییر امن وضعیت مشتری توسط Super Admin
+// هدف: تغییر امن وضعیت مشتری و ثبت Audit Log
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
+require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
@@ -20,10 +21,21 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 
 $input = get_json_input();
-$tenantId = filter_var($input['tenant_id'] ?? 0, FILTER_VALIDATE_INT, [
-    'options' => ['default' => 0, 'min_range' => 1],
-]);
-$status = is_string($input['status'] ?? null) ? trim($input['status']) : '';
+
+$tenantId = filter_var(
+    $input['tenant_id'] ?? 0,
+    FILTER_VALIDATE_INT,
+    [
+        'options' => [
+            'default' => 0,
+            'min_range' => 1,
+        ],
+    ]
+);
+
+$status = is_string($input['status'] ?? null)
+    ? trim($input['status'])
+    : '';
 
 $allowedStatuses = ['active', 'inactive', 'suspended'];
 
@@ -43,12 +55,18 @@ if (!in_array($status, $allowedStatuses, true)) {
 
 try {
     $tenantStmt = $pdo->prepare("
-        SELECT id, name, status
+        SELECT
+            id,
+            name,
+            status
         FROM tenants
         WHERE id = :tenant_id
         LIMIT 1
     ");
-    $tenantStmt->execute([':tenant_id' => $tenantId]);
+
+    $tenantStmt->execute([
+        ':tenant_id' => $tenantId,
+    ]);
 
     $tenant = $tenantStmt->fetch();
 
@@ -62,15 +80,43 @@ try {
     $previousStatus = (string) $tenant['status'];
 
     if ($previousStatus !== $status) {
+        $pdo->beginTransaction();
+
         $updateStmt = $pdo->prepare("
             UPDATE tenants
             SET status = :status
             WHERE id = :tenant_id
         ");
+
         $updateStmt->execute([
             ':status' => $status,
             ':tenant_id' => $tenantId,
         ]);
+
+        admin_audit_log(
+            $pdo,
+            $user,
+            'customer.status_changed',
+            'tenant',
+            $tenantId,
+            sprintf(
+                'وضعیت مشتری «%s» از %s به %s تغییر کرد.',
+                $tenant['name'],
+                $previousStatus,
+                $status
+            ),
+            [
+                'status' => $previousStatus,
+            ],
+            [
+                'status' => $status,
+            ],
+            [
+                'tenant_id' => $tenantId,
+            ]
+        );
+
+        $pdo->commit();
     }
 
     json_response([
@@ -86,11 +132,22 @@ try {
         ],
     ]);
 } catch (Throwable $e) {
-    error_log('[AI_CHAT_SAAS] customer-status-update failed: ' . $e->getMessage());
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
 
-    json_response([
+    error_log(
+        '[AI_CHAT_SAAS] customer-status-update failed: ' . $e->getMessage()
+    );
+
+    $payload = [
         'success' => false,
         'message' => 'Failed to update customer status',
-        'error' => $e->getMessage(),
-    ], 500);
+    ];
+
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+
+    json_response($payload, 500);
 }

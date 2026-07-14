@@ -1,11 +1,12 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/super-admin/user-status-update.php
-// هدف: فعال یا غیرفعال کردن امن کاربر مشتری و لغو نشست‌های قبلی
+// هدف: فعال یا غیرفعال کردن کاربر، لغو نشست‌ها و ثبت Audit Log
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
+require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
@@ -20,9 +21,17 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 
 $input = get_json_input();
-$userId = filter_var($input['user_id'] ?? 0, FILTER_VALIDATE_INT, [
-    'options' => ['default' => 0, 'min_range' => 1],
-]);
+
+$userId = filter_var(
+    $input['user_id'] ?? 0,
+    FILTER_VALIDATE_INT,
+    [
+        'options' => [
+            'default' => 0,
+            'min_range' => 1,
+        ],
+    ]
+);
 
 if (!array_key_exists('is_active', $input)) {
     json_response([
@@ -31,7 +40,11 @@ if (!array_key_exists('is_active', $input)) {
     ], 422);
 }
 
-$isActive = filter_var($input['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+$isActive = filter_var(
+    $input['is_active'],
+    FILTER_VALIDATE_BOOLEAN,
+    FILTER_NULL_ON_FAILURE
+);
 
 if ($userId <= 0) {
     json_response([
@@ -49,14 +62,24 @@ if ($isActive === null) {
 
 try {
     $userStmt = $pdo->prepare("
-        SELECT id, tenant_id, name, email, role, is_active
+        SELECT
+            id,
+            tenant_id,
+            name,
+            email,
+            role,
+            is_active,
+            token_version
         FROM users
         WHERE id = :user_id
           AND tenant_id IS NOT NULL
           AND role IN ('customer_admin', 'agent')
         LIMIT 1
     ");
-    $userStmt->execute([':user_id' => $userId]);
+
+    $userStmt->execute([
+        ':user_id' => $userId,
+    ]);
 
     $targetUser = $userStmt->fetch();
 
@@ -70,6 +93,8 @@ try {
     $previousState = (bool) $targetUser['is_active'];
 
     if ($previousState !== $isActive) {
+        $pdo->beginTransaction();
+
         $updateStmt = $pdo->prepare("
             UPDATE users
             SET
@@ -82,11 +107,41 @@ try {
             WHERE id = :user_id
               AND role IN ('customer_admin', 'agent')
         ");
+
         $updateStmt->execute([
             ':is_active' => $isActive ? 1 : 0,
             ':is_active_for_status' => $isActive ? 1 : 0,
             ':user_id' => $userId,
         ]);
+
+        admin_audit_log(
+            $pdo,
+            $user,
+            'user.status_changed',
+            'user',
+            $userId,
+            sprintf(
+                'وضعیت کاربر «%s» از %s به %s تغییر کرد و نشست‌های قبلی لغو شد.',
+                $targetUser['name'],
+                $previousState ? 'فعال' : 'غیرفعال',
+                $isActive ? 'فعال' : 'غیرفعال'
+            ),
+            [
+                'is_active' => $previousState,
+                'token_version' => (int) $targetUser['token_version'],
+            ],
+            [
+                'is_active' => $isActive,
+                'sessions_revoked' => true,
+                'token_version_incremented' => true,
+            ],
+            [
+                'tenant_id' => (int) $targetUser['tenant_id'],
+                'target_user_id' => $userId,
+            ]
+        );
+
+        $pdo->commit();
     }
 
     json_response([
@@ -105,11 +160,22 @@ try {
         ],
     ]);
 } catch (Throwable $e) {
-    error_log('[AI_CHAT_SAAS] user-status-update failed: ' . $e->getMessage());
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
 
-    json_response([
+    error_log(
+        '[AI_CHAT_SAAS] user-status-update failed: ' . $e->getMessage()
+    );
+
+    $payload = [
         'success' => false,
         'message' => 'Failed to update user status',
-        'error' => $e->getMessage(),
-    ], 500);
+    ];
+
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+
+    json_response($payload, 500);
 }

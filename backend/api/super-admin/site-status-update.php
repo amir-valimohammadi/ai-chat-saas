@@ -1,11 +1,12 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/super-admin/site-status-update.php
-// هدف: فعال یا غیرفعال کردن امن سایت توسط Super Admin
+// هدف: فعال یا غیرفعال کردن امن سایت و ثبت Audit Log
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
+require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
@@ -20,9 +21,17 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 
 $input = get_json_input();
-$siteId = filter_var($input['site_id'] ?? 0, FILTER_VALIDATE_INT, [
-    'options' => ['default' => 0, 'min_range' => 1],
-]);
+
+$siteId = filter_var(
+    $input['site_id'] ?? 0,
+    FILTER_VALIDATE_INT,
+    [
+        'options' => [
+            'default' => 0,
+            'min_range' => 1,
+        ],
+    ]
+);
 
 if (!array_key_exists('is_active', $input)) {
     json_response([
@@ -31,7 +40,11 @@ if (!array_key_exists('is_active', $input)) {
     ], 422);
 }
 
-$isActive = filter_var($input['is_active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+$isActive = filter_var(
+    $input['is_active'],
+    FILTER_VALIDATE_BOOLEAN,
+    FILTER_NULL_ON_FAILURE
+);
 
 if ($siteId <= 0) {
     json_response([
@@ -49,12 +62,20 @@ if ($isActive === null) {
 
 try {
     $siteStmt = $pdo->prepare("
-        SELECT id, tenant_id, name, domain, is_active
+        SELECT
+            id,
+            tenant_id,
+            name,
+            domain,
+            is_active
         FROM sites
         WHERE id = :site_id
         LIMIT 1
     ");
-    $siteStmt->execute([':site_id' => $siteId]);
+
+    $siteStmt->execute([
+        ':site_id' => $siteId,
+    ]);
 
     $site = $siteStmt->fetch();
 
@@ -68,15 +89,44 @@ try {
     $previousState = (bool) $site['is_active'];
 
     if ($previousState !== $isActive) {
+        $pdo->beginTransaction();
+
         $updateStmt = $pdo->prepare("
             UPDATE sites
             SET is_active = :is_active
             WHERE id = :site_id
         ");
+
         $updateStmt->execute([
             ':is_active' => $isActive ? 1 : 0,
             ':site_id' => $siteId,
         ]);
+
+        admin_audit_log(
+            $pdo,
+            $user,
+            'site.status_changed',
+            'site',
+            $siteId,
+            sprintf(
+                'وضعیت سایت «%s» از %s به %s تغییر کرد.',
+                $site['name'],
+                $previousState ? 'فعال' : 'غیرفعال',
+                $isActive ? 'فعال' : 'غیرفعال'
+            ),
+            [
+                'is_active' => $previousState,
+            ],
+            [
+                'is_active' => $isActive,
+            ],
+            [
+                'tenant_id' => (int) $site['tenant_id'],
+                'site_id' => $siteId,
+            ]
+        );
+
+        $pdo->commit();
     }
 
     json_response([
@@ -94,11 +144,22 @@ try {
         ],
     ]);
 } catch (Throwable $e) {
-    error_log('[AI_CHAT_SAAS] site-status-update failed: ' . $e->getMessage());
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
 
-    json_response([
+    error_log(
+        '[AI_CHAT_SAAS] site-status-update failed: ' . $e->getMessage()
+    );
+
+    $payload = [
         'success' => false,
         'message' => 'Failed to update site status',
-        'error' => $e->getMessage(),
-    ], 500);
+    ];
+
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+
+    json_response($payload, 500);
 }

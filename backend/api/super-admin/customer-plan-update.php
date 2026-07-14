@@ -1,11 +1,12 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/super-admin/customer-plan-update.php
-// هدف: تغییر امن پلن مشتری توسط Super Admin
+// هدف: تغییر امن پلن مشتری و ثبت Audit Log
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
+require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
@@ -20,12 +21,28 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 
 $input = get_json_input();
-$tenantId = filter_var($input['tenant_id'] ?? 0, FILTER_VALIDATE_INT, [
-    'options' => ['default' => 0, 'min_range' => 1],
-]);
-$planId = filter_var($input['plan_id'] ?? 0, FILTER_VALIDATE_INT, [
-    'options' => ['default' => 0, 'min_range' => 1],
-]);
+
+$tenantId = filter_var(
+    $input['tenant_id'] ?? 0,
+    FILTER_VALIDATE_INT,
+    [
+        'options' => [
+            'default' => 0,
+            'min_range' => 1,
+        ],
+    ]
+);
+
+$planId = filter_var(
+    $input['plan_id'] ?? 0,
+    FILTER_VALIDATE_INT,
+    [
+        'options' => [
+            'default' => 0,
+            'min_range' => 1,
+        ],
+    ]
+);
 
 if ($tenantId <= 0) {
     json_response([
@@ -43,12 +60,21 @@ if ($planId <= 0) {
 
 try {
     $tenantStmt = $pdo->prepare("
-        SELECT id, name, plan_id
+        SELECT
+            tenants.id,
+            tenants.name,
+            tenants.plan_id,
+            current_plan.name AS current_plan_name
         FROM tenants
-        WHERE id = :tenant_id
+        LEFT JOIN plans AS current_plan
+            ON current_plan.id = tenants.plan_id
+        WHERE tenants.id = :tenant_id
         LIMIT 1
     ");
-    $tenantStmt->execute([':tenant_id' => $tenantId]);
+
+    $tenantStmt->execute([
+        ':tenant_id' => $tenantId,
+    ]);
 
     $tenant = $tenantStmt->fetch();
 
@@ -71,7 +97,10 @@ try {
         WHERE id = :plan_id
         LIMIT 1
     ");
-    $planStmt->execute([':plan_id' => $planId]);
+
+    $planStmt->execute([
+        ':plan_id' => $planId,
+    ]);
 
     $plan = $planStmt->fetch();
 
@@ -89,18 +118,51 @@ try {
         ], 422);
     }
 
-    $previousPlanId = $tenant['plan_id'] !== null ? (int) $tenant['plan_id'] : null;
+    $previousPlanId = $tenant['plan_id'] !== null
+        ? (int) $tenant['plan_id']
+        : null;
 
     if ($previousPlanId !== $planId) {
+        $pdo->beginTransaction();
+
         $updateStmt = $pdo->prepare("
             UPDATE tenants
             SET plan_id = :plan_id
             WHERE id = :tenant_id
         ");
+
         $updateStmt->execute([
             ':plan_id' => $planId,
             ':tenant_id' => $tenantId,
         ]);
+
+        admin_audit_log(
+            $pdo,
+            $user,
+            'customer.plan_changed',
+            'tenant',
+            $tenantId,
+            sprintf(
+                'پلن مشتری «%s» از %s به %s تغییر کرد.',
+                $tenant['name'],
+                $tenant['current_plan_name'] ?: 'بدون پلن',
+                $plan['name']
+            ),
+            [
+                'plan_id' => $previousPlanId,
+                'plan_name' => $tenant['current_plan_name'],
+            ],
+            [
+                'plan_id' => (int) $plan['id'],
+                'plan_name' => $plan['name'],
+            ],
+            [
+                'tenant_id' => $tenantId,
+                'plan_id' => (int) $plan['id'],
+            ]
+        );
+
+        $pdo->commit();
     }
 
     json_response([
@@ -119,15 +181,27 @@ try {
             'name' => $plan['name'],
             'max_sites' => (int) $plan['max_sites'],
             'max_agents' => (int) $plan['max_agents'],
-            'max_monthly_conversations' => (int) $plan['max_monthly_conversations'],
+            'max_monthly_conversations' =>
+                (int) $plan['max_monthly_conversations'],
         ],
     ]);
 } catch (Throwable $e) {
-    error_log('[AI_CHAT_SAAS] customer-plan-update failed: ' . $e->getMessage());
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
 
-    json_response([
+    error_log(
+        '[AI_CHAT_SAAS] customer-plan-update failed: ' . $e->getMessage()
+    );
+
+    $payload = [
         'success' => false,
         'message' => 'Failed to update customer plan',
-        'error' => $e->getMessage(),
-    ], 500);
+    ];
+
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+
+    json_response($payload, 500);
 }

@@ -145,6 +145,12 @@ export default function AppShell({
                             description: "مصرف و کیفیت پاسخ‌ها",
                         },
                         {
+                            href: "/super-admin/audit-logs",
+                            label: "گزارش فعالیت‌ها",
+                            icon: "LOG",
+                            description: "تغییرات حساس مدیران",
+                        },
+                        {
                             href: "/super-admin/announcements",
                             label: "اعلان‌ها",
                             icon: "🔔",
