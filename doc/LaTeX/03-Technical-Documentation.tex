@@ -1,0 +1,570 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{fontspec}
+\usepackage{xepersian}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\providecommand{\UseMathForPositioningText}{}
+
+\IfFontExistsTF{Vazirmatn}{
+  \settextfont{Vazirmatn}
+}{
+  \IfFontExistsTF{Tahoma}{
+    \settextfont{Tahoma}
+  }{
+    \settextfont{Arial}
+  }
+}
+\IfFontExistsTF{Arial}{
+  \setlatintextfont{Arial}
+}{
+  \setlatintextfont{Times New Roman}
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={AI Chat SaaS Technical Documentation},
+  pdfauthor={Mobin Yousefi}
+}
+
+\definecolor{HeaderBlue}{HTML}{1E3A8A}
+\definecolor{SoftGray}{HTML}{F3F4F6}
+\definecolor{BorderGray}{HTML}{D1D5DB}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{7pt}
+\setlength{\headheight}{15pt}
+\emergencystretch=3em
+\sloppy
+\renewcommand{\arraystretch}{1.45}
+\setlist[itemize]{rightmargin=1.2cm,itemsep=3pt,topsep=4pt}
+\setlist[enumerate]{rightmargin=1.2cm,itemsep=3pt,topsep=4pt}
+
+\titleformat{\section}{\Large\bfseries\color{HeaderBlue}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{مستند فنی AI Chat SaaS}
+\lhead{نسخه 1.0}
+\cfoot{\thepage}
+
+\newcommand{\en}[1]{\lr{#1}}
+\newcommand{\code}[1]{\lr{\texttt{#1}}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\Huge\bfseries مستند فنی سامانه \en{AI Chat SaaS}\par}
+\vspace{0.8cm}
+{\Large\bfseries \en{Technical Documentation}\par}
+\vspace{1.5cm}
+{\large پلتفرم چندمستاجری چت پشتیبانی، ویجت سایت و دستیار هوشمند مبتنی بر دانش\par}
+\vfill
+\begin{tabular}{rl}
+\textbf{نام پروژه:} & \en{AI Chat SaaS} \\
+\textbf{نوع سند:} & مستند فنی \\
+\textbf{نسخه سند:} & 1.0 \\
+\textbf{تاریخ:} & ۱۴ جولای ۲۰۲۶ \\
+\textbf{نویسنده/تهیه‌کننده:} & مبین یوسفی \\
+\textbf{مسیر سند:} & \code{doc/LaTeX/03-Technical-Documentation.tex} \\
+\end{tabular}
+\vfill
+{\small این سند برای ارائه فنی پروژه، اثبات بلوغ مهندسی نرم‌افزار، تشریح معماری و مستندسازی ماژول‌های اصلی سامانه تهیه شده است.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{هدف و دامنه سند}
+این سند، مستند فنی پروژه \en{AI Chat SaaS} است و با هدف توضیح دقیق سیستم، معماری نرم‌افزار، ساختار کد، ماژول‌ها، سرویس‌ها، وابستگی‌ها، جریان‌های عملیاتی، الگوهای طراحی، مدل امنیت و محدودیت‌های فعلی تهیه شده است.
+
+دامنه این سند شامل سه لایه اصلی محصول است:
+\begin{itemize}
+  \item بک‌اند \en{PHP} و \en{MySQL} برای مدیریت داده، احراز هویت، چندمستاجری، APIها، چت، دانش و موتور پاسخ‌دهی.
+  \item پنل مدیریتی \en{Next.js/React} برای سوپرادمین، ادمین مشتری و اپراتور پشتیبانی.
+  \item ویجت \en{JavaScript} قابل نصب روی سایت مشتری برای چت عمومی بازدیدکنندگان.
+\end{itemize}
+
+این سند بر اساس بررسی فایل‌های \code{doc/md/Rahnama.md}، \code{doc/md/ArchitectureForMobin.md}، \code{doc/md/ReportForSale.md} و فایل‌های کد کلیدی پروژه نوشته شده است.
+
+\section{معرفی کامل سیستم}
+\en{AI Chat SaaS} یک سامانه نرم‌افزاری چندمستاجری برای پشتیبانی آنلاین وب‌سایت‌ها است. هر مشتری می‌تواند یک یا چند سایت را در سامانه ثبت کند، ویجت چت را با \code{site\_key} روی سایت خود نصب کند، مکالمات بازدیدکنندگان را در پنل مدیریتی ببیند و با کمک اپراتور انسانی یا پاسخ هوشمند مبتنی بر دانش به کاربران پاسخ دهد.
+
+ویژگی مهم سیستم این است که محصول فقط یک چت‌بات نیست؛ بلکه یک سکوی کامل پشتیبانی شامل کنترل پنل، مدیریت مشتریان، پلن‌ها، تیم پشتیبانی، مکالمات، فایل‌های پیوست، دانش دستی، خزش وب‌سایت، پیشنهاد پاسخ هوشمند، پاسخ خودکار در زمان آفلاین بودن پشتیبانی و حلقه بهبود دانش است.
+
+\subsection{اهداف محصول}
+\begin{itemize}
+  \item فراهم کردن کانال چت نصب‌شدنی برای سایت‌های مشتریان.
+  \item مدیریت مکالمات بازدیدکنندگان توسط ادمین‌ها و اپراتورها.
+  \item پاسخ‌گویی سریع‌تر با پیشنهادهای هوشمند مبتنی بر دانش سایت.
+  \item پاسخ خودکار به سوالات متداول در زمان آفلاین بودن پشتیبانی.
+  \item ایجاد چرخه یادگیری از سوالات بی‌پاسخ و تبدیل آن‌ها به دانش قابل استفاده.
+  \item فراهم کردن ساختار تجاری \en{SaaS} شامل پلن، محدودیت مصرف، مشتری، سایت و تیم.
+\end{itemize}
+
+\subsection{کاربران و نقش‌ها}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{3.5cm} p{11cm}}
+\toprule
+\textbf{نقش} & \textbf{مسئولیت‌ها و سطح دسترسی} \\
+\midrule
+سوپرادمین & مالک پلتفرم؛ مدیریت مشتریان، پلن‌ها، سایت‌ها، کاربران، وضعیت مشتری، اعلان‌ها و آمار کلی سامانه. \\
+ادمین مشتری & مدیر کسب‌وکار مشتری؛ مدیریت سایت‌های خود، تنظیمات ویجت، تیم، دانش، AI، گزارش‌ها و مصرف پلن. \\
+اپراتور/Agent & کاربر پشتیبانی؛ مشاهده مکالمات مجاز، پاسخ‌گویی، ارسال فایل، استفاده از پاسخ سریع، دریافت پیشنهاد AI و تغییر وضعیت مکالمه. \\
+بازدیدکننده سایت & کاربر عمومی؛ شروع مکالمه از ویجت، ارسال پیام و فایل، دریافت پاسخ انسانی یا پاسخ AI. \\
+\bottomrule
+\end{longtable}
+
+\section{معماری نرم‌افزار}
+\subsection{نمای کلی معماری}
+معماری پروژه از چهار بخش اصلی تشکیل شده است:
+\begin{itemize}
+  \item \textbf{Backend:} مجموعه APIهای مستقل PHP که از طریق PDO به MySQL متصل می‌شوند.
+  \item \textbf{Frontend:} پنل مدیریتی مبتنی بر \en{Next.js} و \en{React}.
+  \item \textbf{Widget:} اسکریپت جاوااسکریپت قابل جاسازی در سایت مشتری با \en{Shadow DOM}.
+  \item \textbf{Test Shop:} سایت آزمایشی برای تست ویجت و جریان چت.
+\end{itemize}
+
+بک‌اند یک اپلیکیشن فریم‌ورکی نیست. هر endpoint به‌صورت یک فایل مستقل در مسیر \code{backend/api/...} پیاده‌سازی شده و منطق مشترک در مسیر \code{backend/includes/...} قرار دارد. این ساختار برای MVP و توسعه سریع مناسب است و باعث می‌شود افزودن endpoint جدید با اضافه کردن یک فایل PHP و include کردن helperهای لازم انجام شود.
+
+\subsection{نمودار متنی اجزا}
+\begin{latin}
+\begin{verbatim}
+Customer Website
+    |
+    | embeds widget/dist/widget.js with data-site-key
+    v
+Public Chat Widget  ----->  backend/api/widget/*
+                              |
+                              v
+                         PHP API Backend
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+     MySQL Database      Upload Storage      AI Knowledge Engine
+          ^
+          |
+Next.js Management Panel ----> backend/api/auth/*
+                         ----> backend/api/agent/*
+                         ----> backend/api/customer/*
+                         ----> backend/api/super-admin/*
+\end{verbatim}
+\end{latin}
+
+\subsection{اصل چندمستاجری}
+سامانه بر پایه جداسازی داده در سطح \code{tenant} و \code{site} طراحی شده است. مشتریان در جدول \code{tenants} نگهداری می‌شوند و هر مشتری می‌تواند چند سایت در جدول \code{sites} داشته باشد. کاربران غیرسوپرادمین به یک \code{tenant\_id} وابسته‌اند و دسترسی آن‌ها به سایت‌ها از طریق نقش و جدول \code{agent\_site\_access} کنترل می‌شود.
+
+در این مدل:
+\begin{itemize}
+  \item سوپرادمین به همه سایت‌ها و مشتریان دسترسی دارد.
+  \item ادمین مشتری فقط به داده‌های مستاجر خود دسترسی دارد.
+  \item اپراتور فقط به سایت‌هایی دسترسی دارد که به او اختصاص داده شده است.
+  \item endpointهای عمومی ویجت به‌جای JWT با \code{site\_key}، وضعیت سایت، وضعیت tenant، CORS و rate limit کنترل می‌شوند.
+\end{itemize}
+
+\section{فناوری‌های استفاده شده}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4cm} p{10.5cm}}
+\toprule
+\textbf{لایه} & \textbf{فناوری‌ها و توضیح} \\
+\midrule
+Backend & \en{PHP} خام، \en{PDO}، \en{MySQL}، endpointهای فایل‌محور، JSON API، JWT با الگوریتم HS256. \\
+Frontend & \en{Next.js}، \en{React}، \en{TypeScript}، CSS ماژولار در پوشه \code{frontend/styles}. \\
+Widget & \en{Vanilla JavaScript}، \en{Shadow DOM}، \en{LocalStorage}، \en{Fetch API}، polling برای پیام‌ها و typing. \\
+Database & \en{MySQL/InnoDB}، کلید خارجی، ایندکس‌های معمولی و \en{FULLTEXT} در جداول AI. \\
+AI/KM & موتور محلی مبتنی بر نرمال‌سازی متن، استخراج token، تشخیص intent، جست‌وجوی LIKE/FULLTEXT، امتیازدهی و پاسخ استخراجی. \\
+Security & JWT، role-based access، site access، CORS، origin validation، rate limit، validation فایل، security headers. \\
+Config & فایل \code{.env} و فایل‌های \code{backend/config/app.php} و \code{backend/config/database.php}. \\
+\bottomrule
+\end{longtable}
+
+\section{وابستگی‌ها و Dependencyها}
+\subsection{وابستگی‌های Frontend}
+بر اساس \code{frontend/package.json} وابستگی‌های اصلی پنل عبارت‌اند از:
+\begin{itemize}
+  \item \code{next}: فریم‌ورک اصلی پنل مدیریتی.
+  \item \code{react} و \code{react-dom}: ساخت رابط کاربری.
+  \item \code{typescript}: تایپ‌گذاری و توسعه پایدارتر کد frontend.
+  \item \code{tailwindcss}: وابستگی توسعه‌ای موجود در پروژه، هرچند بخش مهمی از استایل‌ها از فایل‌های CSS اختصاصی استفاده می‌کند.
+\end{itemize}
+
+\subsection{وابستگی‌های Backend}
+بک‌اند بر پایه کتابخانه خارجی سنگین طراحی نشده و عمدتا از امکانات استاندارد PHP استفاده می‌کند:
+\begin{itemize}
+  \item \code{PDO}: اتصال امن‌تر به MySQL و اجرای queryهای prepared.
+  \item \code{curl} یا \code{file\_get\_contents}: دریافت صفحات توسط crawler.
+  \item \code{DOMDocument} و \code{DOMXPath}: استخراج محتوای خوانا از HTML.
+  \item توابع استاندارد رمزنگاری و hash برای JWT، نام فایل تصادفی و hash محتوا.
+\end{itemize}
+
+\subsection{متغیرهای محیطی مهم}
+فایل \code{backend/.env.example} متغیرهای زیر را مستند کرده است:
+\begin{itemize}
+  \item تنظیمات برنامه: \code{APP\_ENV}، \code{APP\_DEBUG}، \code{APP\_TIMEZONE}، \code{FRONTEND\_URL}، \code{API\_URL}.
+  \item پایگاه داده: \code{DB\_HOST}، \code{DB\_NAME}، \code{DB\_USER}، \code{DB\_PASS}.
+  \item احراز هویت: \code{JWT\_SECRET}، \code{JWT\_EXPIRATION\_SECONDS}، \code{JWT\_ISSUER}، \code{JWT\_AUDIENCE}.
+  \item AI Provider: \code{OPENAI\_API\_KEY} و \code{OPENAI\_MODEL}. در جریان فعال فعلی، پاسخ‌دهی اصلی عمدتا محلی و استخراجی است.
+  \item آپلود: \code{UPLOAD\_MAX\_BYTES}، \code{UPLOAD\_MAX\_IMAGE\_PIXELS}، \code{UPLOAD\_STORAGE\_ROOT}، \code{UPLOAD\_PUBLIC\_URL}.
+  \item CORS: \code{PANEL\_ALLOWED\_ORIGINS}، \code{WIDGET\_ALLOWED\_ORIGINS}، \code{WIDGET\_ALLOW\_EMPTY\_ORIGIN}.
+\end{itemize}
+
+\section{ساختار Repository}
+\begin{latin}
+\begin{verbatim}
+ai-chat-saas/
+|-- backend/
+|   |-- api/
+|   |   |-- auth/
+|   |   |-- widget/
+|   |   |-- agent/
+|   |   |-- customer/
+|   |   `-- super-admin/
+|   |-- config/
+|   |-- database/migrations/
+|   |-- includes/
+|   |-- public/
+|   `-- storage/
+|-- frontend/
+|   |-- app/
+|   |-- components/
+|   |-- lib/
+|   |-- public/
+|   `-- styles/
+|-- widget/
+|   |-- src/
+|   `-- dist/
+|-- test-shop/
+`-- doc/
+    |-- md/
+    `-- LaTeX/
+\end{verbatim}
+\end{latin}
+
+\subsection{توضیح پوشه‌های اصلی}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4cm} p{10.5cm}}
+\toprule
+\textbf{مسیر} & \textbf{شرح} \\
+\midrule
+\code{backend/api/auth} & ورود، دریافت کاربر جاری، تغییر رمز و خروج از همه دستگاه‌ها. \\
+\code{backend/api/widget} & API عمومی ویجت شامل تنظیمات، شروع بازدیدکننده، شروع مکالمه، ارسال پیام، فایل، لیست پیام‌ها، typing و پاسخ AI. \\
+\code{backend/api/agent} & API اپراتور برای مکالمات، ارسال پاسخ، پیوست، assignment، وضعیت، presence، quick replies و پیشنهاد AI. \\
+\code{backend/api/customer} & مدیریت سایت‌ها، تیم، گزارش، quick replies، دانش، تنظیمات AI، crawl، سوالات تولیدشده و سوالات بی‌پاسخ. \\
+\code{backend/api/super-admin} & داشبورد پلتفرم، مشتریان، پلن‌ها، سایت‌ها، کاربران، اعلان‌ها و مانیتورینگ AI. \\
+\code{backend/includes} & helperهای مشترک شامل auth، JWT، response، CORS، security headers، upload، rate limit، site access، plan limits و موتور AI. \\
+\code{frontend/app} & صفحات پنل مدیریتی Next.js برای نقش‌های مختلف. \\
+\code{frontend/lib/api.ts} & لایه مرکزی ارتباط frontend با API و مدیریت token در localStorage. \\
+\code{widget/src/widget.js} & سورس ویجت قابل نصب روی سایت مشتری. \\
+\code{widget/dist/widget.js} & خروجی قابل انتشار ویجت. \\
+\bottomrule
+\end{longtable}
+
+\section{ماژول‌ها و سرویس‌های اصلی}
+\subsection{ماژول احراز هویت}
+احراز هویت پنل از طریق JWT انجام می‌شود. endpoint ورود پس از اعتبارسنجی ایمیل و رمز عبور، token صادر می‌کند. فایل \code{backend/includes/auth.php} وظیفه استخراج \code{Bearer Token}، decode کردن JWT، بررسی کاربر، فعال بودن حساب، بررسی \code{token\_version} و اعتبار tenant را بر عهده دارد.
+
+payload توکن شامل فیلدهایی مانند \code{sub}، \code{tenant\_id}، \code{email}، \code{role}، \code{token\_version}، \code{jti}، \code{iat}، \code{nbf}، \code{exp}، \code{iss} و \code{aud} است. وجود \code{token\_version} باعث می‌شود تغییر رمز یا logout-all بتواند توکن‌های قبلی را باطل کند.
+
+\subsection{ماژول دسترسی سایت}
+کنترل دسترسی سایت در \code{backend/includes/site-access.php} متمرکز شده است. این ماژول مانع \en{IDOR} بین tenantها و سایت‌ها می‌شود. سوپرادمین دسترسی کامل دارد، ادمین مشتری به سایت‌های tenant خود محدود است و اپراتور از طریق \code{agent\_site\_access} مجوز می‌گیرد.
+
+\subsection{ماژول ویجت عمومی}
+ویجت با یک script tag و مقدار \code{data-site-key} نصب می‌شود. ویجت ابتدا تنظیمات سایت را از \code{widget/config.php} می‌گیرد، سپس با \code{browser\_id} ذخیره‌شده در \en{LocalStorage} بازدیدکننده را ایجاد یا بازیابی می‌کند. مکالمه از طریق \code{conversation-start.php} شروع می‌شود و پیام‌ها از طریق \code{message-send.php} ارسال می‌شوند.
+
+ویژگی‌های فنی ویجت:
+\begin{itemize}
+  \item استفاده از \en{Shadow DOM} برای جلوگیری از تداخل CSS سایت میزبان.
+  \item ذخیره \code{browser\_id}، اطلاعات visitor و conversation در \en{LocalStorage}.
+  \item polling با بازه تقریبی ۲.۵ ثانیه برای پیام‌ها و typing.
+  \item کنترل client-side برای حجم و نوع فایل.
+  \item پشتیبانی از پیام‌های visitor، agent، AI و system.
+  \item نمایش راست‌چین و مناسب زبان فارسی.
+\end{itemize}
+
+\subsection{ماژول مکالمات و پشتیبانی انسانی}
+مکالمات در جدول \code{conversations} و پیام‌ها در جدول \code{messages} ذخیره می‌شوند. اپراتورها و ادمین‌ها از مسیر \code{backend/api/agent} مکالمات را مشاهده و مدیریت می‌کنند. endpointهای مهم شامل \code{conversations-list.php}، \code{conversation-show.php}، \code{message-send.php}، \code{conversation-assign.php}، \code{conversation-status-update.php} و \code{conversation-close.php} هستند.
+
+وضعیت‌های مکالمه در کد شامل \code{new}، \code{open}، \code{in\_progress}، \code{waiting\_customer}، \code{follow\_up}، \code{pending} و \code{closed} است.
+
+\subsection{ماژول فایل‌های پیوست}
+فایل‌های پیوست از سمت visitor و agent قابل ارسال هستند. منطق مشترک validation در \code{backend/includes/upload.php} قرار دارد. نوع‌های مجاز شامل JPG، PNG، GIF، WebP و PDF است. کنترل‌ها شامل محدودیت حجم، MIME، پسوند، جلوگیری از پسوندهای خطرناک، اسکن محتوای HTML/SVG/Executable، بررسی محتوای فعال PDF، کنترل ابعاد تصویر و تولید نام تصادفی است.
+
+\subsection{ماژول پلن و محدودیت مصرف}
+فایل \code{backend/includes/plan-limits.php} مسئول خواندن پلن tenant و اعمال محدودیت‌ها است. محدودیت‌ها شامل تعداد سایت، تعداد agent، تعداد مکالمات ماهانه، فعال بودن پیشنهاد AI، پاسخ خودکار AI و دانش هستند. تابع \code{ensure\_monthly\_conversation\_limit} قبل از ایجاد مکالمه جدید، مصرف ماهانه tenant را بررسی می‌کند.
+
+\subsection{ماژول دانش و AI}
+AI فعال پروژه یک موتور محلی، قابل کنترل و مبتنی بر دانش ذخیره‌شده است. این موتور در مسیرهای \code{backend/includes/ai-answer-engine.php}، \code{backend/includes/ai-crawler.php} و \code{backend/includes/ai-helpers.php} پیاده‌سازی شده است.
+
+منابع دانش:
+\begin{itemize}
+  \item دانش دستی در جدول \code{knowledge\_sources}.
+  \item صفحات crawl شده در جدول \code{ai\_pages}.
+  \item chunkهای متنی در جدول \code{ai\_content\_chunks}.
+  \item terms استخراج‌شده در جدول \code{ai\_terms}.
+  \item سوالات قالبی تولیدشده در جدول \code{ai\_generated\_questions}.
+\end{itemize}
+
+این طراحی وابستگی عملیاتی پاسخ‌دهی روزمره به سرویس خارجی را کاهش می‌دهد و پاسخ‌ها را به محتوای تاییدشده مشتری نزدیک نگه می‌دارد.
+
+\section{Workflow سیستم}
+\subsection{جریان نصب و راه‌اندازی مشتری}
+\begin{enumerate}
+  \item سوپرادمین یک مشتری جدید ایجاد می‌کند.
+  \item برای مشتری یک tenant، یک سایت اولیه، یک \code{site\_key} و یک کاربر customer admin ساخته می‌شود.
+  \item مشتری کد نصب ویجت را دریافت می‌کند.
+  \item مشتری ویجت را روی سایت خود نصب می‌کند.
+  \item مشتری تنظیمات برند، رنگ، پیام خوشامد و حالت AI را تعیین می‌کند.
+  \item مشتری دانش دستی اضافه می‌کند یا منابع crawl را تعریف می‌کند.
+  \item agentها مکالمات ورودی را در پنل پاسخ می‌دهند.
+\end{enumerate}
+
+\subsection{جریان مکالمه بازدیدکننده}
+\begin{enumerate}
+  \item ویجت با \code{site\_key} بارگذاری می‌شود.
+  \item ویجت از \code{widget/config.php} تنظیمات عمومی سایت و وضعیت آنلاین پشتیبانی را می‌گیرد.
+  \item بازدیدکننده نام، ایمیل یا شماره تماس و پیام اولیه را وارد می‌کند.
+  \item \code{visitor-start.php} بازدیدکننده را ثبت یا به‌روزرسانی می‌کند.
+  \item \code{conversation-start.php} مکالمه فعال را برمی‌گرداند یا مکالمه جدید می‌سازد.
+  \item پیام visitor در \code{message-send.php} ذخیره می‌شود.
+  \item اگر پشتیبانی آنلاین نباشد و AI مجاز باشد، ویجت \code{ai-reply.php} را فراخوانی می‌کند.
+  \item agentها مکالمه را در پنل می‌بینند و می‌توانند ادامه دهند.
+\end{enumerate}
+
+\subsection{جریان پیشنهاد پاسخ AI برای اپراتور}
+\begin{enumerate}
+  \item agent یا customer admin مکالمه را باز می‌کند.
+  \item endpoint \code{ai-suggestion-generate.php} آخرین پیام visitor را پیدا می‌کند.
+  \item سیستم فعال بودن ویژگی \code{ai\_suggestions\_enabled} در پلن را بررسی می‌کند.
+  \item تابع \code{ai\_find\_best\_answer} روی دانش سایت اجرا می‌شود.
+  \item اگر امتیاز از \code{min\_suggestion\_score} بیشتر باشد، پیشنهاد در \code{ai\_suggestions} ذخیره می‌شود.
+  \item نتیجه در \code{ai\_answer\_logs} ثبت می‌شود.
+  \item اگر امتیاز کافی نباشد، سوال در \code{ai\_unanswered\_questions} ذخیره می‌شود.
+\end{enumerate}
+
+\subsection{جریان پاسخ خودکار AI}
+\begin{enumerate}
+  \item ویجت پس از ارسال پیام visitor، \code{widget/ai-reply.php} را با \code{message\_id} فراخوانی می‌کند.
+  \item endpoint اعتبار \code{site\_key}، visitor، conversation، message، وضعیت سایت، وضعیت tenant و origin را بررسی می‌کند.
+  \item اگر conversation بسته باشد، AI خاموش باشد، assistant غیرفعال باشد یا پشتیبانی آنلاین باشد، پاسخ خودکار انجام نمی‌شود.
+  \item از ارسال پاسخ تکراری برای یک پیام جلوگیری می‌شود.
+  \item موتور پاسخ‌دهی محلی بهترین پاسخ را پیدا و confidence را محاسبه می‌کند.
+  \item اگر confidence از \code{min\_auto\_reply\_score} بالاتر باشد، پیام با \code{sender\_type = ai} درج می‌شود.
+  \item در غیر این صورت fallback message ارسال و سوال برای بررسی بعدی ذخیره می‌شود.
+\end{enumerate}
+
+\section{موتور پاسخ‌دهی هوشمند}
+\subsection{Pipeline فنی}
+تابع اصلی پاسخ‌دهی \code{ai\_find\_best\_answer} است. این تابع مراحل زیر را اجرا می‌کند:
+\begin{enumerate}
+  \item نرمال‌سازی متن سوال با تبدیل حروف عربی به فارسی و حذف فاصله‌های زائد.
+  \item استخراج tokenهای معنادار و حذف stop wordهای فارسی و انگلیسی.
+  \item تشخیص intent و category با قواعد کلیدواژه‌ای مانند pricing، contact، appointment، shipping و service.
+  \item جست‌وجو در دانش دستی، سوالات تولیدشده و chunkهای crawl شده.
+  \item محاسبه امتیاز تطابق بر اساس نسبت tokenهای پیدا شده، وزن طول token، تطابق تقریبی سوال و boostهای منبع.
+  \item اعمال boost برای دانش دستی، FAQ، intent/category مشابه، termهای استخراج‌شده و importance score.
+  \item انتخاب بهترین candidate و ساخت پاسخ استخراجی کوتاه از متن منبع.
+  \item برگرداندن confidence، answer، sources و best candidates.
+\end{enumerate}
+
+\subsection{چرایی انتخاب رویکرد استخراجی}
+در نسخه فعلی، موتور فعال بیشتر محلی و استخراجی است؛ یعنی به‌جای تولید آزاد متن، پاسخ را از منابع دانش مشتری استخراج می‌کند. این تصمیم برای سامانه پشتیبانی مزیت دارد، چون:
+\begin{itemize}
+  \item پاسخ‌ها به محتوای تاییدشده مشتری محدود می‌شوند.
+  \item ریسک hallucination کاهش می‌یابد.
+  \item قابلیت توضیح‌پذیری بیشتر است، چون source و score ذخیره می‌شود.
+  \item هزینه عملیاتی و وابستگی به API خارجی کمتر می‌شود.
+  \item سوالات کم‌اعتماد به‌جای پاسخ اشتباه، وارد صف بازبینی می‌شوند.
+\end{itemize}
+
+\subsection{Crawler و آماده‌سازی دانش}
+خزشگر سایت در \code{backend/includes/ai-crawler.php} پیاده‌سازی شده و از منابع \code{url}، \code{path\_prefix} و \code{sitemap} پشتیبانی می‌کند. crawler صفحات مجاز دامنه مشتری را دریافت می‌کند، عنوان، meta description، H1، متن خوانا و لینک‌ها را استخراج می‌کند، متن را chunk می‌کند، term استخراج می‌کند و از هر chunk چند سوال قالبی می‌سازد.
+
+خروجی‌های اصلی crawler:
+\begin{itemize}
+  \item \code{ai\_pages}: متن پاک‌سازی‌شده و metadata هر صفحه.
+  \item \code{ai\_content\_chunks}: قطعات قابل جست‌وجوی متن.
+  \item \code{ai\_terms}: کلیدواژه‌ها و امتیاز اهمیت.
+  \item \code{ai\_generated\_questions}: سوالات احتمالی برای matching بهتر.
+  \item \code{ai\_crawl\_runs}: وضعیت و آمار اجرای crawl.
+\end{itemize}
+
+\section{ساختار پایگاه داده}
+فایل migration موجود در مخزن برای جداول AI در مسیر \code{backend/database/migrations/2026\_07\_07\_ai\_knowledge\_tables.sql} قرار دارد. schema کامل جداول پایه مانند \code{users}، \code{tenants}، \code{sites}، \code{conversations} و \code{messages} در مخزن فعلی دیده نمی‌شود، اما از APIها قابل استنباط است.
+
+\subsection{جداول اصلی استنباط‌شده}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4cm} p{10.5cm}}
+\toprule
+\textbf{جدول} & \textbf{نقش در سیستم} \\
+\midrule
+\code{plans} & تعریف پلن‌ها، محدودیت سایت، agent، مکالمه ماهانه و قابلیت‌های AI. \\
+\code{tenants} & حساب مشتریان و اتصال به پلن. \\
+\code{sites} & سایت‌های مشتری، دامنه، site key، تنظیمات برند و وضعیت AI. \\
+\code{users} & کاربران پنل با نقش‌های super admin، customer admin و agent. \\
+\code{agent\_site\_access} & نگاشت دسترسی agentها به سایت‌ها. \\
+\code{visitors} & بازدیدکنندگان عمومی سایت مشتری. \\
+\code{conversations} & مکالمات بازدیدکنندگان با سایت. \\
+\code{messages} & پیام‌های visitor، agent و AI. \\
+\code{message\_attachments} & فایل‌های پیوست مرتبط با پیام‌ها. \\
+\code{quick\_replies} & پاسخ‌های آماده برای تیم پشتیبانی. \\
+\code{knowledge\_sources} & دانش دستی و curated مشتری. \\
+\code{ai\_suggestions} & پیشنهادهای AI برای agent. \\
+\code{api\_rate\_limits} & ذخیره داده‌های rate limiting. \\
+\code{announcements} & اعلان‌های پلتفرم. \\
+\bottomrule
+\end{longtable}
+
+\subsection{جداول AI موجود در migration}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4.2cm} p{10.3cm}}
+\toprule
+\textbf{جدول} & \textbf{شرح} \\
+\midrule
+\code{ai\_site\_settings} & تنظیمات AI هر سایت شامل فعال بودن assistant، auto reply، crawl، thresholdها و fallback. \\
+\code{ai\_crawl\_sources} & منابع crawl از نوع URL، path prefix یا sitemap. \\
+\code{ai\_crawl\_runs} & وضعیت اجرای crawl، تعداد صفحات موفق/ناموفق، chunkها، terms و سوالات تولیدشده. \\
+\code{ai\_pages} & صفحات crawl شده، متن پاک‌شده، عنوان، heading، hash محتوا و وضعیت crawl. \\
+\code{ai\_content\_chunks} & قطعات متنی قابل جست‌وجو، category، intent، keywords و importance score. \\
+\code{ai\_terms} & termهای استخراج‌شده از chunkها برای boost در matching. \\
+\code{ai\_generated\_questions} & سوالات قالبی تولیدشده از محتوا برای بهبود تطابق سوال visitor. \\
+\code{ai\_unanswered\_questions} & سوالات کم‌اعتماد یا بی‌پاسخ برای بازبینی و بهبود دانش. \\
+\code{ai\_answer\_logs} & لاگ همه تلاش‌های AI شامل confidence، منابع، متن پاسخ و reply mode. \\
+\bottomrule
+\end{longtable}
+
+\section{API و گروه Endpointها}
+\subsection{گروه Auth}
+\begin{itemize}
+  \item \code{login.php}: ورود و صدور JWT.
+  \item \code{me.php}: دریافت کاربر جاری.
+  \item \code{change-password.php}: تغییر رمز و افزایش \code{token\_version}.
+  \item \code{logout-all.php}: باطل‌سازی توکن‌های قبلی.
+\end{itemize}
+
+\subsection{گروه Widget}
+\begin{itemize}
+  \item \code{config.php}: دریافت تنظیمات عمومی ویجت و وضعیت پشتیبانی.
+  \item \code{visitor-start.php}: ایجاد یا به‌روزرسانی visitor.
+  \item \code{conversation-start.php}: ایجاد یا بازیابی conversation با کنترل محدودیت ماهانه.
+  \item \code{message-send.php}: ثبت پیام visitor.
+  \item \code{attachment-send.php}: ثبت پیام همراه فایل.
+  \item \code{messages-list.php}: دریافت پیام‌ها و پیوست‌ها.
+  \item \code{typing-status.php}: دریافت وضعیت typing اپراتور.
+  \item \code{ai-reply.php}: پاسخ خودکار AI در شرایط مجاز.
+\end{itemize}
+
+\subsection{گروه Agent}
+این گروه برای اپراتورها و ادمین مشتری استفاده می‌شود و شامل لیست مکالمات، جزئیات مکالمه، ارسال پیام، ارسال فایل، assignment، تغییر وضعیت، بستن مکالمه، presence، typing، quick replies و چرخه پیشنهاد AI است.
+
+\subsection{گروه Customer Admin}
+این گروه مدیریت عملیاتی مشتری را پوشش می‌دهد: سایت‌ها، تنظیمات ویجت، تیم، پلن، گزارش‌ها، quick replies، دانش دستی، تنظیمات AI، منابع crawl، اجرای crawl، سوالات تولیدشده، سوالات بی‌پاسخ و اعلان‌ها.
+
+\subsection{گروه Super Admin}
+این گروه کنترل پلتفرم را پوشش می‌دهد: dashboard، مشتریان، پلن‌ها، سایت‌ها، وضعیت کاربران، reset رمز، اعلان‌ها و آمار مانیتورینگ AI.
+
+\section{Design Patternها و تصمیم‌های معماری}
+\subsection{Endpoint-per-file}
+هر API در یک فایل مستقل PHP قرار دارد. این الگو پیچیدگی routing را کاهش داده و برای ساخت سریع MVP مناسب است. در مقابل، برای رشد آینده بهتر است مستندسازی endpointها و استانداردسازی includeها جدی گرفته شود.
+
+\subsection{Shared Includes}
+منطق مشترک به‌جای تکرار در endpointها، در فایل‌های \code{backend/includes} قرار گرفته است. نمونه‌ها شامل \code{auth.php}، \code{response.php}، \code{rate-limit.php}، \code{upload.php}، \code{site-access.php} و \code{plan-limits.php} هستند. این الگو نوعی \en{Shared Kernel} سبک در بک‌اند ایجاد می‌کند.
+
+\subsection{Repository/Service سبک در Frontend}
+در پنل Next.js، فایل \code{frontend/lib/api.ts} نقش لایه ارتباط مرکزی با API را دارد. این فایل token را از \en{LocalStorage} می‌خواند، header احراز هویت را اضافه می‌کند، JSON response را parse می‌کند و در خطای 401 کاربر را به login هدایت می‌کند.
+
+\subsection{Policy-based Access}
+دسترسی‌ها بر اساس ترکیب نقش، tenant، site و plan اعمال می‌شوند. این تصمیم برای SaaS چندمستاجری ضروری است، چون فقط احراز هویت کافی نیست و هر درخواست باید نسبت به مرز tenant و site بررسی شود.
+
+\subsection{Knowledge-grounded AI}
+AI به‌صورت مستقل از جریان انسانی طراحی نشده است. پاسخ AI بر اساس دانش داخلی، score، threshold، log و unanswered queue کنترل می‌شود. این الگو باعث می‌شود AI نقش کمک‌کننده و قابل نظارت داشته باشد.
+
+\section{امنیت و کنترل سوءاستفاده}
+کنترل‌های امنیتی فعلی شامل موارد زیر است:
+\begin{itemize}
+  \item JWT برای APIهای پنل.
+  \item role-based access با \code{require\_role}.
+  \item بررسی فعال بودن user و tenant.
+  \item token revocation با \code{token\_version}.
+  \item site access برای جلوگیری از دسترسی بین مستاجران.
+  \item CORS جداگانه برای پنل و ویجت.
+  \item origin validation برای ویجت بر اساس دامنه سایت و تنظیمات مجاز.
+  \item rate limiting برای login و endpointهای عمومی حساس.
+  \item security headers شامل \en{nosniff}، frame deny، referrer policy، permissions policy و CSP برای APIها.
+  \item validation سخت‌گیرانه فایل‌های آپلودی.
+  \item پنهان‌سازی خطاهای 500 در محیط production از طریق response handler.
+\end{itemize}
+
+\subsection{نکات امنیتی نیازمند بازبینی قبل از تولید}
+\begin{itemize}
+  \item در crawler فعلی، SSL verification در fetch غیرفعال شده است؛ برای production باید فعال یا با سیاست مشخص کنترل شود.
+  \item مقادیر \code{JWT\_SECRET} و CORS در production باید حتما جایگزین مقادیر نمونه شوند.
+  \item لازم است endpointهای billing-sensitive و plan-sensitive قبل از عرضه تجاری audit شوند.
+  \item اجرای crawlهای بزرگ بهتر است به job queue منتقل شود تا timeout و فشار HTTP request کاهش یابد.
+\end{itemize}
+
+\section{Git Flow و مدیریت نسخه}
+در مخزن فعلی سند رسمی Git Flow دیده نمی‌شود. پیشنهاد فنی برای ادامه توسعه به شکل زیر است:
+\begin{itemize}
+  \item شاخه \code{main}: نسخه پایدار و قابل ارائه.
+  \item شاخه \code{develop}: ادغام قابلیت‌های آماده تست.
+  \item شاخه‌های \code{feature/*}: توسعه قابلیت‌های جدید مانند billing، تست خودکار یا queue.
+  \item شاخه‌های \code{hotfix/*}: اصلاح فوری خطاهای production.
+  \item هر merge به \code{main} باید با شماره نسخه، changelog کوتاه و تست smoke همراه باشد.
+\end{itemize}
+
+نسخه‌گذاری پیشنهادی: \en{Semantic Versioning} با قالب \code{MAJOR.MINOR.PATCH}. برای مثال نسخه اولیه قابل ارائه می‌تواند \code{0.1.0} باشد و نسخه‌های پایدار تجاری از \code{1.0.0} شروع شوند.
+
+\section{کیفیت، تست و پایش}
+در فایل‌های بررسی‌شده، ساختار تست خودکار کامل مشاهده نمی‌شود. با توجه به حساسیت محصول، تست‌های زیر باید در اولویت قرار بگیرند:
+\begin{itemize}
+  \item تست login، token revocation و نقش‌ها.
+  \item تست site access و جلوگیری از IDOR بین tenantها.
+  \item تست شروع visitor و conversation از ویجت.
+  \item تست محدودیت مکالمه ماهانه، محدودیت agent و محدودیت سایت.
+  \item تست ارسال فایل‌های مجاز و رد فایل‌های خطرناک.
+  \item تست AI suggestion و auto reply با thresholdهای مختلف.
+  \item تست unanswered loop و افزودن سوال به knowledge.
+\end{itemize}
+
+برای پایش production پیشنهاد می‌شود logging ساختاریافته، error tracking، health check، backup زمان‌بندی‌شده دیتابیس، پایش فضای upload و مانیتورینگ نرخ خطاهای API اضافه شود.
+
+\section{محدودیت‌های فعلی و ریسک‌های فنی}
+\begin{longtable}{>{\raggedleft\arraybackslash}p{4cm} p{10.5cm}}
+\toprule
+\textbf{موضوع} & \textbf{شرح و پیشنهاد} \\
+\midrule
+Schema پایه & migration کامل جداول اصلی در مخزن فعلی دیده نمی‌شود. برای ارائه و استقرار باید schema پایه کامل بسته‌بندی شود. \\
+AI مولد & جریان فعال AI بیشتر استخراجی و rule-based است. این موضوع مزیت کنترل‌پذیری دارد، اما نباید به عنوان LLM کامل معرفی شود مگر endpoint مولد فعال و مستند شود. \\
+Crawler & crawler هم‌اکنون synchronous است و در crawl بزرگ ممکن است timeout شود. پیشنهاد: job queue و worker. \\
+SSL در crawler & SSL verification غیرفعال است. برای production باید بازبینی شود. \\
+Router مرکزی & بک‌اند router مرکزی ندارد. در رشد پروژه، استانداردسازی endpointها و مستندسازی API اهمیت بیشتری پیدا می‌کند. \\
+تست خودکار & پوشش تست رسمی در مخزن قابل مشاهده نیست. برای بلوغ فنی باید تست‌های حیاتی اضافه شوند. \\
+Billing & ساختار پلن وجود دارد، اما پرداخت و billing self-service در نسخه فعلی دیده نمی‌شود. \\
+\bottomrule
+\end{longtable}
+
+\section{جمع‌بندی فنی}
+پروژه \en{AI Chat SaaS} از نظر فنی یک MVP پیشرفته و قابل نمایش برای پلتفرم پشتیبانی چندمستاجری است. سیستم دارای سه لایه اصلی بک‌اند، پنل و ویجت است و جریان‌های مهم SaaS شامل مشتری، سایت، کاربر، پلن، مکالمه، گزارش، دانش، AI، فایل پیوست و اعلان را پوشش می‌دهد.
+
+ارزش فنی اصلی پروژه در ترکیب سه قابلیت است: پشتیبانی انسانی، ویجت قابل نصب روی سایت مشتری و AI کنترل‌شده مبتنی بر دانش داخلی. موتور پاسخ‌دهی فعلی به‌صورت محلی و استخراجی طراحی شده و با ذخیره source، confidence و unanswered questions قابلیت توضیح‌پذیری و بهبود تدریجی دارد.
+
+برای ارائه به پارک علم و فناوری، نقاط قابل تاکید عبارت‌اند از:
+\begin{itemize}
+  \item معماری چندمستاجری و جداسازی tenant/site.
+  \item چرخه کامل پشتیبانی انسانی و handoff.
+  \item موتور دانش اختصاصی شامل crawler، chunking، term extraction، question generation و scoring.
+  \item کنترل plan، role، site access، CORS، rate limit و upload security.
+  \item مسیر روشن برای تکامل محصول شامل queue، تست خودکار، billing، monitoring و API documentation.
+\end{itemize}
+
+\end{document}
