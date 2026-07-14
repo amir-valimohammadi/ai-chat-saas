@@ -139,6 +139,12 @@ export default function AppShell({
                             description: "مدیریت پلن‌ها",
                         },
                         {
+                            href: "/super-admin/ai-monitoring",
+                            label: "نظارت AI",
+                            icon: "AI",
+                            description: "مصرف و کیفیت پاسخ‌ها",
+                        },
+                        {
                             href: "/super-admin/announcements",
                             label: "اعلان‌ها",
                             icon: "🔔",
@@ -299,14 +305,20 @@ export default function AppShell({
                     <span className="role-dot" />
                     <div>
                         <strong>{roleLabels[user.role]}</strong>
-                        <p>{user.role === "super_admin" ? "مدیریت کل سیستم" : "مدیریت پشتیبانی"}</p>
+                        <p>
+                            {user.role === "super_admin"
+                                ? "مدیریت کل سیستم"
+                                : "مدیریت پشتیبانی"}
+                        </p>
                     </div>
                 </div>
 
                 <nav className="sidebar-nav sidebar-nav-pro">
                     {navGroups.map((group) => (
                         <div className="sidebar-section" key={group.title}>
-                            <div className="sidebar-section-title">{group.title}</div>
+                            <div className="sidebar-section-title">
+                                {group.title}
+                            </div>
 
                             <div className="sidebar-section-links">
                                 {group.links.map((link) => {
@@ -316,17 +328,29 @@ export default function AppShell({
                                         <Link
                                             key={link.href}
                                             href={link.href}
-                                            className={`sidebar-link ${active ? "active" : ""}`}
-                                            aria-current={active ? "page" : undefined}
+                                            className={`sidebar-link ${
+                                                active ? "active" : ""
+                                            }`}
+                                            aria-current={
+                                                active ? "page" : undefined
+                                            }
                                         >
-                                            <span className="sidebar-link-icon">{link.icon}</span>
+                                            <span className="sidebar-link-icon">
+                                                {link.icon}
+                                            </span>
 
                                             <span className="sidebar-link-content">
                                                 <strong>{link.label}</strong>
-                                                {link.description && <small>{link.description}</small>}
+                                                {link.description && (
+                                                    <small>
+                                                        {link.description}
+                                                    </small>
+                                                )}
                                             </span>
 
-                                            <span className="sidebar-link-arrow">‹</span>
+                                            <span className="sidebar-link-arrow">
+                                                ‹
+                                            </span>
                                         </Link>
                                     );
                                 })}
@@ -348,7 +372,10 @@ export default function AppShell({
                         </div>
                     </div>
 
-                    <button className="btn secondary shell-logout-btn" onClick={handleLogout}>
+                    <button
+                        className="btn secondary shell-logout-btn"
+                        onClick={handleLogout}
+                    >
                         خروج از حساب
                     </button>
                 </div>
@@ -357,12 +384,20 @@ export default function AppShell({
             <main className="main-area main-area-pro">
                 <header className="page-header page-header-pro">
                     <div>
-                        {kicker && <div className="page-kicker">{kicker}</div>}
+                        {kicker && (
+                            <div className="page-kicker">{kicker}</div>
+                        )}
                         <h1 className="page-title">{title}</h1>
-                        {description && <p className="muted page-description">{description}</p>}
+                        {description && (
+                            <p className="muted page-description">
+                                {description}
+                            </p>
+                        )}
                     </div>
 
-                    {actions && <div className="page-actions">{actions}</div>}
+                    {actions && (
+                        <div className="page-actions">{actions}</div>
+                    )}
                 </header>
 
                 <div className="page-content-pro">{children}</div>
