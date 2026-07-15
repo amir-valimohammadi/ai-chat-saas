@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../includes/plan-limits.php';
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/subscription.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -89,6 +90,8 @@ try {
             'message' => 'Conversation not found'
         ], 404);
     }
+
+    require_active_subscription($pdo, (int) $conversation['tenant_id'], 'ai_auto_reply');
 
     validate_widget_origin_or_fail($conversation['domain']);
 

@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
+require_once __DIR__ . '/../../includes/subscription.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -66,6 +67,7 @@ try {
     }
 
     $siteId = (int) $conversation['site_id'];
+    require_active_subscription($pdo, (int) $conversation['tenant_id'], 'ai_suggestion');
     require_site_access($pdo, $user, $siteId);
 
     require_site_plan_feature(

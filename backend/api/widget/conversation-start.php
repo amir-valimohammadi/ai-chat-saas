@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/subscription.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -100,6 +101,10 @@ try {
     ]);
 
     $site = $siteStmt->fetch();
+
+    if ($site) {
+        require_active_subscription($pdo, (int) $site['tenant_id'], 'conversation_start');
+    }
 
     if (!$site) {
         json_response([

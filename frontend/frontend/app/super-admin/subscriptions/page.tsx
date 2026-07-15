@@ -1,0 +1,15 @@
+"use client";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import AppShell from "@/components/layout/AppShell";
+import { apiRequest, getAuthUser } from "@/lib/api";
+
+type Item={id:number;tenant_name:string;owner_email:string;plan_name:string;status:string;billing_cycle:string;starts_at:string;ends_at:string;days_remaining:number;price:number;currency:string};
+const labels:Record<string,string>={trial:"آزمایشی",active:"فعال",past_due:"سررسید گذشته",expired:"منقضی",cancelled:"لغوشده",suspended:"تعلیق‌شده"};
+export default function SubscriptionsPage(){const router=useRouter();const [items,setItems]=useState<Item[]>([]);const [summary,setSummary]=useState<Record<string,number>>({});const [search,setSearch]=useState("");const [status,setStatus]=useState("");const [loading,setLoading]=useState(true);const [error,setError]=useState("");
+async function load(){setLoading(true);setError("");try{const q=new URLSearchParams();if(search)q.set("search",search);if(status)q.set("status",status);const r=await apiRequest(`/super-admin/subscriptions-list.php?${q}`);setItems(r.subscriptions);setSummary(r.summary);}catch(e){setError(e instanceof Error?e.message:"خطا در دریافت اشتراک‌ها");}finally{setLoading(false)}}
+useEffect(()=>{const u=getAuthUser();if(!u||u.role!=="super_admin"){router.push("/dashboard");return}load()},[router]);
+return <AppShell title="مدیریت اشتراک‌ها" kicker="Subscriptions" description="اشتراک، انقضا، تمدید و پرداخت دستی مشتریان"><div className="sa-subscriptions"><div className="subscription-summary">{Object.entries(labels).map(([k,v])=><div className={`subscription-stat is-${k}`} key={k}><span>{v}</span><strong>{summary[k]||0}</strong></div>)}</div><form className="subscription-toolbar" onSubmit={e=>{e.preventDefault();load()}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="نام یا ایمیل مشتری"/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">همه وضعیت‌ها</option>{Object.entries(labels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><button className="btn primary">جست‌وجو</button></form>{error&&<div className="error">{error}</div>}{loading?<p className="muted">در حال بارگذاری...</p>:<div className="subscription-table-wrap"><table className="subscription-table"><thead><tr><th>مشتری</th><th>پلن</th><th>وضعیت</th><th>پایان</th><th>باقی‌مانده</th><th>مبلغ</th><th></th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td><strong>{x.tenant_name}</strong><small>{x.owner_email}</small></td><td>{x.plan_name}</td><td><span className={`subscription-badge is-${x.status}`}>{labels[x.status]||x.status}</span></td><td>{date(x.ends_at)}</td><td>{x.days_remaining.toLocaleString("fa-IR")} روز</td><td>{x.price.toLocaleString("fa-IR")} {x.currency}</td><td><Link className="btn secondary" href={`/super-admin/subscriptions/${x.id}`}>جزئیات</Link></td></tr>)}</tbody></table></div>}</div></AppShell>}
+function date(v:string){return new Intl.DateTimeFormat("fa-IR",{dateStyle:"medium"}).format(new Date(v.replace(" ","T")))}
+

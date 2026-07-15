@@ -92,6 +92,7 @@ try {
             max_sites,
             max_agents,
             max_monthly_conversations,
+            price_monthly,
             is_active
         FROM plans
         WHERE id = :plan_id
@@ -134,6 +135,16 @@ try {
         $updateStmt->execute([
             ':plan_id' => $planId,
             ':tenant_id' => $tenantId,
+        ]);
+
+        $pdo->prepare("\n            UPDATE tenant_subscriptions\n+            SET status = 'cancelled', updated_at = NOW()\n+            WHERE tenant_id = :tenant_id\n+              AND status IN ('trial','active','past_due','suspended')\n+        ")->execute([':tenant_id' => $tenantId]);
+
+        $subscriptionStmt = $pdo->prepare("\n            INSERT INTO tenant_subscriptions (\n+                tenant_id, plan_id, status, billing_cycle, starts_at, ends_at,\n+                auto_renew, price, currency, created_by\n+            ) VALUES (\n+                :tenant_id, :plan_id, 'active', 'manual', NOW(),\n+                DATE_ADD(NOW(), INTERVAL 1 YEAR), 0, :price, 'IRR', :created_by\n+            )\n+        ");
+        $subscriptionStmt->execute([
+            ':tenant_id' => $tenantId,
+            ':plan_id' => $planId,
+            ':price' => (float) $plan['price_monthly'],
+            ':created_by' => $user['id'],
         ]);
 
         admin_audit_log(

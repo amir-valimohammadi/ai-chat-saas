@@ -140,6 +140,7 @@ export default function SubscriptionPage() {
         >
             <div className="subscription-page">
                 {error && <div className="error">{error}</div>}
+                <SubscriptionLifecycle />
 
                 {loading || !data ? (
                     <section className="subscription-card">
@@ -219,7 +220,7 @@ export default function SubscriptionPage() {
 
                                 <div className="subscription-feature-grid">
                                     <FeatureCard
-                                        title="Knowledge Base"
+                                        title="پایگاه دانش"
                                         description={`آیتم‌های ثبت‌شده: ${Number(
                                             data.usage.knowledge_items.used
                                         ).toLocaleString("fa-IR")}`}
@@ -229,7 +230,7 @@ export default function SubscriptionPage() {
                                         }
                                     />
                                     <FeatureCard
-                                        title="AI Suggestion"
+                                        title="پیشنهاد هوشمند"
                                         description={`پیشنهادهای ماه: ${Number(
                                             data.usage.ai_suggestions_this_month
                                                 .used
@@ -240,7 +241,7 @@ export default function SubscriptionPage() {
                                         }
                                     />
                                     <FeatureCard
-                                        title="AI Auto Reply"
+                                        title="پاسخ خودکار AI"
                                         description={`پاسخ‌های خودکار ماه: ${Number(
                                             data.usage.ai_auto_replies_this_month
                                                 .used
@@ -267,7 +268,7 @@ export default function SubscriptionPage() {
                                 />
                                 <MiniTile
                                     label="وضعیت حساب"
-                                    value={data.customer.status}
+                                    value={customerStatusLabel(data.customer.status)}
                                 />
                                 <MiniTile
                                     label="شروع بازه"
@@ -411,4 +412,73 @@ function formatDate(value: string) {
         hour: "2-digit",
         minute: "2-digit",
     }).format(date);
+}
+
+type SubscriptionOverviewData = {
+    subscription: null | {
+        status: string;
+        plan_name: string;
+        starts_at: string;
+        ends_at: string;
+        trial_ends_at: string | null;
+        days_remaining: number;
+        billing_cycle: string;
+        price: number;
+        currency: string;
+        auto_renew: boolean;
+    };
+    payments: Array<{
+        id: number; amount: string | number; currency: string; status: string;
+        payment_method: string; reference_number: string | null; paid_at: string | null; created_at: string;
+    }>;
+    history: Array<{id:number;plan_name:string;status:string;starts_at:string;ends_at:string}>;
+};
+
+function SubscriptionLifecycle() {
+    const [overview, setOverview] = useState<SubscriptionOverviewData | null>(null);
+    useEffect(() => {
+        apiRequest("/customer/subscription-overview.php")
+            .then(setOverview)
+            .catch(() => setOverview({ subscription: null, payments: [], history: [] }));
+    }, []);
+    if (!overview) return <section className="subscription-card"><p className="muted">در حال دریافت وضعیت اشتراک...</p></section>;
+    if (!overview.subscription) return <section className="subscription-card subscription-alert is-danger"><h2>اشتراک ثبت نشده است</h2><p>برای انجام عملیات جدید با مدیر سیستم تماس بگیرید. اطلاعات قبلی شما محفوظ است.</p></section>;
+    const s=overview.subscription; const warning=s.days_remaining<=30;
+    return <>
+        {warning && <section className="subscription-card subscription-alert is-warning"><strong>{s.days_remaining===0?"اشتراک شما منقضی شده است.":`تنها ${s.days_remaining.toLocaleString("fa-IR")} روز تا پایان اشتراک باقی مانده است.`}</strong><p>برای جلوگیری از توقف عملیات جدید، تمدید را با مدیر سیستم هماهنگ کنید.</p></section>}
+        <section className="subscription-card"><Header title="وضعیت اشتراک" description="بازه اعتبار و مشخصات قرارداد فعلی" badge={subscriptionStatusLabel(s.status)}/><div className="subscription-mini-grid"><MiniTile label="تاریخ شروع" value={formatDate(s.starts_at)}/><MiniTile label="تاریخ پایان" value={formatDate(s.ends_at)}/><MiniTile label="روزهای باقی‌مانده" value={s.days_remaining.toLocaleString("fa-IR")}/><MiniTile label="دوره پرداخت" value={billingCycleLabel(s.billing_cycle)}/><MiniTile label="مبلغ" value={formatMoney(Number(s.price), s.currency)}/><MiniTile label="تمدید خودکار" value={s.auto_renew?"فعال":"غیرفعال"}/></div></section>
+        <section className="subscription-card"><Header title="آخرین پرداخت‌ها" description="سوابق پرداخت دستی ثبت‌شده"/><div className="subscription-payment-list">{overview.payments.length===0?<p className="muted">پرداختی ثبت نشده است.</p>:overview.payments.slice(0,8).map(p=><div className="subscription-payment-row" key={p.id}><strong>{Number(p.amount).toLocaleString("fa-IR")} {p.currency}</strong><span className={`subscription-record-status is-${p.status}`}>{paymentStatusLabel(p.status)}</span><span>{p.reference_number||"بدون شماره پیگیری"}</span><time>{formatDate(p.paid_at||p.created_at)}</time></div>)}</div></section>
+        <section className="subscription-card"><Header title="تاریخچه تمدید و پلن" description="نسخه‌های قبلی و فعلی اشتراک"/><div className="subscription-payment-list">{overview.history.map(h=><div className="subscription-payment-row" key={h.id}><strong>{h.plan_name}</strong><span className={`subscription-record-status is-${h.status}`}>{subscriptionStatusLabel(h.status)}</span><span>{formatDate(h.starts_at)}</span><time>{formatDate(h.ends_at)}</time></div>)}</div></section>
+    </>;
+}
+
+function subscriptionStatusLabel(value: string) {
+    const labels: Record<string, string> = {
+        trial: "آزمایشی", active: "فعال", past_due: "سررسید گذشته",
+        expired: "منقضی", cancelled: "لغوشده", suspended: "تعلیق‌شده",
+    };
+    return labels[value] || value;
+}
+
+function paymentStatusLabel(value: string) {
+    const labels: Record<string, string> = {
+        pending: "در انتظار", paid: "پرداخت‌شده", failed: "ناموفق",
+        refunded: "بازپرداخت‌شده", cancelled: "لغوشده",
+    };
+    return labels[value] || value;
+}
+
+function billingCycleLabel(value: string) {
+    const labels: Record<string, string> = { monthly: "ماهانه", quarterly: "سه‌ماهه", yearly: "سالانه", manual: "دستی" };
+    return labels[value] || value;
+}
+
+function customerStatusLabel(value: string) {
+    const labels: Record<string, string> = { active: "فعال", inactive: "غیرفعال", suspended: "تعلیق‌شده" };
+    return labels[value] || value;
+}
+
+function formatMoney(value: number, currency: string) {
+    const labels: Record<string, string> = { IRR: "ریال", IRT: "تومان", USD: "دلار", EUR: "یورو" };
+    return `${Number(value || 0).toLocaleString("fa-IR", { maximumFractionDigits: 2 })} ${labels[currency] || currency}`;
 }

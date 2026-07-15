@@ -132,20 +132,41 @@ export default function SuperAdminCreateCustomerPage() {
             plan_id: form.plan_id ? Number(form.plan_id) : null,
         };
 
-        try {
-            let data: any;
+        if (!form.tenant_name.trim()) {
+            setError("نام مشتری یا کسب‌وکار را وارد کن.");
+            setCreating(false);
+            return;
+        }
 
-            try {
-                data = await apiRequest("/super-admin/customer-create.php", {
-                    method: "POST",
-                    body: JSON.stringify(body),
-                });
-            } catch {
-                data = await apiRequest("/super-admin/tenant-create.php", {
-                    method: "POST",
-                    body: JSON.stringify(body),
-                });
-            }
+        if (!form.plan_id) {
+            setError("یک پلن فعال انتخاب کن.");
+            setCreating(false);
+            return;
+        }
+
+        if (!form.owner_email.trim()) {
+            setError("ایمیل مدیر مشتری را وارد کن.");
+            setCreating(false);
+            return;
+        }
+
+        if (form.owner_password.length < 8) {
+            setError("رمز عبور مدیر باید حداقل ۸ کاراکتر باشد.");
+            setCreating(false);
+            return;
+        }
+
+        if (!form.site_domain.trim()) {
+            setError("دامنه سایت را وارد کن؛ مثلاً example.com");
+            setCreating(false);
+            return;
+        }
+
+        try {
+            const data = await apiRequest("/super-admin/customer-create.php", {
+                method: "POST",
+                body: JSON.stringify(body),
+            });
 
             setResult(data);
 
@@ -264,6 +285,7 @@ export default function SuperAdminCreateCustomerPage() {
                                             updateField("tenant_name", event.target.value)
                                         }
                                         placeholder="مثلاً فروشگاه نمونه"
+                                        required
                                     />
                                 </label>
 
@@ -322,6 +344,7 @@ export default function SuperAdminCreateCustomerPage() {
                                             updateField("owner_email", event.target.value)
                                         }
                                         placeholder="owner@example.com"
+                                        required
                                     />
                                 </label>
 
@@ -347,6 +370,8 @@ export default function SuperAdminCreateCustomerPage() {
                                             updateField("owner_password", event.target.value)
                                         }
                                         placeholder="حداقل ۸ کاراکتر"
+                                        minLength={8}
+                                        required
                                     />
                                 </label>
                             </div>
@@ -382,6 +407,7 @@ export default function SuperAdminCreateCustomerPage() {
                                             updateField("site_domain", event.target.value)
                                         }
                                         placeholder="example.com"
+                                        required
                                     />
                                 </label>
                             </div>

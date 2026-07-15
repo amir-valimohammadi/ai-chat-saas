@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
+require_once __DIR__ . '/../../includes/subscription.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -53,6 +54,7 @@ $siteIds = array_values(array_unique(array_filter(
 )));
 
 $tenantId = (int) $user['tenant_id'];
+require_active_subscription($pdo, $tenantId, 'agent_create');
 
 try {
     if (count($siteIds) === 0) {

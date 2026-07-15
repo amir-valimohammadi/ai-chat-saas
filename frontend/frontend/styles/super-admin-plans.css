@@ -1,0 +1,143 @@
+/* مسیر فایل: ai-chat-saas/frontend/styles/super-admin-plans.css */
+/* استایل ایزوله مدیریت پلن‌های Super Admin */
+
+.sa-plans-page { display: grid; gap: 16px; }
+.sa-plans-header-actions { display: flex; gap: 9px; flex-wrap: wrap; }
+
+.sa-plans-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.sa-plans-summary-card {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+    padding: 15px;
+    border-radius: 20px;
+    background: #fff;
+    border: 1px solid var(--border-soft, #e2e8f0);
+    box-shadow: var(--shadow-xs, 0 6px 16px rgba(15,23,42,.04));
+}
+
+.sa-plans-summary-card.warning { background: #fffaf0; border-color: #fed7aa; }
+.sa-plans-summary-card span, .sa-plans-summary-card small { color: var(--muted, #64748b); font-size: 11.5px; }
+.sa-plans-summary-card strong { color: var(--text, #0f172a); font-size: 21px; line-height: 1.45; }
+
+.sa-plans-toolbar {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) 170px 190px auto;
+    gap: 9px;
+    align-items: center;
+    padding: 11px;
+    border-radius: 18px;
+    background: #fff;
+    border: 1px solid var(--border-soft, #e2e8f0);
+    box-shadow: var(--shadow-xs, 0 6px 16px rgba(15,23,42,.04));
+}
+
+.sa-plans-toolbar > input {
+    width: 100%; height: 42px; padding: 0 12px;
+    border-radius: 13px; border: 1px solid var(--border-soft, #e2e8f0);
+    background: #f8fafc; color: var(--text, #0f172a); outline: none; font: inherit;
+}
+
+.sa-plans-toolbar > input:focus { border-color: rgba(37,99,235,.55); box-shadow: 0 0 0 3px rgba(37,99,235,.08); }
+.sa-plans-toolbar > span { justify-self: end; padding: 7px 10px; border-radius: 999px; color: var(--primary-dark, #1d4ed8); background: var(--primary-soft, #eff6ff); font-size: 11.5px; font-weight: 900; white-space: nowrap; }
+
+.sa-plans-workspace { display: grid; grid-template-columns: minmax(320px, 390px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.sa-plans-editor-card, .sa-plans-catalog { border-radius: 21px; background: #fff; border: 1px solid var(--border-soft, #e2e8f0); box-shadow: var(--shadow-xs, 0 6px 16px rgba(15,23,42,.04)); }
+.sa-plans-editor-card { position: sticky; top: 16px; overflow: hidden; }
+.sa-plans-editor-card > header, .sa-plans-catalog > header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 15px; border-bottom: 1px solid var(--border-soft, #e2e8f0); }
+.sa-plans-editor-card h2, .sa-plans-catalog h2 { margin: 4px 0 0; font-size: 17px; }
+.sa-plans-editor-card p, .sa-plans-catalog p { margin: 4px 0 0; color: var(--muted, #64748b); font-size: 12px; line-height: 1.8; }
+.sa-plans-editor-card small, .sa-plans-catalog small { color: var(--primary, #2563eb); font-size: 10.5px; font-weight: 950; }
+.sa-plans-editor-card > header button { width: 34px; height: 34px; border: 1px solid var(--border-soft, #e2e8f0); border-radius: 12px; background: #fff; color: #64748b; font-size: 20px; }
+.sa-plans-editor-context { margin: 12px 14px 0; padding: 11px; border-radius: 14px; color: #3730a3; background: #eef2ff; border: 1px solid #c7d2fe; font-size: 11.5px; font-weight: 800; }
+
+.sa-plans-form { display: grid; gap: 11px; padding: 14px; }
+.sa-plans-field { display: grid; gap: 6px; }
+.sa-plans-field > span { color: var(--text-soft, #334155); font-size: 11.5px; font-weight: 850; }
+.sa-plans-number-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+.sa-plans-field.wide { grid-column: 1 / -1; }
+.sa-plans-form-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 3px; }
+
+.sa-plans-toggle {
+    position: relative; display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 10px; align-items: center;
+    padding: 10px; border-radius: 14px; cursor: pointer; background: #f8fafc;
+    border: 1px solid var(--border-soft, #e2e8f0); transition: .2s ease;
+}
+.sa-plans-toggle.checked { background: #f5f7ff; border-color: rgba(79,70,229,.34); }
+.sa-plans-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.sa-plans-toggle .track { width: 38px; height: 22px; padding: 2px; display: flex; align-items: center; direction: ltr; border-radius: 999px; background: #cbd5e1; transition: .2s ease; }
+.sa-plans-toggle .track i { width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgba(15,23,42,.18); transition: .2s ease; }
+.sa-plans-toggle.checked .track { background: var(--primary, #2563eb); }
+.sa-plans-toggle.checked .track i { transform: translateX(16px); }
+.sa-plans-toggle strong { font-size: 11.5px; }
+
+.sa-plans-catalog { min-width: 0; padding-bottom: 14px; }
+.sa-plans-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 11px; padding: 14px; }
+
+.sa-plans-card {
+    min-width: 0; padding: 13px; display: grid; gap: 12px; border-radius: 18px;
+    background: #fff; border: 1px solid var(--border-soft, #e2e8f0);
+    box-shadow: 0 8px 24px rgba(15,23,42,.045); transition: .2s ease;
+}
+.sa-plans-card:hover { transform: translateY(-2px); border-color: rgba(37,99,235,.28); box-shadow: 0 14px 34px rgba(15,23,42,.08); }
+.sa-plans-card.is-inactive { background: #f8fafc; opacity: .78; }
+.sa-plans-card.is-loading { min-height: 390px; background: linear-gradient(90deg,#f8fafc 20%,#eef2ff 40%,#f8fafc 60%); background-size: 240% 100%; animation: saPlansShimmer 1.25s infinite linear; }
+
+.sa-plans-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.sa-plans-card-head small { color: #64748b; font-size: 10px; font-weight: 900; }
+.sa-plans-card-head h3 { margin: 3px 0 0; font-size: 16px; }
+.sa-plans-card-head p { min-height: 38px; margin: 3px 0 0; color: var(--muted, #64748b); font-size: 10.8px; line-height: 1.75; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sa-plans-card-head > span { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 900; }
+.sa-plans-card-head > span.active { color: #15803d; background: #dcfce7; }
+.sa-plans-card-head > span.inactive { color: #b91c1c; background: #fee2e2; }
+.sa-plans-price { font-size: 20px; }
+
+.sa-plans-stats-row, .sa-plans-limits { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.sa-plans-stats-row > div, .sa-plans-limits > div { min-width: 0; padding: 8px; display: grid; gap: 2px; border-radius: 12px; background: #f8fafc; border: 1px solid var(--border-soft, #e2e8f0); }
+.sa-plans-stats-row span, .sa-plans-limits span { color: var(--muted, #64748b); font-size: 9.8px; }
+.sa-plans-stats-row strong, .sa-plans-limits strong { font-size: 12.5px; }
+
+.sa-plans-features { display: flex; gap: 6px; flex-wrap: wrap; }
+.sa-plans-features span { padding: 5px 7px; border-radius: 999px; font-size: 9.8px; font-weight: 850; }
+.sa-plans-features .enabled { color: #166534; background: #dcfce7; }
+.sa-plans-features .disabled { color: #64748b; background: #f1f5f9; }
+.sa-plans-alert, .sa-plans-ok { padding: 9px; border-radius: 12px; font-size: 10.5px; line-height: 1.7; }
+.sa-plans-alert { color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; }
+.sa-plans-ok { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
+.sa-plans-card-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.sa-plans-card-actions .btn { min-height: 36px; padding: 0 11px; border-radius: 12px; font-size: 11px; }
+.sa-plans-empty { min-height: 300px; margin: 14px; display: grid; place-items: center; border-radius: 18px; color: var(--muted, #64748b); background: #f8fafc; border: 1px dashed #cbd5e1; }
+
+.sa-plans-modal-backdrop { position: fixed; inset: 0; z-index: 300; padding: 20px; display: grid; place-items: center; background: rgba(15,23,42,.56); backdrop-filter: blur(8px); }
+.sa-plans-modal { width: min(440px,100%); padding: 22px; border-radius: 22px; background: #fff; box-shadow: 0 30px 90px rgba(15,23,42,.28); }
+.sa-plans-modal h2 { margin: 0; font-size: 19px; }
+.sa-plans-modal p { margin: 8px 0 0; color: var(--muted, #64748b); font-size: 12.5px; line-height: 1.9; }
+.sa-plans-modal > div { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+@keyframes saPlansShimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+
+@media (max-width: 1280px) {
+    .sa-plans-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .sa-plans-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 980px) {
+    .sa-plans-toolbar { grid-template-columns: 1fr 1fr; }
+    .sa-plans-toolbar > input, .sa-plans-toolbar > span { grid-column: 1 / -1; justify-self: stretch; }
+    .sa-plans-workspace { grid-template-columns: 1fr; }
+    .sa-plans-editor-card { position: static; }
+    .sa-plans-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+
+@media (max-width: 700px) {
+    .sa-plans-summary-grid, .sa-plans-grid, .sa-plans-toolbar, .sa-plans-number-grid { grid-template-columns: 1fr; }
+    .sa-plans-field.wide { grid-column: auto; }
+    .sa-plans-stats-row, .sa-plans-limits { grid-template-columns: 1fr; }
+    .sa-plans-header-actions, .sa-plans-form-actions, .sa-plans-card-actions { width: 100%; }
+    .sa-plans-header-actions .btn, .sa-plans-form-actions .btn, .sa-plans-card-actions .btn { flex: 1; }
+}

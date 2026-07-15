@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../includes/ai-crawler.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
+require_once __DIR__ . '/../../includes/subscription.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -21,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $user = require_auth($pdo);
 require_role($user, ['customer_admin']);
+require_active_subscription($pdo, (int) $user['tenant_id'], 'crawl_start');
 
 $input = get_json_input();
 $siteId = isset($input['site_id']) ? (int) $input['site_id'] : 0;

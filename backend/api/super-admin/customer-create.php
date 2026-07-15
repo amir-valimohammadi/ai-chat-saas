@@ -83,7 +83,7 @@ if (strlen($adminPassword) < 8) {
 
 try {
     $planStmt = $pdo->prepare("
-        SELECT id, name, max_sites
+        SELECT id, name, max_sites, price_monthly
         FROM plans
         WHERE id = :id AND is_active = 1
         LIMIT 1
@@ -95,18 +95,17 @@ try {
 
 
     $plan = $planStmt->fetch();
-    if ((int) $plan['max_sites'] < 1) {
-        json_response([
-            'success' => false,
-            'message' => 'Selected plan does not allow creating a site',
-        ], 422);
-    }
-
     if (!$plan) {
         json_response([
             'success' => false,
             'message' => 'Selected plan was not found'
         ], 404);
+    }
+    if ((int) $plan['max_sites'] < 1) {
+        json_response([
+            'success' => false,
+            'message' => 'Selected plan does not allow creating a site',
+        ], 422);
     }
 
     $emailStmt = $pdo->prepare("
@@ -244,6 +243,14 @@ try {
     ]);
 
     $adminUserId = (int) $pdo->lastInsertId();
+
+    $subscriptionStmt = $pdo->prepare("\n        INSERT INTO tenant_subscriptions (\n            tenant_id, plan_id, status, billing_cycle, starts_at, ends_at,\n            auto_renew, price, currency, created_by\n        ) VALUES (\n            :tenant_id, :plan_id, 'active', 'manual', NOW(),\n            DATE_ADD(NOW(), INTERVAL 1 YEAR), 0, :price, 'IRR', :created_by\n        )\n    ");
+    $subscriptionStmt->execute([
+        ':tenant_id' => $tenantId,
+        ':plan_id' => $planId,
+        ':price' => (float) $plan['price_monthly'],
+        ':created_by' => $user['id'],
+    ]);
 
     $accessStmt = $pdo->prepare("
         INSERT INTO agent_site_access (

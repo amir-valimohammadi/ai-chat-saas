@@ -18,10 +18,13 @@ import "../styles/super-admin-customers.css";
 import "../styles/super-admin-customer-detail.css";
 import "../styles/super-admin-sites.css";
 import "../styles/super-admin-plans.css";
+import "../styles/super-admin-subscriptions.css";
 import "../styles/super-admin-ai-monitoring.css";
 import "../styles/super-admin-audit-logs.css";
 import "../styles/subscription.css";
 import "../styles/sites.css";
+import "../styles/super-admin-subscriptions.css";
+import "../styles/subscription.css";
 export const metadata = {
     title: "AI Chat SaaS Panel",
     description: "Admin and support panel for AI Chat SaaS",
