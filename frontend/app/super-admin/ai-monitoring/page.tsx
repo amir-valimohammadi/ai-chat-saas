@@ -115,6 +115,8 @@ type RecentLog = {
     user_question: string;
     reply_text: string | null;
     reply_mode: string;
+    request_source: string;
+    failure_reason: string | null;
     confidence_score: number;
     sources_count: number;
     created_at: string;
@@ -145,6 +147,12 @@ type MonitoringResponse = {
     unanswered_questions: UnansweredItem[];
     recent_logs: RecentLog[];
     generated_at: string;
+};
+
+const sourceLabels: Record<string, string> = {
+    agent: "پشتیبان",
+    widget: "ویجت",
+    auto_reply: "پاسخ خودکار",
 };
 
 const modeLabels: Record<string, string> = {
@@ -382,8 +390,8 @@ export default function SuperAdminAiMonitoringPage() {
                                     summary.useful_rate >= 70
                                         ? "success"
                                         : summary.useful_rate >= 45
-                                          ? "warning"
-                                          : "danger"
+                                            ? "warning"
+                                            : "danger"
                                 }
                             />
                             <SummaryCard
@@ -397,8 +405,8 @@ export default function SuperAdminAiMonitoringPage() {
                                     summary.average_confidence >= 65
                                         ? "success"
                                         : summary.average_confidence >= 45
-                                          ? "warning"
-                                          : "danger"
+                                            ? "warning"
+                                            : "danger"
                                 }
                             />
                             <SummaryCard
@@ -412,8 +420,8 @@ export default function SuperAdminAiMonitoringPage() {
                                     summary.no_answer_rate <= 10
                                         ? "success"
                                         : summary.no_answer_rate <= 30
-                                          ? "warning"
-                                          : "danger"
+                                            ? "warning"
+                                            : "danger"
                                 }
                             />
                         </section>
@@ -437,7 +445,7 @@ export default function SuperAdminAiMonitoringPage() {
                                         const failedHeight =
                                             item.total > 0
                                                 ? (failed / item.total) *
-                                                  totalHeight
+                                                totalHeight
                                                 : 0;
 
                                         return (
@@ -784,6 +792,7 @@ export default function SuperAdminAiMonitoringPage() {
                                                     <small>
                                                         {log.tenant_name} ·{" "}
                                                         {log.site_name} ·{" "}
+                                                        {sourceLabels[log.request_source] || log.request_source} ·{" "}
                                                         {formatDateTime(
                                                             log.created_at
                                                         )}
@@ -837,12 +846,12 @@ function MonitoringSkeleton() {
 }
 
 function SummaryCard({
-    label,
-    value,
-    detail,
-    icon,
-    tone = "default",
-}: {
+                         label,
+                         value,
+                         detail,
+                         icon,
+                         tone = "default",
+                     }: {
     label: string;
     value: string;
     detail: string;
@@ -862,10 +871,10 @@ function SummaryCard({
 }
 
 function SectionHead({
-    kicker,
-    title,
-    description,
-}: {
+                         kicker,
+                         title,
+                         description,
+                     }: {
     kicker: string;
     title: string;
     description: string;
@@ -880,9 +889,9 @@ function SectionHead({
 }
 
 function MetricTile({
-    label,
-    value,
-}: {
+                        label,
+                        value,
+                    }: {
     label: string;
     value: number;
 }) {
@@ -895,9 +904,9 @@ function MetricTile({
 }
 
 function QualityBadge({
-    value,
-    inverse,
-}: {
+                          value,
+                          inverse,
+                      }: {
     value: number;
     inverse: boolean;
 }) {

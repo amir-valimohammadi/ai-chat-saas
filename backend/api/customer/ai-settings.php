@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/ai-helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 
 $user = require_auth($pdo);
 require_role($user, ['customer_admin']);
@@ -104,6 +105,34 @@ try {
     $autoReplyEnabled = array_key_exists('auto_reply_enabled', $input) ? ai_bool($input['auto_reply_enabled']) : 0;
     $crawlEnabled = array_key_exists('crawl_enabled', $input) ? ai_bool($input['crawl_enabled']) : 1;
 
+    // ai_mode و کلیدهای AI باید همیشه یک معنی داشته باشند.
+    if ($assistantEnabled !== 1) {
+        $assistantEnabled = 0;
+        $autoReplyEnabled = 0;
+        $effectiveAiMode = 'off';
+    } elseif ($autoReplyEnabled === 1) {
+        $effectiveAiMode = 'semi_auto';
+    } else {
+        $effectiveAiMode = 'assistant';
+    }
+
+    if ($autoReplyEnabled === 1) {
+        $plan = get_tenant_plan_limits($pdo, (int) $user['tenant_id']);
+
+        if (!$plan['ai_auto_reply_enabled']) {
+            json_response([
+                'success' => false,
+                'code' => 'PLAN_FEATURE_UNAVAILABLE',
+                'message' => 'قابلیت پاسخ خودکار در پلن فعلی فعال نیست. ابتدا آن را از پنل سوپر ادمین برای پلن مشتری فعال کنید.',
+                'feature' => 'ai_auto_reply_enabled',
+                'plan' => [
+                    'id' => $plan['plan_id'],
+                    'name' => $plan['plan_name'],
+                ],
+            ], 403);
+        }
+    }
+
     $minAutoReplyScore = ai_score($input['min_auto_reply_score'] ?? null, 75.00, 0.00, 100.00);
     $minSuggestionScore = ai_score($input['min_suggestion_score'] ?? null, 45.00, 0.00, 100.00);
 
@@ -131,6 +160,8 @@ try {
     if ($fallbackMessage === '') {
         $fallbackMessage = 'برای این سوال پاسخ دقیقی در اطلاعات سایت پیدا نکردم. پیام شما برای پشتیبان ثبت شد تا در اولین فرصت پاسخ بدهند.';
     }
+
+    $pdo->beginTransaction();
 
     $stmt = $pdo->prepare(" 
         INSERT INTO ai_site_settings (
@@ -180,11 +211,31 @@ try {
         ':fallback_message' => $fallbackMessage,
     ]);
 
+    $siteModeStmt = $pdo->prepare("
+        UPDATE sites
+        SET ai_mode = :ai_mode
+        WHERE id = :site_id
+          AND tenant_id = :tenant_id
+    ");
+    $siteModeStmt->execute([
+        ':ai_mode' => $effectiveAiMode,
+        ':site_id' => (int) $site['id'],
+        ':tenant_id' => (int) $user['tenant_id'],
+    ]);
+
+    $pdo->commit();
+
     json_response([
         'success' => true,
-        'message' => 'AI settings saved successfully'
+        'message' => 'تنظیمات AI با موفقیت ذخیره شد.',
+        'ai_mode' => $effectiveAiMode,
+        'assistant_enabled' => (bool) $assistantEnabled,
+        'auto_reply_enabled' => (bool) $autoReplyEnabled,
     ]);
-} catch (Exception $e) {
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     json_response([
         'success' => false,
         'message' => 'Failed to save AI settings',

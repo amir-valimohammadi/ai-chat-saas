@@ -46,6 +46,11 @@ try {
             conversation_id,
             message_id,
             question,
+            normalized_question,
+            occurrence_count,
+            first_seen_at,
+            last_seen_at,
+            failure_reason,
             detected_category,
             detected_intent,
             best_match_score,
@@ -57,7 +62,7 @@ try {
         WHERE tenant_id = :tenant_id
           AND site_id = :site_id
           AND status = :status
-        ORDER BY id DESC
+        ORDER BY occurrence_count DESC, last_seen_at DESC, id DESC
         LIMIT {$limit}
     ");
 
@@ -89,6 +94,11 @@ try {
                 'conversation_id' => $item['conversation_id'] !== null ? (int) $item['conversation_id'] : null,
                 'message_id' => $item['message_id'] !== null ? (int) $item['message_id'] : null,
                 'question' => $item['question'],
+                'normalized_question' => $item['normalized_question'],
+                'occurrence_count' => (int) $item['occurrence_count'],
+                'first_seen_at' => $item['first_seen_at'],
+                'last_seen_at' => $item['last_seen_at'],
+                'failure_reason' => $item['failure_reason'],
                 'detected_category' => $item['detected_category'],
                 'detected_intent' => $item['detected_intent'],
                 'best_match_score' => (float) $item['best_match_score'],

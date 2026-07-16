@@ -195,6 +195,9 @@ try {
     $createdChunks = 0;
     $createdTerms = 0;
     $createdQuestions = 0;
+    $unchangedPages = 0;
+    $preservedQuestions = 0;
+    $archivedQuestions = 0;
 
     while ($queue && $fetchedPages < $maxPages) {
         $item = array_shift($queue);
@@ -256,6 +259,9 @@ try {
         $createdChunks += $storeResult['chunks'];
         $createdTerms += $storeResult['terms'];
         $createdQuestions += $storeResult['questions'];
+        $unchangedPages += !empty($storeResult['unchanged']) ? 1 : 0;
+        $preservedQuestions += (int) ($storeResult['preserved_questions'] ?? 0);
+        $archivedQuestions += (int) ($storeResult['archived_questions'] ?? 0);
 
         $results[] = [
             'url' => $url,
@@ -265,7 +271,10 @@ try {
             'intent' => $storeResult['intent'],
             'chunks' => $storeResult['chunks'],
             'terms' => $storeResult['terms'],
-            'questions' => $storeResult['questions']
+            'questions' => $storeResult['questions'],
+            'unchanged' => (bool) ($storeResult['unchanged'] ?? false),
+            'preserved_questions' => (int) ($storeResult['preserved_questions'] ?? 0),
+            'archived_questions' => (int) ($storeResult['archived_questions'] ?? 0)
         ];
 
         if ($item['depth'] < $maxDepth) {
@@ -354,6 +363,9 @@ try {
             'created_chunks' => $createdChunks,
             'created_terms' => $createdTerms,
             'created_questions' => $createdQuestions,
+            'unchanged_pages' => $unchangedPages,
+            'preserved_questions' => $preservedQuestions,
+            'archived_questions' => $archivedQuestions,
         ],
         'results' => $results
     ]);

@@ -1765,10 +1765,8 @@
             return null;
         }
 
-        if (siteConfig?.support_online || siteConfig?.ai_mode === "off") {
-            return null;
-        }
-
+        // تصمیم نهایی پاسخ‌گویی فقط در بک‌اند گرفته می‌شود؛
+        // چون وضعیت آنلاین و تنظیمات ممکن است پس از بارگذاری ویجت تغییر کرده باشند.
         try {
             const data = await fetchJson(`${apiBase}/widget/ai-reply.php`, {
                 method: "POST",
@@ -1784,10 +1782,16 @@
             });
 
             if (!data.success) {
-                console.warn("AI Chat Widget AI reply skipped:", data);
+                console.warn("AI Chat Widget AI reply failed:", data);
                 return null;
             }
 
+            if (data.skipped) {
+                console.info("AI Chat Widget AI reply skipped:", data.reason, data);
+                return data;
+            }
+
+            console.info("AI Chat Widget AI reply created:", data.reply_mode, data);
             return data;
         } catch (error) {
             console.warn("AI Chat Widget AI reply request failed:", error);

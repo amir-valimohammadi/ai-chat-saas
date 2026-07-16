@@ -42,7 +42,7 @@ if ($siteId <= 0) {
     ], 422);
 }
 
-$allowedStatuses = ['approved', 'active', 'inactive', 'archived'];
+$allowedStatuses = ['draft', 'approved', 'archived'];
 
 if (!$status) {
     $status = 'approved';

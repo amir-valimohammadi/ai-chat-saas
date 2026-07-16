@@ -347,6 +347,7 @@ function get_tenant_plan_usage(PDO $pdo, int $tenantId): array
         SELECT COUNT(*)
         FROM ai_answer_logs
         WHERE tenant_id = :tenant_id
+          AND request_source <> 'test'
           AND reply_mode = 'auto_reply'
           AND created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00')
           AND created_at < DATE_ADD(

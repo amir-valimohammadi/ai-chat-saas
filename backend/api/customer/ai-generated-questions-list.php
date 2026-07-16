@@ -43,9 +43,14 @@ try {
             q.category,
             q.detected_intent,
             q.source_type,
+            q.is_user_edited,
+            q.source_chunk_hash,
+            q.last_seen_crawl_run_id,
+            q.preserved_at,
             q.score,
             q.status,
             q.created_at,
+            q.updated_at,
             p.url,
             p.title,
             p.main_heading
@@ -81,9 +86,16 @@ try {
                 'category' => $item['category'],
                 'detected_intent' => $item['detected_intent'],
                 'source_type' => $item['source_type'],
+                'is_user_edited' => (bool) $item['is_user_edited'],
+                'source_chunk_hash' => $item['source_chunk_hash'],
+                'last_seen_crawl_run_id' => $item['last_seen_crawl_run_id'] !== null
+                    ? (int) $item['last_seen_crawl_run_id']
+                    : null,
+                'preserved_at' => $item['preserved_at'],
                 'score' => (float) $item['score'],
                 'status' => $item['status'],
                 'created_at' => $item['created_at'],
+                'updated_at' => $item['updated_at'],
                 'page' => [
                     'url' => $item['url'],
                     'title' => $item['title'],

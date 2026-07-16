@@ -44,7 +44,9 @@ type AiOverview = {
         terms: number;
         questions: number;
         unanswered: number;
+        unanswered_occurrences: number;
         answer_logs: number;
+        test_logs: number;
     };
     recent_runs: Array<{
         id: number;
@@ -79,6 +81,8 @@ type SearchResult = {
     confidence_score: number;
     min_suggestion_score: number;
     answer: string;
+    request_source?: string;
+    failure_reason?: string | null;
     sources?: unknown[];
     debug?: unknown;
 };
@@ -91,9 +95,14 @@ type GeneratedQuestion = {
     category: string | null;
     detected_intent: string | null;
     source_type: string;
+    is_user_edited: boolean;
+    source_chunk_hash: string | null;
+    last_seen_crawl_run_id: number | null;
+    preserved_at: string | null;
     score: number;
     status: string;
     created_at: string;
+    updated_at: string | null;
     page: {
         url: string | null;
         title: string | null;
@@ -127,6 +136,11 @@ type UnansweredQuestion = {
     conversation_id: number | null;
     message_id: number | null;
     question: string;
+    normalized_question: string;
+    occurrence_count: number;
+    first_seen_at: string;
+    last_seen_at: string;
+    failure_reason: string | null;
     detected_category: string | null;
     detected_intent: string | null;
     best_match_score: number;
@@ -141,6 +155,14 @@ type AiCenterTab =
     | "test"
     | "knowledge"
     | "unanswered";
+
+const failureReasonLabels: Record<string, string> = {
+    no_candidate: "هیچ دانش مرتبطی پیدا نشد",
+    low_confidence: "امتیاز پاسخ کمتر از حد لازم بود",
+    question_too_short: "سؤال برای جست‌وجو خیلی کوتاه بود",
+    unknown: "علت نامشخص",
+};
+
 const defaultSettings: AiSettings = {
     assistant_enabled: true,
     auto_reply_enabled: false,
@@ -415,7 +437,7 @@ export default function AiCenterPage() {
             });
 
             setSuccess(
-                `خزش کامل شد. صفحات موفق: ${result.summary?.fetched_pages || 0}، بخش‌های ساخته‌شده: ${result.summary?.created_chunks || 0}`
+                `خزش کامل شد. صفحات موفق: ${result.summary?.fetched_pages || 0}، بدون تغییر: ${result.summary?.unchanged_pages || 0}، بخش‌های بازسازی‌شده: ${result.summary?.created_chunks || 0}، سوالات ویرایش‌شده حفظ‌شده: ${result.summary?.preserved_questions || 0}`
             );
 
             await loadAiData(selectedSiteId);
@@ -639,7 +661,7 @@ export default function AiCenterPage() {
         }
     }
 
-    async function handleKnowledgeSourceStatus(item: KnowledgeSource, status: "approved" | "active" | "inactive" | "archived") {
+    async function handleKnowledgeSourceStatus(item: KnowledgeSource, status: "draft" | "approved" | "archived") {
         try {
             setError("");
             setSuccess("");
@@ -714,7 +736,7 @@ export default function AiCenterPage() {
             setCreatingKnowledgeSource(false);
         }
     }
-    async function handleGeneratedQuestionStatus(item: GeneratedQuestion, status: "active" | "inactive" | "archived") {
+    async function handleGeneratedQuestionStatus(item: GeneratedQuestion, status: "active" | "ignored" | "archived") {
         try {
             setError("");
             setSuccess("");
@@ -870,12 +892,14 @@ export default function AiCenterPage() {
 
                         <div className="ai-center-metric">
                             <strong>{overview?.counts.unanswered || 0}</strong>
-                            <span>سوالات بی‌پاسخ</span>
+                            <span>سوالات بی‌پاسخ یکتا</span>
+                            <small>{overview?.counts.unanswered_occurrences || 0} بار تکرار</small>
                         </div>
 
                         <div className="ai-center-metric">
                             <strong>{overview?.counts.answer_logs || 0}</strong>
-                            <span>لاگ پاسخ‌ها</span>
+                            <span>لاگ واقعی پاسخ‌ها</span>
+                            <small>{overview?.counts.test_logs || 0} تست جداشده</small>
                         </div>
                     </section>
 
@@ -1272,6 +1296,14 @@ export default function AiCenterPage() {
                                         <span className="soft-chip">
                                             mode: {testResult.reply_mode}
                                         </span>
+                                        <span className="soft-chip">
+                                            منبع: تست پنل
+                                        </span>
+                                        {testResult.failure_reason && (
+                                            <span className="soft-chip danger">
+                                                {failureReasonLabels[testResult.failure_reason] || testResult.failure_reason}
+                                            </span>
+                                        )}
                                     </div>
 
                                     <p className="ai-center-item-text" style={{ marginBottom: 0 }}>
@@ -1308,11 +1340,18 @@ export default function AiCenterPage() {
                                                     <div>
                                                         <h3 className="ai-center-item-title">{item.question}</h3>
                                                         <div className="ai-center-item-meta">
-                                                            دسته: {item.category || "-"} · intent: {item.detected_intent || "-"} · نوع: {item.source_type} · وضعیت: {item.status}
+                                                            دسته: {item.category || "-"} · intent: {item.detected_intent || "-"} · نوع: {item.source_type === "edited" ? "ویرایش‌شده" : item.source_type === "manual" ? "دستی" : "خودکار"} · وضعیت: {item.status}
                                                         </div>
                                                     </div>
 
-                                                    <span className="soft-chip primary">score: {item.score}</span>
+                                                    <div className="ai-center-question-badges">
+                                                        {item.is_user_edited && (
+                                                            <span className="soft-chip ai-center-preserved-chip">
+                                                                ویرایش کاربر · محفوظ در خزش مجدد
+                                                            </span>
+                                                        )}
+                                                        <span className="soft-chip primary">score: {item.score}</span>
+                                                    </div>
                                                 </div>
 
                                                 {item.answer_text && (
@@ -1336,9 +1375,9 @@ export default function AiCenterPage() {
                                                         <button
                                                             className="btn secondary"
                                                             type="button"
-                                                            onClick={() => handleGeneratedQuestionStatus(item, "inactive")}
+                                                            onClick={() => handleGeneratedQuestionStatus(item, "ignored")}
                                                         >
-                                                            غیرفعال کردن
+                                                            نادیده گرفتن
                                                         </button>
                                                     ) : (
                                                         <button
@@ -1417,9 +1456,9 @@ export default function AiCenterPage() {
                                                                         )
                                                                     }
                                                                 >
-                                                                    <option value="active">active</option>
-                                                                    <option value="inactive">inactive</option>
-                                                                    <option value="archived">archived</option>
+                                                                    <option value="active">فعال</option>
+                                                                    <option value="ignored">نادیده‌گرفته‌شده</option>
+                                                                    <option value="archived">بایگانی‌شده</option>
                                                                 </select>
                                                             </label>
                                                         </div>
@@ -1476,10 +1515,9 @@ export default function AiCenterPage() {
                                                 value={newKnowledgeSource.status}
                                                 onChange={(event) => setNewKnowledgeSource((prev) => ({ ...prev, status: event.target.value }))}
                                             >
-                                                <option value="approved">approved</option>
-                                                <option value="active">active</option>
-                                                <option value="inactive">inactive</option>
-                                                <option value="archived">archived</option>
+                                                <option value="approved">تأییدشده و فعال</option>
+                                                <option value="draft">پیش‌نویس</option>
+                                                <option value="archived">بایگانی‌شده</option>
                                             </select>
                                         </label>
                                     </div>
@@ -1592,13 +1630,13 @@ export default function AiCenterPage() {
                                                             ویرایش
                                                         </button>
 
-                                                        {item.status === "approved" || item.status === "active" ? (
+                                                        {item.status === "approved" ? (
                                                             <button
                                                                 className="btn secondary"
                                                                 type="button"
-                                                                onClick={() => handleKnowledgeSourceStatus(item, "inactive")}
+                                                                onClick={() => handleKnowledgeSourceStatus(item, "draft")}
                                                             >
-                                                                غیرفعال کردن
+                                                                تبدیل به پیش‌نویس
                                                             </button>
                                                         ) : (
                                                             <button
@@ -1650,10 +1688,9 @@ export default function AiCenterPage() {
                                                                             )
                                                                         }
                                                                     >
-                                                                        <option value="approved">approved</option>
-                                                                        <option value="active">active</option>
-                                                                        <option value="inactive">inactive</option>
-                                                                        <option value="archived">archived</option>
+                                                                        <option value="approved">تأییدشده و فعال</option>
+                                                                        <option value="draft">پیش‌نویس</option>
+                                                                        <option value="archived">بایگانی‌شده</option>
                                                                     </select>
                                                                 </label>
                                                             </div>
@@ -1758,7 +1795,12 @@ export default function AiCenterPage() {
                                     </p>
                                 </div>
 
-                                <span className="soft-chip primary">{unansweredQuestions.length} مورد جدید</span>
+                                <div className="ai-center-actions">
+                                    <span className="soft-chip primary">{unansweredQuestions.length} سؤال یکتا</span>
+                                    <span className="soft-chip">
+                                        {unansweredQuestions.reduce((sum, item) => sum + item.occurrence_count, 0)} بار تکرار
+                                    </span>
+                                </div>
                             </div>
 
                             {unansweredQuestions.length === 0 ? (
@@ -1773,12 +1815,22 @@ export default function AiCenterPage() {
                                                 <div>
                                                     <h3 className="ai-center-item-title">{item.question}</h3>
                                                     <div className="ai-center-item-meta">
-                                                        دسته تشخیص‌داده‌شده: {item.detected_category || "-"} · intent: {item.detected_intent || "-"} · وضعیت: {item.status}
+                                                        دسته: {item.detected_category || "-"} · intent: {item.detected_intent || "-"} · وضعیت: {item.status}
                                                     </div>
-                                                    <div className="ai-center-item-meta">ثبت‌شده در: {item.created_at}</div>
+                                                    <div className="ai-center-item-meta">
+                                                        علت: {item.failure_reason
+                                                        ? failureReasonLabels[item.failure_reason] || item.failure_reason
+                                                        : "-"}
+                                                    </div>
+                                                    <div className="ai-center-item-meta">
+                                                        اولین مشاهده: {item.first_seen_at} · آخرین مشاهده: {item.last_seen_at}
+                                                    </div>
                                                 </div>
 
-                                                <span className="soft-chip danger">score: {item.best_match_score}</span>
+                                                <div className="ai-center-actions">
+                                                    <span className="soft-chip danger">score: {item.best_match_score}</span>
+                                                    <span className="soft-chip primary">{item.occurrence_count} بار</span>
+                                                </div>
                                             </div>
 
                                             <div className="ai-center-actions">

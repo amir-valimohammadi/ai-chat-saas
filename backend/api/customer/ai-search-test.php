@@ -1,7 +1,7 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/api/customer/ai-search-test.php
-// هدف: تست موتور جستجو و پاسخ AI از پنل customer admin
+// هدف: تست موتور جستجو بدون واردکردن داده آزمایشی به آمار و صف سوالات واقعی
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
@@ -11,7 +11,6 @@ require_once __DIR__ . '/../../includes/ai-answer-engine.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
-
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -24,7 +23,6 @@ $user = require_auth($pdo);
 require_role($user, ['customer_admin']);
 
 $input = get_json_input();
-
 $siteId = isset($input['site_id']) ? (int) $input['site_id'] : 0;
 $question = trim((string) ($input['question'] ?? ''));
 
@@ -37,6 +35,7 @@ if ($question === '') {
 
 try {
     $site = ai_get_customer_site($pdo, $user, $siteId);
+
     require_site_plan_feature(
         $pdo,
         (int) $site['id'],
@@ -65,144 +64,50 @@ try {
     ]);
 
     $settings = $settingsStmt->fetch();
+    $minSuggestionScore = $settings
+        ? (float) $settings['min_suggestion_score']
+        : 45.00;
 
-    $minSuggestionScore = $settings ? (float) $settings['min_suggestion_score'] : 45.00;
     $fallbackMessage = $settings && !empty($settings['fallback_message'])
         ? $settings['fallback_message']
         : 'برای این سوال پاسخ دقیقی در اطلاعات سایت پیدا نکردم. پیام شما برای پشتیبان ثبت شد.';
 
     $result = ai_find_best_answer($pdo, $site, $question);
+    $confidenceScore = (float) ($result['confidence_score'] ?? 0);
+    $hasGoodAnswer = $result['success'] && $confidenceScore >= $minSuggestionScore;
+    $failureReason = ai_failure_reason($result, $minSuggestionScore);
+    $replyText = $hasGoodAnswer ? $result['answer'] : $fallbackMessage;
 
-    if (!$result['success'] || (float) $result['confidence_score'] < $minSuggestionScore) {
-        $insertUnanswered = $pdo->prepare("
-            INSERT INTO ai_unanswered_questions (
-                tenant_id,
-                site_id,
-                question,
-                normalized_question,
-                detected_category,
-                detected_intent,
-                best_match_score,
-                best_sources_json,
-                status
-            ) VALUES (
-                :tenant_id,
-                :site_id,
-                :question,
-                :normalized_question,
-                :detected_category,
-                :detected_intent,
-                :best_match_score,
-                :best_sources_json,
-                'new'
-            )
-        ");
-
-        $insertUnanswered->execute([
-            ':tenant_id' => $user['tenant_id'],
-            ':site_id' => $siteId,
-            ':question' => $question,
-            ':normalized_question' => ai_normalize_text($question),
-            ':detected_category' => $result['detected']['category'] ?? null,
-            ':detected_intent' => $result['detected']['intent'] ?? null,
-            ':best_match_score' => $result['confidence_score'] ?? 0,
-            ':best_sources_json' => json_encode($result['sources'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ]);
-
-        $logStmt = $pdo->prepare("
-            INSERT INTO ai_answer_logs (
-                tenant_id,
-                site_id,
-                user_question,
-                normalized_question,
-                reply_text,
-                confidence_score,
-                sources_json,
-                reply_mode
-            ) VALUES (
-                :tenant_id,
-                :site_id,
-                :user_question,
-                :normalized_question,
-                :reply_text,
-                :confidence_score,
-                :sources_json,
-                'no_answer'
-            )
-        ");
-
-        $logStmt->execute([
-            ':tenant_id' => $user['tenant_id'],
-            ':site_id' => $siteId,
-            ':user_question' => $question,
-            ':normalized_question' => ai_normalize_text($question),
-            ':reply_text' => $fallbackMessage,
-            ':confidence_score' => $result['confidence_score'] ?? 0,
-            ':sources_json' => json_encode($result['sources'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ]);
-
-        json_response([
-            'success' => true,
-            'answered' => false,
-            'reply_mode' => 'fallback',
-            'confidence_score' => $result['confidence_score'] ?? 0,
-            'min_suggestion_score' => $minSuggestionScore,
-            'answer' => $fallbackMessage,
-            'debug' => $result
-        ]);
-    }
-
-    $logStmt = $pdo->prepare("
-        INSERT INTO ai_answer_logs (
-            tenant_id,
-            site_id,
-            user_question,
-            normalized_question,
-            reply_text,
-            confidence_score,
-            matched_chunk_id,
-            matched_question_id,
-            sources_json,
-            reply_mode
-        ) VALUES (
-            :tenant_id,
-            :site_id,
-            :user_question,
-            :normalized_question,
-            :reply_text,
-            :confidence_score,
-            :matched_chunk_id,
-            :matched_question_id,
-            :sources_json,
-            'suggestion'
-        )
-    ");
-
-    $logStmt->execute([
-        ':tenant_id' => $user['tenant_id'],
-        ':site_id' => $siteId,
-        ':user_question' => $question,
-        ':normalized_question' => ai_normalize_text($question),
-        ':reply_text' => $result['answer'],
-        ':confidence_score' => $result['confidence_score'],
-        ':matched_chunk_id' => $result['matched_chunk_id'],
-        ':matched_question_id' => $result['matched_question_id'],
-        ':sources_json' => json_encode($result['sources'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+    // تست‌های AI Center فقط در لاگ تست ذخیره می‌شوند و وارد صف سوالات بی‌پاسخ نمی‌شوند.
+    ai_log_answer($pdo, [
+        'tenant_id' => (int) $user['tenant_id'],
+        'site_id' => $siteId,
+        'user_question' => $question,
+        'reply_text' => $replyText,
+        'confidence_score' => $confidenceScore,
+        'matched_chunk_id' => $result['matched_chunk_id'] ?? null,
+        'matched_question_id' => $result['matched_question_id'] ?? null,
+        'sources' => $result['sources'] ?? [],
+        'reply_mode' => $hasGoodAnswer ? 'suggestion' : 'no_answer',
+        'request_source' => 'test',
+        'failure_reason' => $failureReason,
     ]);
 
     json_response([
         'success' => true,
-        'answered' => true,
-        'reply_mode' => 'suggestion',
-        'confidence_score' => $result['confidence_score'],
+        'answered' => $hasGoodAnswer,
+        'reply_mode' => $hasGoodAnswer ? 'suggestion' : 'fallback',
+        'request_source' => 'test',
+        'failure_reason' => $failureReason,
+        'confidence_score' => $confidenceScore,
         'min_suggestion_score' => $minSuggestionScore,
-        'answer' => $result['answer'],
-        'sources' => $result['sources'],
+        'answer' => $replyText,
+        'sources' => $result['sources'] ?? [],
         'debug' => [
-            'tokens' => $result['tokens'],
-            'detected' => $result['detected'],
-            'matched_type' => $result['matched_type'],
-            'best_candidates' => $result['best_candidates'],
+            'tokens' => $result['tokens'] ?? [],
+            'detected' => $result['detected'] ?? [],
+            'matched_type' => $result['matched_type'] ?? null,
+            'best_candidates' => $result['best_candidates'] ?? [],
         ]
     ]);
 } catch (Exception $e) {

@@ -103,11 +103,13 @@ try {
         ]);
     }
 
-    if ($conversation['ai_mode'] === 'off') {
+    if ($conversation['ai_mode'] !== 'semi_auto') {
         json_response([
             'success' => true,
             'skipped' => true,
-            'reason' => 'site_ai_mode_off'
+            'reason' => $conversation['ai_mode'] === 'off'
+                ? 'site_ai_mode_off'
+                : 'site_ai_mode_assistant_only'
         ]);
     }
     $plan = get_tenant_plan_limits(
@@ -266,49 +268,22 @@ try {
 
     $replyText = $hasGoodAnswer ? $result['answer'] : $fallbackMessage;
     $replyMode = $hasGoodAnswer ? 'auto_reply' : 'fallback';
+    $failureReason = ai_failure_reason($result, $minAutoReplyScore);
 
     $pdo->beginTransaction();
 
     if (!$hasGoodAnswer) {
-        $unansweredStmt = $pdo->prepare("
-            INSERT INTO ai_unanswered_questions (
-                tenant_id,
-                site_id,
-                conversation_id,
-                message_id,
-                question,
-                normalized_question,
-                detected_category,
-                detected_intent,
-                best_match_score,
-                best_sources_json,
-                status
-            ) VALUES (
-                :tenant_id,
-                :site_id,
-                :conversation_id,
-                :message_id,
-                :question,
-                :normalized_question,
-                :detected_category,
-                :detected_intent,
-                :best_match_score,
-                :best_sources_json,
-                'new'
-            )
-        ");
-
-        $unansweredStmt->execute([
-            ':tenant_id' => (int) $conversation['tenant_id'],
-            ':site_id' => (int) $conversation['site_id'],
-            ':conversation_id' => $conversationId,
-            ':message_id' => $messageId,
-            ':question' => $question,
-            ':normalized_question' => ai_normalize_text($question),
-            ':detected_category' => $result['detected']['category'] ?? null,
-            ':detected_intent' => $result['detected']['intent'] ?? null,
-            ':best_match_score' => $result['confidence_score'] ?? 0,
-            ':best_sources_json' => json_encode($result['sources'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ai_record_unanswered_question($pdo, [
+            'tenant_id' => (int) $conversation['tenant_id'],
+            'site_id' => (int) $conversation['site_id'],
+            'conversation_id' => $conversationId,
+            'message_id' => $messageId,
+            'question' => $question,
+            'detected_category' => $result['detected']['category'] ?? null,
+            'detected_intent' => $result['detected']['intent'] ?? null,
+            'best_match_score' => $result['confidence_score'] ?? 0,
+            'best_sources' => $result['sources'] ?? [],
+            'failure_reason' => $failureReason,
         ]);
     }
 
@@ -335,49 +310,20 @@ try {
 
     $aiMessageId = (int) $pdo->lastInsertId();
 
-    $logStmt = $pdo->prepare("
-        INSERT INTO ai_answer_logs (
-            tenant_id,
-            site_id,
-            conversation_id,
-            message_id,
-            user_question,
-            normalized_question,
-            reply_text,
-            confidence_score,
-            matched_chunk_id,
-            matched_question_id,
-            sources_json,
-            reply_mode
-        ) VALUES (
-            :tenant_id,
-            :site_id,
-            :conversation_id,
-            :message_id,
-            :user_question,
-            :normalized_question,
-            :reply_text,
-            :confidence_score,
-            :matched_chunk_id,
-            :matched_question_id,
-            :sources_json,
-            :reply_mode
-        )
-    ");
-
-    $logStmt->execute([
-        ':tenant_id' => (int) $conversation['tenant_id'],
-        ':site_id' => (int) $conversation['site_id'],
-        ':conversation_id' => $conversationId,
-        ':message_id' => $messageId,
-        ':user_question' => $question,
-        ':normalized_question' => ai_normalize_text($question),
-        ':reply_text' => $replyText,
-        ':confidence_score' => $result['confidence_score'] ?? 0,
-        ':matched_chunk_id' => $result['matched_chunk_id'] ?? null,
-        ':matched_question_id' => $result['matched_question_id'] ?? null,
-        ':sources_json' => json_encode($result['sources'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ':reply_mode' => $replyMode,
+    ai_log_answer($pdo, [
+        'tenant_id' => (int) $conversation['tenant_id'],
+        'site_id' => (int) $conversation['site_id'],
+        'conversation_id' => $conversationId,
+        'message_id' => $messageId,
+        'user_question' => $question,
+        'reply_text' => $replyText,
+        'confidence_score' => $result['confidence_score'] ?? 0,
+        'matched_chunk_id' => $result['matched_chunk_id'] ?? null,
+        'matched_question_id' => $result['matched_question_id'] ?? null,
+        'sources' => $result['sources'] ?? [],
+        'reply_mode' => $replyMode,
+        'request_source' => 'widget',
+        'failure_reason' => $failureReason,
     ]);
 
     $updateConversationStmt = $pdo->prepare("

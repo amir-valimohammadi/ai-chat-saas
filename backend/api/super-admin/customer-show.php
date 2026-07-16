@@ -258,6 +258,7 @@ try {
             MAX(created_at) AS last_ai_activity_at
         FROM ai_answer_logs
         WHERE tenant_id = :tenant_id
+          AND request_source <> 'test'
     ");
     $aiStmt->execute([':tenant_id' => $tenantId]);
     $ai = $aiStmt->fetch() ?: [];

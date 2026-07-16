@@ -40,7 +40,7 @@ if ($id <= 0) {
     ], 422);
 }
 
-$allowedStatuses = ['approved', 'active', 'inactive', 'archived'];
+$allowedStatuses = ['draft', 'approved', 'archived'];
 
 if (!$status || !in_array($status, $allowedStatuses, true)) {
     json_response([

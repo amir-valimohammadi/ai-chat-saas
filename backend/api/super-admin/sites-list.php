@@ -120,6 +120,7 @@ $aiRequestsMonthExpr = "(
     SELECT COUNT(*)
     FROM ai_answer_logs aal
     WHERE aal.site_id = s.id
+      AND aal.request_source <> 'test'
       AND aal.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00')
 )";
 
@@ -127,6 +128,7 @@ $aiUsableMonthExpr = "(
     SELECT COUNT(*)
     FROM ai_answer_logs aal_ok
     WHERE aal_ok.site_id = s.id
+      AND aal_ok.request_source <> 'test'
       AND aal_ok.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00')
       AND aal_ok.reply_mode IN ('suggestion', 'auto_reply')
 )";

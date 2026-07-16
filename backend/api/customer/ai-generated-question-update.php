@@ -30,7 +30,7 @@ $category = trim((string) ($input['category'] ?? ''));
 $detectedIntent = trim((string) ($input['detected_intent'] ?? ''));
 $status = trim((string) ($input['status'] ?? 'active'));
 
-$allowedStatuses = ['active', 'inactive', 'archived'];
+$allowedStatuses = ['active', 'ignored', 'archived'];
 
 if ($id <= 0) {
     json_response([
@@ -76,7 +76,7 @@ if (mb_strlen($answerText) > 4000) {
 
 try {
     $checkStmt = $pdo->prepare("
-        SELECT id, tenant_id, site_id, source_type
+        SELECT id, tenant_id, site_id, source_type, question, normalized_question, origin_question_hash
         FROM ai_generated_questions
         WHERE id = :id
           AND tenant_id = :tenant_id
@@ -104,6 +104,12 @@ try {
             'Knowledge Base'
         );
     }
+    $existingNormalizedQuestion = ai_normalize_text(
+        (string) ($existing['normalized_question'] ?: $existing['question'])
+    );
+    $originQuestionHash = $existing['origin_question_hash']
+        ?: hash('sha256', $existingNormalizedQuestion);
+
     $stmt = $pdo->prepare("
         UPDATE ai_generated_questions
         SET
@@ -116,6 +122,9 @@ try {
                 WHEN source_type = 'manual' THEN 'manual'
                 ELSE 'edited'
             END,
+            origin_question_hash = COALESCE(origin_question_hash, :origin_question_hash),
+            is_user_edited = 1,
+            preserved_at = COALESCE(preserved_at, NOW()),
             score = CASE
                 WHEN score < 90 THEN 90
                 ELSE score
@@ -128,6 +137,7 @@ try {
     $stmt->execute([
         ':question' => $question,
         ':normalized_question' => ai_normalize_text($question),
+        ':origin_question_hash' => $originQuestionHash,
         ':answer_text' => $answerText,
         ':category' => $category !== '' ? $category : 'دانش ویرایش‌شده',
         ':detected_intent' => $detectedIntent !== '' ? $detectedIntent : 'edited_answer',

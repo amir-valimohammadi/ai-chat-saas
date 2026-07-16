@@ -77,15 +77,6 @@ try {
         'AI Suggestions'
     );
 
-    require_site_plan_feature(
-        $pdo,
-        $siteId,
-        'ai_suggestions_enabled',
-        'AI Suggestions'
-    );
-
-    require_site_access($pdo, $user, $siteId);
-
     if ($conversation['conversation_status'] === 'closed') {
         json_response([
             'success' => false,
@@ -93,10 +84,10 @@ try {
         ], 422);
     }
 
-    if ($conversation['ai_mode'] === 'off') {
+    if (!in_array($conversation['ai_mode'], ['assistant', 'semi_auto'], true)) {
         json_response([
             'success' => false,
-            'message' => 'AI is disabled for this site'
+            'message' => 'AI suggestions are disabled for this site'
         ], 422);
     }
 
@@ -171,67 +162,23 @@ try {
 
     $confidenceForSuggestion = round(max(0.05, min(1.00, $confidenceScore / 100)), 2);
     $sources = $result['sources'] ?? [];
+    $failureReason = ai_failure_reason($result, $minSuggestionScore);
 
     $pdo->beginTransaction();
 
     if (!$hasGoodAnswer) {
-        $duplicateUnansweredStmt = $pdo->prepare("
-            SELECT id
-            FROM ai_unanswered_questions
-            WHERE tenant_id = :tenant_id
-              AND site_id = :site_id
-              AND message_id = :message_id
-            LIMIT 1
-        ");
-
-        $duplicateUnansweredStmt->execute([
-            ':tenant_id' => (int) $conversation['tenant_id'],
-            ':site_id' => $siteId,
-            ':message_id' => (int) $lastVisitorMessage['id'],
+        ai_record_unanswered_question($pdo, [
+            'tenant_id' => (int) $conversation['tenant_id'],
+            'site_id' => $siteId,
+            'conversation_id' => $conversationId,
+            'message_id' => (int) $lastVisitorMessage['id'],
+            'question' => $question,
+            'detected_category' => $result['detected']['category'] ?? null,
+            'detected_intent' => $result['detected']['intent'] ?? null,
+            'best_match_score' => $confidenceScore,
+            'best_sources' => $sources,
+            'failure_reason' => $failureReason,
         ]);
-
-        if (!$duplicateUnansweredStmt->fetch()) {
-            $unansweredStmt = $pdo->prepare("
-                INSERT INTO ai_unanswered_questions (
-                    tenant_id,
-                    site_id,
-                    conversation_id,
-                    message_id,
-                    question,
-                    normalized_question,
-                    detected_category,
-                    detected_intent,
-                    best_match_score,
-                    best_sources_json,
-                    status
-                ) VALUES (
-                    :tenant_id,
-                    :site_id,
-                    :conversation_id,
-                    :message_id,
-                    :question,
-                    :normalized_question,
-                    :detected_category,
-                    :detected_intent,
-                    :best_match_score,
-                    :best_sources_json,
-                    'new'
-                )
-            ");
-
-            $unansweredStmt->execute([
-                ':tenant_id' => (int) $conversation['tenant_id'],
-                ':site_id' => $siteId,
-                ':conversation_id' => $conversationId,
-                ':message_id' => (int) $lastVisitorMessage['id'],
-                ':question' => $question,
-                ':normalized_question' => ai_normalize_text($question),
-                ':detected_category' => $result['detected']['category'] ?? null,
-                ':detected_intent' => $result['detected']['intent'] ?? null,
-                ':best_match_score' => $confidenceScore,
-                ':best_sources_json' => json_encode($sources, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            ]);
-        }
     }
 
     $existingPendingStmt = $pdo->prepare("
@@ -299,49 +246,20 @@ try {
         $suggestionId = (int) $pdo->lastInsertId();
     }
 
-    $logStmt = $pdo->prepare("
-        INSERT INTO ai_answer_logs (
-            tenant_id,
-            site_id,
-            conversation_id,
-            message_id,
-            user_question,
-            normalized_question,
-            reply_text,
-            confidence_score,
-            matched_chunk_id,
-            matched_question_id,
-            sources_json,
-            reply_mode
-        ) VALUES (
-            :tenant_id,
-            :site_id,
-            :conversation_id,
-            :message_id,
-            :user_question,
-            :normalized_question,
-            :reply_text,
-            :confidence_score,
-            :matched_chunk_id,
-            :matched_question_id,
-            :sources_json,
-            :reply_mode
-        )
-    ");
-
-    $logStmt->execute([
-        ':tenant_id' => (int) $conversation['tenant_id'],
-        ':site_id' => $siteId,
-        ':conversation_id' => $conversationId,
-        ':message_id' => (int) $lastVisitorMessage['id'],
-        ':user_question' => $question,
-        ':normalized_question' => ai_normalize_text($question),
-        ':reply_text' => $suggestedReply,
-        ':confidence_score' => $confidenceScore,
-        ':matched_chunk_id' => $result['matched_chunk_id'] ?? null,
-        ':matched_question_id' => $result['matched_question_id'] ?? null,
-        ':sources_json' => json_encode($sources, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ':reply_mode' => $hasGoodAnswer ? 'suggestion' : 'no_answer',
+    ai_log_answer($pdo, [
+        'tenant_id' => (int) $conversation['tenant_id'],
+        'site_id' => $siteId,
+        'conversation_id' => $conversationId,
+        'message_id' => (int) $lastVisitorMessage['id'],
+        'user_question' => $question,
+        'reply_text' => $suggestedReply,
+        'confidence_score' => $confidenceScore,
+        'matched_chunk_id' => $result['matched_chunk_id'] ?? null,
+        'matched_question_id' => $result['matched_question_id'] ?? null,
+        'sources' => $sources,
+        'reply_mode' => $hasGoodAnswer ? 'suggestion' : 'no_answer',
+        'request_source' => 'agent',
+        'failure_reason' => $failureReason,
     ]);
 
     $pdo->commit();

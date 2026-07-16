@@ -624,6 +624,7 @@ if (!function_exists('ai_store_page_knowledge')) {
     {
         $tenantId = (int) $site['tenant_id'];
         $siteId = (int) $site['id'];
+        $crawlMarker = $crawlRunId ?? 0;
 
         $text = $content['clean_text'] ?? '';
         $wordCount = str_word_count(strip_tags($text));
@@ -635,275 +636,505 @@ if (!function_exists('ai_store_page_knowledge')) {
             $categoryHint
         );
 
-        $urlHash = hash('sha256', ai_clean_url($url));
+        $cleanUrl = ai_clean_url($url);
+        $urlHash = hash('sha256', $cleanUrl);
         $contentHash = hash('sha256', ai_normalize_text($text));
+        $ownsTransaction = !$pdo->inTransaction();
 
-        $stmt = $pdo->prepare("
-            INSERT INTO ai_pages (
-                tenant_id,
-                site_id,
-                crawl_run_id,
-                source_id,
-                url,
-                url_hash,
-                title,
-                meta_description,
-                main_heading,
-                clean_text,
-                content_hash,
-                category,
-                detected_intent,
-                status_code,
-                crawl_status,
-                word_count,
-                last_crawled_at
-            ) VALUES (
-                :tenant_id,
-                :site_id,
-                :crawl_run_id,
-                :source_id,
-                :url,
-                :url_hash,
-                :title,
-                :meta_description,
-                :main_heading,
-                :clean_text,
-                :content_hash,
-                :category,
-                :detected_intent,
-                :status_code,
-                'success',
-                :word_count,
-                NOW()
-            )
-            ON DUPLICATE KEY UPDATE
-                id = LAST_INSERT_ID(id),
-                crawl_run_id = VALUES(crawl_run_id),
-                source_id = VALUES(source_id),
-                title = VALUES(title),
-                meta_description = VALUES(meta_description),
-                main_heading = VALUES(main_heading),
-                clean_text = VALUES(clean_text),
-                content_hash = VALUES(content_hash),
-                category = VALUES(category),
-                detected_intent = VALUES(detected_intent),
-                status_code = VALUES(status_code),
-                crawl_status = 'success',
-                word_count = VALUES(word_count),
-                last_crawled_at = NOW()
-        ");
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
+        }
 
-        $stmt->execute([
-            ':tenant_id' => $tenantId,
-            ':site_id' => $siteId,
-            ':crawl_run_id' => $crawlRunId,
-            ':source_id' => $sourceId,
-            ':url' => ai_clean_url($url),
-            ':url_hash' => $urlHash,
-            ':title' => $content['title'] ?? null,
-            ':meta_description' => $content['meta_description'] ?? null,
-            ':main_heading' => $content['main_heading'] ?? null,
-            ':clean_text' => $text,
-            ':content_hash' => $contentHash,
-            ':category' => $detected['category'],
-            ':detected_intent' => $detected['intent'],
-            ':status_code' => $statusCode,
-            ':word_count' => $wordCount,
-        ]);
+        try {
+            $existingPageStmt = $pdo->prepare("
+                SELECT id, content_hash
+                FROM ai_pages
+                WHERE site_id = :site_id
+                  AND url_hash = :url_hash
+                LIMIT 1
+                FOR UPDATE
+            ");
+            $existingPageStmt->execute([
+                ':site_id' => $siteId,
+                ':url_hash' => $urlHash,
+            ]);
+            $existingPage = $existingPageStmt->fetch();
+            $contentUnchanged = $existingPage
+                && is_string($existingPage['content_hash'])
+                && hash_equals((string) $existingPage['content_hash'], $contentHash);
 
-        $pageId = (int) $pdo->lastInsertId();
-
-        $deleteStmt = $pdo->prepare("DELETE FROM ai_content_chunks WHERE page_id = :page_id");
-        $deleteStmt->execute([':page_id' => $pageId]);
-
-        $chunks = ai_split_chunks($text);
-        $createdChunks = 0;
-        $createdTerms = 0;
-        $createdQuestions = 0;
-
-        foreach ($chunks as $index => $chunkText) {
-            $terms = ai_extract_terms($chunkText, $content['title'] ?? null, $content['main_heading'] ?? null);
-            $importance = 20 + min(60, count($terms) * 2);
-
-            $chunkHash = hash('sha256', ai_normalize_text($chunkText));
-
-            $chunkStmt = $pdo->prepare("
-                INSERT INTO ai_content_chunks (
+            $stmt = $pdo->prepare("
+                INSERT INTO ai_pages (
                     tenant_id,
                     site_id,
-                    page_id,
-                    chunk_index,
-                    heading,
-                    chunk_text,
-                    normalized_text,
+                    crawl_run_id,
+                    source_id,
+                    url,
+                    url_hash,
+                    title,
+                    meta_description,
+                    main_heading,
+                    clean_text,
+                    content_hash,
                     category,
                     detected_intent,
-                    keywords_json,
-                    importance_score,
-                    content_hash,
-                    status
+                    status_code,
+                    crawl_status,
+                    word_count,
+                    last_crawled_at
                 ) VALUES (
                     :tenant_id,
                     :site_id,
-                    :page_id,
-                    :chunk_index,
-                    :heading,
-                    :chunk_text,
-                    :normalized_text,
+                    :crawl_run_id,
+                    :source_id,
+                    :url,
+                    :url_hash,
+                    :title,
+                    :meta_description,
+                    :main_heading,
+                    :clean_text,
+                    :content_hash,
                     :category,
                     :detected_intent,
-                    :keywords_json,
-                    :importance_score,
-                    :content_hash,
-                    'active'
+                    :status_code,
+                    'success',
+                    :word_count,
+                    NOW()
                 )
+                ON DUPLICATE KEY UPDATE
+                    id = LAST_INSERT_ID(id),
+                    crawl_run_id = VALUES(crawl_run_id),
+                    source_id = VALUES(source_id),
+                    title = VALUES(title),
+                    meta_description = VALUES(meta_description),
+                    main_heading = VALUES(main_heading),
+                    clean_text = VALUES(clean_text),
+                    content_hash = VALUES(content_hash),
+                    category = VALUES(category),
+                    detected_intent = VALUES(detected_intent),
+                    status_code = VALUES(status_code),
+                    crawl_status = 'success',
+                    word_count = VALUES(word_count),
+                    last_crawled_at = NOW()
             ");
 
-            $chunkStmt->execute([
+            $stmt->execute([
                 ':tenant_id' => $tenantId,
                 ':site_id' => $siteId,
-                ':page_id' => $pageId,
-                ':chunk_index' => $index,
-                ':heading' => $content['main_heading'] ?? $content['title'] ?? null,
-                ':chunk_text' => $chunkText,
-                ':normalized_text' => ai_normalize_text($chunkText),
+                ':crawl_run_id' => $crawlRunId,
+                ':source_id' => $sourceId,
+                ':url' => $cleanUrl,
+                ':url_hash' => $urlHash,
+                ':title' => $content['title'] ?? null,
+                ':meta_description' => $content['meta_description'] ?? null,
+                ':main_heading' => $content['main_heading'] ?? null,
+                ':clean_text' => $text,
+                ':content_hash' => $contentHash,
                 ':category' => $detected['category'],
                 ':detected_intent' => $detected['intent'],
-                ':keywords_json' => json_encode(array_slice($terms, 0, 15), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                ':importance_score' => $importance,
-                ':content_hash' => $chunkHash,
+                ':status_code' => $statusCode,
+                ':word_count' => $wordCount,
             ]);
 
-            $chunkId = (int) $pdo->lastInsertId();
-            $createdChunks++;
+            $pageId = (int) $pdo->lastInsertId();
 
-            foreach ($terms as $term) {
-                $termStmt = $pdo->prepare("
-                    INSERT INTO ai_terms (
-                        tenant_id,
-                        site_id,
-                        page_id,
-                        chunk_id,
-                        term,
-                        normalized_term,
-                        term_type,
-                        category,
-                        detected_intent,
-                        frequency,
-                        score
-                    ) VALUES (
-                        :tenant_id,
-                        :site_id,
-                        :page_id,
-                        :chunk_id,
-                        :term,
-                        :normalized_term,
-                        :term_type,
-                        :category,
-                        :detected_intent,
-                        :frequency,
-                        :score
-                    )
+            if ($contentUnchanged) {
+                $freshnessStmt = $pdo->prepare("
+                    UPDATE ai_generated_questions
+                    SET last_seen_crawl_run_id = :crawl_run_id
+                    WHERE page_id = :page_id
+                      AND tenant_id = :tenant_id
                 ");
-
-                $termStmt->execute([
-                    ':tenant_id' => $tenantId,
-                    ':site_id' => $siteId,
+                $freshnessStmt->execute([
+                    ':crawl_run_id' => $crawlMarker,
                     ':page_id' => $pageId,
-                    ':chunk_id' => $chunkId,
-                    ':term' => $term['term'],
-                    ':normalized_term' => $term['normalized_term'],
-                    ':term_type' => $term['term_type'],
-                    ':category' => $detected['category'],
-                    ':detected_intent' => $detected['intent'],
-                    ':frequency' => $term['frequency'],
-                    ':score' => $term['score'],
+                    ':tenant_id' => $tenantId,
                 ]);
 
-                $createdTerms++;
-            }
-
-            $questions = ai_generate_questions_from_chunk(
-                $content['title'] ?? null,
-                $content['main_heading'] ?? null,
-                $detected['category'],
-                $detected['intent'],
-                $chunkText
-            );
-
-            foreach ($questions as $question) {
-                $existsStmt = $pdo->prepare("
-                    SELECT id
-                    FROM ai_generated_questions
-                    WHERE site_id = :site_id
-                      AND question = :question
-                    LIMIT 1
+                $countsStmt = $pdo->prepare("
+                    SELECT
+                        (SELECT COUNT(*) FROM ai_content_chunks WHERE page_id = :page_id_1) AS chunks_count,
+                        (SELECT COUNT(*) FROM ai_terms WHERE page_id = :page_id_2) AS terms_count,
+                        (SELECT COUNT(*) FROM ai_generated_questions WHERE page_id = :page_id_3) AS questions_count,
+                        (SELECT COUNT(*) FROM ai_generated_questions WHERE page_id = :page_id_4 AND is_user_edited = 1) AS preserved_count
                 ");
-
-                $existsStmt->execute([
-                    ':site_id' => $siteId,
-                    ':question' => $question,
+                $countsStmt->execute([
+                    ':page_id_1' => $pageId,
+                    ':page_id_2' => $pageId,
+                    ':page_id_3' => $pageId,
+                    ':page_id_4' => $pageId,
                 ]);
+                $counts = $countsStmt->fetch() ?: [];
 
-                if ($existsStmt->fetch()) {
-                    continue;
+                if ($ownsTransaction) {
+                    $pdo->commit();
                 }
 
-                $questionStmt = $pdo->prepare("
-                    INSERT INTO ai_generated_questions (
+                return [
+                    'page_id' => $pageId,
+                    'chunks' => 0,
+                    'terms' => 0,
+                    'questions' => 0,
+                    'existing_chunks' => (int) ($counts['chunks_count'] ?? 0),
+                    'existing_terms' => (int) ($counts['terms_count'] ?? 0),
+                    'existing_questions' => (int) ($counts['questions_count'] ?? 0),
+                    'preserved_questions' => (int) ($counts['preserved_count'] ?? 0),
+                    'archived_questions' => 0,
+                    'unchanged' => true,
+                    'category' => $detected['category'],
+                    'intent' => $detected['intent'],
+                ];
+            }
+
+            // قبل از حذف Chunkها، همه سؤال‌ها را از Chunk قدیمی جدا می‌کنیم.
+            // در غیر این صورت ON DELETE CASCADE سؤال‌های ویرایش‌شده را حذف می‌کند.
+            $detachStmt = $pdo->prepare("
+                UPDATE ai_generated_questions q
+                LEFT JOIN ai_content_chunks c ON c.id = q.chunk_id
+                SET
+                    q.source_chunk_hash = COALESCE(q.source_chunk_hash, c.content_hash),
+                    q.chunk_id = NULL,
+                    q.preserved_at = CASE
+                        WHEN q.is_user_edited = 1 THEN COALESCE(q.preserved_at, NOW())
+                        ELSE q.preserved_at
+                    END
+                WHERE q.page_id = :page_id
+                  AND q.tenant_id = :tenant_id
+            ");
+            $detachStmt->execute([
+                ':page_id' => $pageId,
+                ':tenant_id' => $tenantId,
+            ]);
+
+            $preservedCountStmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM ai_generated_questions
+                WHERE page_id = :page_id
+                  AND tenant_id = :tenant_id
+                  AND is_user_edited = 1
+            ");
+            $preservedCountStmt->execute([
+                ':page_id' => $pageId,
+                ':tenant_id' => $tenantId,
+            ]);
+            $preservedQuestions = (int) $preservedCountStmt->fetchColumn();
+
+            $deleteStmt = $pdo->prepare("DELETE FROM ai_content_chunks WHERE page_id = :page_id");
+            $deleteStmt->execute([':page_id' => $pageId]);
+
+            $chunks = ai_split_chunks($text);
+            $createdChunks = 0;
+            $createdTerms = 0;
+            $createdQuestions = 0;
+
+            foreach ($chunks as $index => $chunkText) {
+                $terms = ai_extract_terms($chunkText, $content['title'] ?? null, $content['main_heading'] ?? null);
+                $importance = 20 + min(60, count($terms) * 2);
+                $chunkHash = hash('sha256', ai_normalize_text($chunkText));
+
+                $chunkStmt = $pdo->prepare("
+                    INSERT INTO ai_content_chunks (
                         tenant_id,
                         site_id,
                         page_id,
-                        chunk_id,
-                        question,
-                        normalized_question,
-                        answer_text,
+                        chunk_index,
+                        heading,
+                        chunk_text,
+                        normalized_text,
                         category,
                         detected_intent,
-                        source_type,
-                        score,
+                        keywords_json,
+                        importance_score,
+                        content_hash,
                         status
                     ) VALUES (
                         :tenant_id,
                         :site_id,
                         :page_id,
-                        :chunk_id,
-                        :question,
-                        :normalized_question,
-                        :answer_text,
+                        :chunk_index,
+                        :heading,
+                        :chunk_text,
+                        :normalized_text,
                         :category,
                         :detected_intent,
-                        'template',
-                        :score,
+                        :keywords_json,
+                        :importance_score,
+                        :content_hash,
                         'active'
                     )
                 ");
 
-                $questionStmt->execute([
+                $chunkStmt->execute([
                     ':tenant_id' => $tenantId,
                     ':site_id' => $siteId,
                     ':page_id' => $pageId,
-                    ':chunk_id' => $chunkId,
-                    ':question' => $question,
-                    ':normalized_question' => ai_normalize_text($question),
-                    ':answer_text' => mb_substr($chunkText, 0, 900),
+                    ':chunk_index' => $index,
+                    ':heading' => $content['main_heading'] ?? $content['title'] ?? null,
+                    ':chunk_text' => $chunkText,
+                    ':normalized_text' => ai_normalize_text($chunkText),
                     ':category' => $detected['category'],
                     ':detected_intent' => $detected['intent'],
-                    ':score' => $importance,
+                    ':keywords_json' => json_encode(array_slice($terms, 0, 15), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ':importance_score' => $importance,
+                    ':content_hash' => $chunkHash,
                 ]);
 
-                $createdQuestions++;
-            }
-        }
+                $chunkId = (int) $pdo->lastInsertId();
+                $createdChunks++;
 
-        return [
-            'page_id' => $pageId,
-            'chunks' => $createdChunks,
-            'terms' => $createdTerms,
-            'questions' => $createdQuestions,
-            'category' => $detected['category'],
-            'intent' => $detected['intent'],
-        ];
+                // اگر Chunk با همان محتوا دوباره ساخته شده باشد، سؤال ویرایش‌شده به آن متصل می‌ماند.
+                $relinkStmt = $pdo->prepare("
+                    UPDATE ai_generated_questions
+                    SET
+                        chunk_id = :chunk_id,
+                        last_seen_crawl_run_id = :crawl_run_id
+                    WHERE page_id = :page_id
+                      AND tenant_id = :tenant_id
+                      AND is_user_edited = 1
+                      AND source_chunk_hash = :source_chunk_hash
+                ");
+                $relinkStmt->execute([
+                    ':chunk_id' => $chunkId,
+                    ':crawl_run_id' => $crawlMarker,
+                    ':page_id' => $pageId,
+                    ':tenant_id' => $tenantId,
+                    ':source_chunk_hash' => $chunkHash,
+                ]);
+
+                foreach ($terms as $term) {
+                    $termStmt = $pdo->prepare("
+                        INSERT INTO ai_terms (
+                            tenant_id,
+                            site_id,
+                            page_id,
+                            chunk_id,
+                            term,
+                            normalized_term,
+                            term_type,
+                            category,
+                            detected_intent,
+                            frequency,
+                            score
+                        ) VALUES (
+                            :tenant_id,
+                            :site_id,
+                            :page_id,
+                            :chunk_id,
+                            :term,
+                            :normalized_term,
+                            :term_type,
+                            :category,
+                            :detected_intent,
+                            :frequency,
+                            :score
+                        )
+                    ");
+
+                    $termStmt->execute([
+                        ':tenant_id' => $tenantId,
+                        ':site_id' => $siteId,
+                        ':page_id' => $pageId,
+                        ':chunk_id' => $chunkId,
+                        ':term' => $term['term'],
+                        ':normalized_term' => $term['normalized_term'],
+                        ':term_type' => $term['term_type'],
+                        ':category' => $detected['category'],
+                        ':detected_intent' => $detected['intent'],
+                        ':frequency' => $term['frequency'],
+                        ':score' => $term['score'],
+                    ]);
+
+                    $createdTerms++;
+                }
+
+                $questions = ai_generate_questions_from_chunk(
+                    $content['title'] ?? null,
+                    $content['main_heading'] ?? null,
+                    $detected['category'],
+                    $detected['intent'],
+                    $chunkText
+                );
+
+                foreach ($questions as $question) {
+                    $normalizedQuestion = ai_normalize_text($question);
+                    $originQuestionHash = hash('sha256', $normalizedQuestion);
+
+                    $existsStmt = $pdo->prepare("
+                        SELECT id, page_id, is_user_edited
+                        FROM ai_generated_questions
+                        WHERE site_id = :site_id
+                          AND origin_question_hash = :origin_question_hash
+                        ORDER BY is_user_edited DESC, id ASC
+                        LIMIT 1
+                    ");
+
+                    $existsStmt->execute([
+                        ':site_id' => $siteId,
+                        ':origin_question_hash' => $originQuestionHash,
+                    ]);
+                    $existingQuestion = $existsStmt->fetch();
+
+                    if ($existingQuestion) {
+                        // سؤال متعلق به صفحه دیگری است؛ از تولید نسخه تکراری جلوگیری می‌کنیم.
+                        if ((int) $existingQuestion['page_id'] !== $pageId) {
+                            continue;
+                        }
+
+                        if ((int) $existingQuestion['is_user_edited'] === 1) {
+                            $refreshEditedStmt = $pdo->prepare("
+                                UPDATE ai_generated_questions
+                                SET
+                                    chunk_id = :chunk_id,
+                                    source_chunk_hash = :source_chunk_hash,
+                                    last_seen_crawl_run_id = :crawl_run_id,
+                                    preserved_at = COALESCE(preserved_at, NOW())
+                                WHERE id = :id
+                                  AND tenant_id = :tenant_id
+                            ");
+                            $refreshEditedStmt->execute([
+                                ':chunk_id' => $chunkId,
+                                ':source_chunk_hash' => $chunkHash,
+                                ':crawl_run_id' => $crawlMarker,
+                                ':id' => (int) $existingQuestion['id'],
+                                ':tenant_id' => $tenantId,
+                            ]);
+                        } else {
+                            $refreshAutomaticStmt = $pdo->prepare("
+                                UPDATE ai_generated_questions
+                                SET
+                                    chunk_id = :chunk_id,
+                                    question = :question,
+                                    normalized_question = :normalized_question,
+                                    answer_text = :answer_text,
+                                    category = :category,
+                                    detected_intent = :detected_intent,
+                                    source_type = 'template',
+                                    score = :score,
+                                    status = 'active',
+                                    source_chunk_hash = :source_chunk_hash,
+                                    last_seen_crawl_run_id = :crawl_run_id,
+                                    preserved_at = NULL
+                                WHERE id = :id
+                                  AND tenant_id = :tenant_id
+                            ");
+                            $refreshAutomaticStmt->execute([
+                                ':chunk_id' => $chunkId,
+                                ':question' => $question,
+                                ':normalized_question' => $normalizedQuestion,
+                                ':answer_text' => mb_substr($chunkText, 0, 900),
+                                ':category' => $detected['category'],
+                                ':detected_intent' => $detected['intent'],
+                                ':score' => $importance,
+                                ':source_chunk_hash' => $chunkHash,
+                                ':crawl_run_id' => $crawlMarker,
+                                ':id' => (int) $existingQuestion['id'],
+                                ':tenant_id' => $tenantId,
+                            ]);
+                        }
+
+                        continue;
+                    }
+
+                    $questionStmt = $pdo->prepare("
+                        INSERT INTO ai_generated_questions (
+                            tenant_id,
+                            site_id,
+                            page_id,
+                            chunk_id,
+                            question,
+                            normalized_question,
+                            origin_question_hash,
+                            answer_text,
+                            category,
+                            detected_intent,
+                            source_type,
+                            is_user_edited,
+                            source_chunk_hash,
+                            last_seen_crawl_run_id,
+                            score,
+                            status
+                        ) VALUES (
+                            :tenant_id,
+                            :site_id,
+                            :page_id,
+                            :chunk_id,
+                            :question,
+                            :normalized_question,
+                            :origin_question_hash,
+                            :answer_text,
+                            :category,
+                            :detected_intent,
+                            'template',
+                            0,
+                            :source_chunk_hash,
+                            :last_seen_crawl_run_id,
+                            :score,
+                            'active'
+                        )
+                    ");
+
+                    $questionStmt->execute([
+                        ':tenant_id' => $tenantId,
+                        ':site_id' => $siteId,
+                        ':page_id' => $pageId,
+                        ':chunk_id' => $chunkId,
+                        ':question' => $question,
+                        ':normalized_question' => $normalizedQuestion,
+                        ':origin_question_hash' => $originQuestionHash,
+                        ':answer_text' => mb_substr($chunkText, 0, 900),
+                        ':category' => $detected['category'],
+                        ':detected_intent' => $detected['intent'],
+                        ':source_chunk_hash' => $chunkHash,
+                        ':last_seen_crawl_run_id' => $crawlMarker,
+                        ':score' => $importance,
+                    ]);
+
+                    $createdQuestions++;
+                }
+            }
+
+            // سؤال‌های خودکاری که در نسخه جدید صفحه دیگر تولید نشدند آرشیو می‌شوند؛
+            // سؤال‌های ویرایش‌شده هرگز توسط خزشگر آرشیو یا بازنویسی نمی‌شوند.
+            $archiveStmt = $pdo->prepare("
+                UPDATE ai_generated_questions
+                SET
+                    status = 'archived',
+                    chunk_id = NULL
+                WHERE page_id = :page_id
+                  AND tenant_id = :tenant_id
+                  AND is_user_edited = 0
+                  AND COALESCE(last_seen_crawl_run_id, 0) <> :crawl_run_id
+                  AND status <> 'archived'
+            ");
+            $archiveStmt->execute([
+                ':page_id' => $pageId,
+                ':tenant_id' => $tenantId,
+                ':crawl_run_id' => $crawlMarker,
+            ]);
+            $archivedQuestions = $archiveStmt->rowCount();
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+
+            return [
+                'page_id' => $pageId,
+                'chunks' => $createdChunks,
+                'terms' => $createdTerms,
+                'questions' => $createdQuestions,
+                'preserved_questions' => $preservedQuestions,
+                'archived_questions' => $archivedQuestions,
+                'unchanged' => false,
+                'category' => $detected['category'],
+                'intent' => $detected['intent'],
+            ];
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $e;
+        }
     }
 }
 

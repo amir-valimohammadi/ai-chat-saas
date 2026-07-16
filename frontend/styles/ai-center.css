@@ -218,7 +218,8 @@
     border-color: #bbf7d0;
 }
 
-.ai-center-status-inactive,
+.ai-center-status-draft,
+.ai-center-status-ignored,
 .ai-center-status-archived {
     color: #9a3412;
     background: #fff7ed;
@@ -276,4 +277,25 @@
     .ai-center-toolbar {
         width: 100%;
     }
+}
+.ai-center-metric small {
+    color: var(--muted);
+    font-size: 10.5px;
+    line-height: 1.5;
+}
+
+
+/* AI Stabilization 1C: نمایش دانش ویرایش‌شده‌ای که در خزش مجدد حفظ می‌شود */
+.ai-center-question-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.ai-center-preserved-chip {
+    color: #6d28d9;
+    background: #f5f3ff;
+    border-color: #ddd6fe;
 }

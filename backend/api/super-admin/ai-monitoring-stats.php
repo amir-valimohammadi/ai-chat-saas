@@ -61,7 +61,7 @@ function ai_monitoring_where(
     string $replyMode,
     array &$params
 ): string {
-    $where = "{$alias}.created_at >= :start_date";
+    $where = "{$alias}.created_at >= :start_date AND {$alias}.request_source <> 'test'";
 
     if ($tenantId > 0) {
         $where .= " AND {$alias}.tenant_id = :tenant_id";
@@ -409,7 +409,7 @@ try {
         ':start_date' => $startDate,
     ];
 
-    $unansweredWhere = "questions.created_at >= :start_date AND questions.status = 'new'";
+    $unansweredWhere = "questions.last_seen_at >= :start_date AND questions.status = 'new'";
 
     if ($tenantId > 0) {
         $unansweredWhere .= " AND questions.tenant_id = :tenant_id";
@@ -430,9 +430,9 @@ try {
             questions.question,
             MAX(questions.detected_category) AS detected_category,
             MAX(questions.detected_intent) AS detected_intent,
-            COUNT(*) AS occurrences,
+            SUM(questions.occurrence_count) AS occurrences,
             AVG(questions.best_match_score) AS average_best_match_score,
-            MAX(questions.created_at) AS last_seen_at
+            MAX(questions.last_seen_at) AS last_seen_at
         FROM ai_unanswered_questions AS questions
         INNER JOIN tenants ON tenants.id = questions.tenant_id
         INNER JOIN sites ON sites.id = questions.site_id
@@ -479,6 +479,8 @@ try {
             logs.user_question,
             logs.reply_text,
             logs.reply_mode,
+            logs.request_source,
+            logs.failure_reason,
             logs.confidence_score,
             logs.sources_json,
             logs.created_at
@@ -516,6 +518,8 @@ try {
             'user_question' => $row['user_question'],
             'reply_text' => $row['reply_text'],
             'reply_mode' => $row['reply_mode'],
+            'request_source' => $row['request_source'],
+            'failure_reason' => $row['failure_reason'],
             'confidence_score' => (float) $row['confidence_score'],
             'sources_count' => $sourcesCount,
             'created_at' => $row['created_at'],

@@ -30,7 +30,9 @@ try {
         'terms' => "SELECT COUNT(*) FROM ai_terms WHERE tenant_id = :tenant_id AND site_id = :site_id",
         'questions' => "SELECT COUNT(*) FROM ai_generated_questions WHERE tenant_id = :tenant_id AND site_id = :site_id AND status = 'active'",
         'unanswered' => "SELECT COUNT(*) FROM ai_unanswered_questions WHERE tenant_id = :tenant_id AND site_id = :site_id AND status = 'new'",
-        'answer_logs' => "SELECT COUNT(*) FROM ai_answer_logs WHERE tenant_id = :tenant_id AND site_id = :site_id",
+        'unanswered_occurrences' => "SELECT COALESCE(SUM(occurrence_count), 0) FROM ai_unanswered_questions WHERE tenant_id = :tenant_id AND site_id = :site_id AND status = 'new'",
+        'answer_logs' => "SELECT COUNT(*) FROM ai_answer_logs WHERE tenant_id = :tenant_id AND site_id = :site_id AND request_source <> 'test'",
+        'test_logs' => "SELECT COUNT(*) FROM ai_answer_logs WHERE tenant_id = :tenant_id AND site_id = :site_id AND request_source = 'test'",
     ];
 
     $counts = [];

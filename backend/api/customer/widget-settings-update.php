@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/plan-limits.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -109,6 +110,23 @@ if (!in_array($aiMode, $allowedAiModes, true)) {
 }
 
 try {
+    if ($aiMode === 'semi_auto') {
+        $plan = get_tenant_plan_limits($pdo, (int) $user['tenant_id']);
+
+        if (!$plan['ai_auto_reply_enabled']) {
+            json_response([
+                'success' => false,
+                'code' => 'PLAN_FEATURE_UNAVAILABLE',
+                'message' => 'قابلیت پاسخ خودکار در پلن فعلی فعال نیست. ابتدا آن را از پنل سوپر ادمین برای پلن مشتری فعال کنید.',
+                'feature' => 'ai_auto_reply_enabled',
+                'plan' => [
+                    'id' => $plan['plan_id'],
+                    'name' => $plan['plan_name'],
+                ],
+            ], 403);
+        }
+    }
+
     $siteStmt = $pdo->prepare("
         SELECT id
         FROM sites
@@ -128,6 +146,8 @@ try {
             'message' => 'سایت موردنظر پیدا نشد.',
         ], 404);
     }
+
+    $pdo->beginTransaction();
 
     $stmt = $pdo->prepare("
         UPDATE sites
@@ -151,6 +171,34 @@ try {
         ':tenant_id' => (int) $user['tenant_id'],
     ]);
 
+    $assistantEnabled = $aiMode === 'off' ? 0 : 1;
+    $autoReplyEnabled = $aiMode === 'semi_auto' ? 1 : 0;
+
+    $aiSettingsStmt = $pdo->prepare("
+        INSERT INTO ai_site_settings (
+            tenant_id,
+            site_id,
+            assistant_enabled,
+            auto_reply_enabled
+        ) VALUES (
+            :tenant_id,
+            :site_id,
+            :assistant_enabled,
+            :auto_reply_enabled
+        )
+        ON DUPLICATE KEY UPDATE
+            assistant_enabled = VALUES(assistant_enabled),
+            auto_reply_enabled = VALUES(auto_reply_enabled)
+    ");
+    $aiSettingsStmt->execute([
+        ':tenant_id' => (int) $user['tenant_id'],
+        ':site_id' => $siteId,
+        ':assistant_enabled' => $assistantEnabled,
+        ':auto_reply_enabled' => $autoReplyEnabled,
+    ]);
+
+    $pdo->commit();
+
     json_response([
         'success' => true,
         'message' => 'تنظیمات ویجت با موفقیت ذخیره شد.',
@@ -164,6 +212,10 @@ try {
         ],
     ]);
 } catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
     $payload = [
         'success' => false,
         'message' => 'ذخیره تنظیمات ویجت با خطا مواجه شد.',

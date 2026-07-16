@@ -31,17 +31,19 @@ try {
             (SELECT COUNT(*) FROM users WHERE role = 'agent' AND is_active = 1) AS agents_total,
             (SELECT COUNT(*) FROM conversations WHERE created_at >= CURDATE()) AS conversations_today,
             (SELECT COUNT(*) FROM messages WHERE created_at >= CURDATE()) AS messages_today,
-            (SELECT COUNT(*) FROM ai_answer_logs WHERE created_at >= CURDATE()) AS ai_requests_today,
+            (SELECT COUNT(*) FROM ai_answer_logs WHERE created_at >= CURDATE() AND request_source <> 'test') AS ai_requests_today,
             (
                 SELECT COUNT(*)
                 FROM ai_answer_logs
                 WHERE created_at >= CURDATE()
+                  AND request_source <> 'test'
                   AND reply_mode = 'no_answer'
             ) AS ai_no_answer_today,
             (
                 SELECT COUNT(*)
                 FROM ai_answer_logs
                 WHERE created_at >= CURDATE()
+                  AND request_source <> 'test'
                   AND reply_mode IN ('suggestion', 'auto_reply')
             ) AS ai_successful_today
     ");
@@ -94,6 +96,7 @@ try {
         SELECT DATE(created_at) AS activity_date, COUNT(*) AS total
         FROM ai_answer_logs
         WHERE created_at >= :trend_start
+          AND request_source <> 'test'
         GROUP BY DATE(created_at)
     ");
     $aiTrendStmt->execute([':trend_start' => $trendStartSql]);
