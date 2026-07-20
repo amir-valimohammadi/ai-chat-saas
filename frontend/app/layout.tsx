@@ -21,6 +21,7 @@ import "../styles/super-admin-plans.css";
 import "../styles/super-admin-subscriptions.css";
 import "../styles/super-admin-ai-monitoring.css";
 import "../styles/super-admin-audit-logs.css";
+import "../styles/super-admin-requests.css";
 import "../styles/subscription.css";
 import "../styles/sites.css";
 import "../styles/landing.css";

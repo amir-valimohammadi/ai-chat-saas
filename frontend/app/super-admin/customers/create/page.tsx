@@ -18,6 +18,19 @@ type Plan = {
     is_active?: boolean;
 };
 
+type SourceRequest = {
+    id: number;
+    tracking_code: string;
+    full_name: string;
+    phone: string;
+    business_name?: string | null;
+    email?: string | null;
+    website_url?: string | null;
+    desired_plan_id?: number | null;
+    request_type_label?: string;
+    status?: string;
+};
+
 type CreateResult = {
     tenant?: {
         id?: number;
@@ -43,6 +56,8 @@ export default function SuperAdminCreateCustomerPage() {
     const router = useRouter();
 
     const [plans, setPlans] = useState<Plan[]>([]);
+    const [requestId, setRequestId] = useState<number | null>(null);
+    const [sourceRequest, setSourceRequest] = useState<SourceRequest | null>(null);
     const [form, setForm] = useState({
         tenant_name: "",
         owner_name: "",
@@ -74,6 +89,12 @@ export default function SuperAdminCreateCustomerPage() {
         }
 
         loadPlans();
+
+        const sourceId = Number(new URLSearchParams(window.location.search).get("request_id") || 0);
+        if (sourceId > 0) {
+            setRequestId(sourceId);
+            loadSourceRequest(sourceId);
+        }
     }, [router]);
 
     async function loadPlans() {
@@ -88,13 +109,40 @@ export default function SuperAdminCreateCustomerPage() {
             if (loadedPlans.length > 0) {
                 setForm((prev) => ({
                     ...prev,
-                    plan_id: String(loadedPlans[0].id),
+                    plan_id: prev.plan_id || String(loadedPlans[0].id),
                 }));
             }
         } catch {
             // اگر پلن‌ها لود نشوند، فرم همچنان قابل نمایش است.
         } finally {
             setLoadingPlans(false);
+        }
+    }
+
+    async function loadSourceRequest(id: number) {
+        try {
+            const data = await apiRequest(`/super-admin/contact-request-show.php?id=${id}`);
+            const source = data.request as SourceRequest;
+
+            if (source.status === "converted") {
+                setError("این درخواست قبلاً به مشتری تبدیل شده است.");
+                setSourceRequest(source);
+                return;
+            }
+
+            setSourceRequest(source);
+            setForm((prev) => ({
+                ...prev,
+                tenant_name: source.business_name || source.full_name || prev.tenant_name,
+                owner_name: source.full_name || prev.owner_name,
+                owner_email: source.email || prev.owner_email,
+                owner_phone: source.phone || prev.owner_phone,
+                site_name: source.business_name || prev.site_name,
+                site_domain: source.website_url || prev.site_domain,
+                plan_id: source.desired_plan_id ? String(source.desired_plan_id) : prev.plan_id,
+            }));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "دریافت اطلاعات درخواست ناموفق بود.");
         }
     }
 
@@ -130,6 +178,7 @@ export default function SuperAdminCreateCustomerPage() {
             domain: form.site_domain,
             site_domain: form.site_domain,
             plan_id: form.plan_id ? Number(form.plan_id) : null,
+            request_id: requestId,
         };
 
         if (!form.tenant_name.trim()) {
@@ -169,6 +218,9 @@ export default function SuperAdminCreateCustomerPage() {
             });
 
             setResult(data);
+            if (sourceRequest) {
+                setSourceRequest((current) => current ? { ...current, status: "converted" } : current);
+            }
 
             setForm({
                 tenant_name: "",
@@ -208,11 +260,28 @@ export default function SuperAdminCreateCustomerPage() {
             kicker="New Customer"
             description="ساخت حساب مشتری، سایت اولیه و کد نصب ویجت"
             actions={
-                <Link className="btn secondary" href="/super-admin/customers">
-                    بازگشت به مشتری‌ها
-                </Link>
+                sourceRequest ? (
+                    <Link className="btn secondary" href={`/super-admin/contact-requests/${sourceRequest.id}`}>
+                        بازگشت به درخواست
+                    </Link>
+                ) : (
+                    <Link className="btn secondary" href="/super-admin/customers">
+                        بازگشت به مشتری‌ها
+                    </Link>
+                )
             }
         >
+            {sourceRequest && (
+                <div className="customer-source-request-banner">
+                    <div>
+                        <small>ایجاد مشتری از درخواست {sourceRequest.tracking_code}</small>
+                        <strong>{sourceRequest.full_name}{sourceRequest.business_name ? ` · ${sourceRequest.business_name}` : ""}</strong>
+                        <span>{sourceRequest.request_type_label || "درخواست مشتری"}؛ اطلاعات قابل انتقال به فرم وارد شده‌اند.</span>
+                    </div>
+                    <Link href={`/super-admin/contact-requests/${sourceRequest.id}`}>مشاهده جزئیات درخواست</Link>
+                </div>
+            )}
+
             {error && <div className="error">{error}</div>}
 
             {result && (

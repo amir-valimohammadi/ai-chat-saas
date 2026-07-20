@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/contact-requests.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -20,6 +21,9 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 
 $input = get_json_input();
+
+$requestId = isset($input['request_id']) ? (int) $input['request_id'] : null;
+$requestRecord = null;
 
 $tenantName = trim($input['tenant_name'] ?? '');
 $ownerName = trim($input['owner_name'] ?? '');
@@ -81,7 +85,38 @@ if (strlen($adminPassword) < 8) {
     ], 422);
 }
 
+if ($requestId !== null && $requestId <= 0) {
+    json_response([
+        'success' => false,
+        'message' => 'Invalid customer request'
+    ], 422);
+}
+
 try {
+    if ($requestId !== null) {
+        $requestStmt = $pdo->prepare("
+            SELECT id, tracking_code, status, converted_tenant_id
+            FROM customer_requests
+            WHERE id = :id
+            LIMIT 1
+        ");
+        $requestStmt->execute([':id' => $requestId]);
+        $requestRecord = $requestStmt->fetch();
+
+        if (!$requestRecord) {
+            json_response([
+                'success' => false,
+                'message' => 'Customer request was not found'
+            ], 404);
+        }
+
+        if ($requestRecord['status'] === 'converted' || $requestRecord['converted_tenant_id'] !== null) {
+            json_response([
+                'success' => false,
+                'message' => 'This request has already been converted to a customer'
+            ], 409);
+        }
+    }
     $planStmt = $pdo->prepare("
         SELECT id, name, max_sites, price_monthly
         FROM plans
@@ -145,6 +180,37 @@ try {
     }
 
     $pdo->beginTransaction();
+
+    // قفل رکورد درخواست برای جلوگیری از تبدیل هم‌زمان یک درخواست به چند مشتری.
+    if ($requestId !== null) {
+        $requestLockStmt = $pdo->prepare("
+            SELECT id, tracking_code, status, converted_tenant_id
+            FROM customer_requests
+            WHERE id = :id
+            LIMIT 1
+            FOR UPDATE
+        ");
+        $requestLockStmt->execute([':id' => $requestId]);
+        $lockedRequest = $requestLockStmt->fetch();
+
+        if (!$lockedRequest) {
+            $pdo->rollBack();
+            json_response([
+                'success' => false,
+                'message' => 'Customer request was not found'
+            ], 404);
+        }
+
+        if ($lockedRequest['status'] === 'converted' || $lockedRequest['converted_tenant_id'] !== null) {
+            $pdo->rollBack();
+            json_response([
+                'success' => false,
+                'message' => 'This request has already been converted to a customer'
+            ], 409);
+        }
+
+        $requestRecord = $lockedRequest;
+    }
 
     $tenantStmt = $pdo->prepare("
         INSERT INTO tenants (
@@ -267,6 +333,37 @@ try {
         ':site_id' => $siteId,
     ]);
 
+    if ($requestId !== null && $requestRecord) {
+        $requestUpdateStmt = $pdo->prepare("
+            UPDATE customer_requests
+            SET status = 'converted',
+                converted_tenant_id = :tenant_id,
+                converted_at = NOW(),
+                follow_up_at = NULL
+            WHERE id = :request_id
+              AND status <> 'converted'
+        ");
+        $requestUpdateStmt->execute([
+            ':tenant_id' => $tenantId,
+            ':request_id' => $requestId,
+        ]);
+
+        contact_request_insert_event(
+            $pdo,
+            $requestId,
+            'converted',
+            $user,
+            'درخواست به مشتری «' . $tenantName . '» تبدیل شد.',
+            $requestRecord['status'],
+            'converted',
+            [
+                'tenant_id' => $tenantId,
+                'site_id' => $siteId,
+                'admin_user_id' => $adminUserId,
+            ]
+        );
+    }
+
     $pdo->commit();
 
     $installCode = '<script src="https://yourdomain.com/widget.js" data-site-key="' . htmlspecialchars($siteKey, ENT_QUOTES, 'UTF-8') . '"></script>';
@@ -292,7 +389,12 @@ try {
             'name' => $adminName,
             'email' => $adminEmail,
             'role' => 'customer_admin',
-        ]
+        ],
+        'source_request' => $requestId !== null ? [
+            'id' => $requestId,
+            'tracking_code' => $requestRecord['tracking_code'] ?? null,
+            'status' => 'converted',
+        ] : null,
     ], 201);
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {

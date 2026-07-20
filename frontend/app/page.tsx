@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import ContactRequestSection from "@/components/public/ContactRequestSection";
 
 type IconName =
     | "spark"
@@ -92,7 +93,7 @@ const workflow = [
 
 const plans = [
     {
-        name: "Starter",
+        name: "Basic",
         caption: "برای شروع و تست محصول",
         items: ["یک سایت", "ویجت شخصی‌سازی‌شده", "Inbox پشتیبانی", "دانش دستی", "گزارش پایه"],
     },
@@ -103,7 +104,7 @@ const plans = [
         items: ["چند پشتیبان", "خزش داخلی سایت", "موتور پاسخ فارسی", "پاسخ خودکار کنترل‌شده", "گزارش کیفیت AI"],
     },
     {
-        name: "Scale",
+        name: "Pro",
         caption: "برای تیم‌ها و چند سایت",
         items: ["چند سایت", "مدیریت تیم پیشرفته", "محدودیت‌های اختصاصی", "نظارت سوپرادمین", "گزارش و کنترل کامل"],
     },
@@ -146,6 +147,14 @@ export default function HomePage() {
         return () => observer.disconnect();
     }, []);
 
+    function choosePlan(planName: string) {
+        window.dispatchEvent(
+            new CustomEvent("contact-plan-select", {
+                detail: { planName },
+            }),
+        );
+    }
+
     return (
         <main className="orbit-page">
             <div className="orbit-grid-bg" aria-hidden="true" />
@@ -167,6 +176,7 @@ export default function HomePage() {
                         <a href="#intelligence" onClick={() => setMobileOpen(false)}>موتور هوشمند</a>
                         <a href="#workflow" onClick={() => setMobileOpen(false)}>نحوه کار</a>
                         <a href="#plans" onClick={() => setMobileOpen(false)}>پلن‌ها</a>
+                        <a href="#contact" onClick={() => setMobileOpen(false)}>مشاوره و خرید</a>
                         <a href="#faq" onClick={() => setMobileOpen(false)}>سؤالات متداول</a>
                         <Link href="/login" className="orbit-nav-login">ورود به پنل <Icon name="arrow" size={17} /></Link>
                     </nav>
@@ -207,8 +217,8 @@ export default function HomePage() {
                             ورود به پنل محصول
                             <Icon name="arrow" size={19} />
                         </Link>
-                        <a href="#platform" className="orbit-button orbit-button--ghost">
-                            مشاهده قابلیت‌ها
+                        <a href="#contact" className="orbit-button orbit-button--ghost">
+                            درخواست مشاوره
                         </a>
                     </div>
 
@@ -286,9 +296,18 @@ export default function HomePage() {
                 </div>
             </section>
 
-            <section className="orbit-section" id="platform">
+            <nav className="orbit-journey-map" aria-label="مسیر معرفی محصول" data-reveal>
+                <a href="#platform"><span>01</span><strong>قابلیت‌ها</strong><small>ساختار یکپارچه محصول</small></a>
+                <a href="#intelligence"><span>02</span><strong>موتور هوشمند</strong><small>پاسخ فارسی و منبع</small></a>
+                <a href="#workflow"><span>03</span><strong>راه‌اندازی</strong><small>چهار مرحله روشن</small></a>
+                <a href="#widget"><span>04</span><strong>ویجت</strong><small>تجربه مطابق برند</small></a>
+                <a href="#plans"><span>05</span><strong>پلن‌ها</strong><small>انتخاب ظرفیت مناسب</small></a>
+                <a href="#contact" className="is-highlighted"><span>06</span><strong>شروع همکاری</strong><small>ثبت درخواست مشاوره</small></a>
+            </nav>
+
+            <section className="orbit-section orbit-section--surface orbit-section--platform" id="platform">
                 <div className="orbit-section-heading" data-reveal>
-                    <span className="orbit-kicker"><Icon name="layers" size={17}/> همه‌چیز در یک محصول</span>
+                    <span className="orbit-kicker"><Icon name="layers" size={17}/> 01 · همه‌چیز در یک محصول</span>
                     <h2>یک محصول برای کل مسیر پشتیبانی</h2>
                     <p>از دریافت پیام تا پاسخ‌گویی و گزارش، همه‌چیز در یک جریان ساده و قابل مدیریت قرار دارد.</p>
                 </div>
@@ -321,7 +340,7 @@ export default function HomePage() {
 
             <section className="orbit-intelligence" id="intelligence">
                 <div className="orbit-intelligence-copy" data-reveal>
-                    <span className="orbit-kicker orbit-kicker--light"><Icon name="brain" size={17}/> موتور پاسخ داخلی</span>
+                    <span className="orbit-kicker orbit-kicker--light"><Icon name="brain" size={17}/> 02 · موتور پاسخ داخلی</span>
                     <h2>پاسخ فارسی با منبع و امتیاز اطمینان</h2>
                     <p>سؤال کاربر پردازش می‌شود، منابع مرتبط رتبه‌بندی می‌شوند و پاسخ همراه با دلیل انتخاب نمایش داده می‌شود.</p>
                     <ul>
@@ -357,9 +376,9 @@ export default function HomePage() {
                 </div>
             </section>
 
-            <section className="orbit-section" id="workflow">
+            <section className="orbit-section orbit-section--soft orbit-section--workflow" id="workflow">
                 <div className="orbit-section-heading orbit-section-heading--center" data-reveal>
-                    <span className="orbit-kicker"><Icon name="spark" size={17}/> مسیر راه‌اندازی</span>
+                    <span className="orbit-kicker"><Icon name="spark" size={17}/> 03 · مسیر راه‌اندازی</span>
                     <h2>راه‌اندازی در چهار مرحله روشن</h2>
                 </div>
                 <div className="orbit-workflow">
@@ -374,10 +393,10 @@ export default function HomePage() {
                 </div>
             </section>
 
-            <section className="orbit-widget-section">
+            <section className="orbit-widget-section orbit-widget-section--surface" id="widget">
                 <div className="orbit-widget-showcase" data-reveal>
                     <div className="orbit-widget-copy">
-                        <span className="orbit-kicker"><Icon name="chat" size={17}/> تجربه‌ای مطابق برند شما</span>
+                        <span className="orbit-kicker"><Icon name="chat" size={17}/> 04 · تجربه‌ای مطابق برند شما</span>
                         <h2>ویجتی هماهنگ با ظاهر سایت شما</h2>
                         <p>ظاهر و رفتار ویجت برای هر سایت به‌صورت مستقل قابل تنظیم است.</p>
                         <div className="orbit-customization-list">
@@ -404,7 +423,7 @@ export default function HomePage() {
                 </div>
             </section>
 
-            <section className="orbit-section orbit-security-section">
+            <section className="orbit-section orbit-security-section orbit-section--plain">
                 <div className="orbit-security-card" data-reveal>
                     <div className="orbit-security-icon"><Icon name="shield" size={32}/></div>
                     <div>
@@ -418,9 +437,9 @@ export default function HomePage() {
                 </div>
             </section>
 
-            <section className="orbit-section" id="plans">
+            <section className="orbit-section orbit-section--surface orbit-section--plans" id="plans">
                 <div className="orbit-section-heading orbit-section-heading--center" data-reveal>
-                    <span className="orbit-kicker"><Icon name="layers" size={17}/> پلن‌های قابل توسعه</span>
+                    <span className="orbit-kicker"><Icon name="layers" size={17}/> 05 · پلن‌های قابل توسعه</span>
                     <h2>پلن‌های ساده و قابل توسعه</h2>
                     <p>ساختار پلن‌ها در پنل سوپرادمین قابل مدیریت است و دسترسی به قابلیت‌ها بر اساس هر پلن کنترل می‌شود.</p>
                 </div>
@@ -432,16 +451,29 @@ export default function HomePage() {
                             <h3>{plan.name}</h3>
                             <div className="orbit-plan-line"/>
                             <ul>{plan.items.map((item) => <li key={item}><Icon name="check" size={16}/>{item}</li>)}</ul>
-                            <Link href="/login">مشاهده در پنل <Icon name="arrow" size={17}/></Link>
+                            <button type="button" onClick={() => choosePlan(plan.name)}>
+                                درخواست این پلن <Icon name="arrow" size={17}/>
+                            </button>
                         </article>
                     ))}
                 </div>
             </section>
 
-            <section className="orbit-section" id="faq">
+            <div className="orbit-contact-transition" data-reveal>
+                <span>06</span>
+                <div>
+                    <small>از معرفی محصول تا شروع همکاری</small>
+                    <strong>محصول را دیدید؛ حالا نیاز واقعی کسب‌وکارتان را با ما در میان بگذارید.</strong>
+                </div>
+                <a href="#contact">ثبت درخواست <Icon name="arrow" size={18}/></a>
+            </div>
+
+            <ContactRequestSection />
+
+            <section className="orbit-section orbit-section--soft orbit-section--faq" id="faq">
                 <div className="orbit-faq-layout">
                     <div className="orbit-faq-copy" data-reveal>
-                        <span className="orbit-kicker"><Icon name="spark" size={17}/> پاسخ کوتاه و شفاف</span>
+                        <span className="orbit-kicker"><Icon name="spark" size={17}/> 07 · پاسخ کوتاه و شفاف</span>
                         <h2>سؤالاتی که در معرفی محصول پرسیده می‌شوند</h2>
                         <p>این بخش مهم‌ترین تفاوت‌ها و شیوه کار محصول را برای ارائه سریع و روشن جمع‌بندی می‌کند.</p>
                         <Link href="/login" className="orbit-text-link">ورود به نسخه عملیاتی <Icon name="arrow" size={18}/></Link>
@@ -464,7 +496,7 @@ export default function HomePage() {
                 <p>ویجت، تیم پشتیبانی، دانش سایت و موتور پاسخ فارسی در یک محصول یکپارچه.</p>
                 <div>
                     <Link href="/login" className="orbit-button orbit-button--light">ورود به پنل محصول <Icon name="arrow" size={19}/></Link>
-                    <a href="#platform" className="orbit-button orbit-button--dark">مرور دوباره قابلیت‌ها</a>
+                    <a href="#contact" className="orbit-button orbit-button--dark">درخواست مشاوره و خرید</a>
                 </div>
             </section>
 
@@ -478,7 +510,7 @@ export default function HomePage() {
                 </div>
                 <div className="orbit-footer-links">
                     <div><strong>محصول</strong><a href="#platform">قابلیت‌ها</a><a href="#intelligence">موتور هوشمند</a><a href="#workflow">نحوه کار</a></div>
-                    <div><strong>دسترسی</strong><Link href="/login">ورود به پنل</Link><a href="#plans">پلن‌ها</a><a href="#faq">سؤالات متداول</a></div>
+                    <div><strong>دسترسی</strong><Link href="/login">ورود به پنل</Link><a href="#plans">پلن‌ها</a><a href="#contact">مشاوره و خرید</a><a href="#faq">سؤالات متداول</a></div>
                 </div>
                 <div className="orbit-footer-bottom"><span>© 2026 AI Chat SaaS</span><span>طراحی و توسعه برای ارتباط هوشمندتر با مشتری</span></div>
             </footer>
