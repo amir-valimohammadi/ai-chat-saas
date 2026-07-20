@@ -104,9 +104,17 @@ try {
         'answer' => $replyText,
         'sources' => $result['sources'] ?? [],
         'debug' => [
+            'engine_version' => $result['search_meta']['engine_version'] ?? ai_search_engine_version(),
+            'normalized_question' => $result['normalized_question'] ?? '',
             'tokens' => $result['tokens'] ?? [],
+            'expanded_tokens' => $result['expanded_tokens'] ?? [],
             'detected' => $result['detected'] ?? [],
             'matched_type' => $result['matched_type'] ?? null,
+            'confidence_label' => $result['confidence_label'] ?? 'low',
+            'candidate_count' => $result['search_meta']['candidate_count'] ?? 0,
+            'score_gap' => $result['search_meta']['score_gap'] ?? 0,
+            'matched_terms' => $result['search_meta']['matched_terms'] ?? [],
+            'processing_time_ms' => $result['search_meta']['processing_time_ms'] ?? 0,
             'best_candidates' => $result['best_candidates'] ?? [],
         ]
     ]);

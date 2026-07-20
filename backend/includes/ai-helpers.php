@@ -118,15 +118,242 @@ if (!function_exists('ai_host_belongs_to_site')) {
         $host = ai_normalize_host($host);
         $siteHost = ai_normalize_host($siteDomain);
 
-        if ($host === '' || $siteHost === '') {
+        return $host !== '' && $siteHost !== '' && $host === $siteHost;
+    }
+}
+
+if (!function_exists('ai_is_local_host')) {
+    function ai_is_local_host(string $host): bool
+    {
+        $host = strtolower(trim($host));
+
+        return $host === 'localhost'
+            || str_ends_with($host, '.local')
+            || str_starts_with($host, '127.')
+            || str_starts_with($host, '10.')
+            || str_starts_with($host, '192.168.')
+            || preg_match('/^172\.(1[6-9]|2\d|3[0-1])\./', $host) === 1;
+    }
+}
+
+if (!function_exists('ai_site_scope_base_url')) {
+    function ai_site_scope_base_url(string $siteDomain): string
+    {
+        $siteDomain = trim($siteDomain);
+
+        if ($siteDomain === '') {
+            return '';
+        }
+
+        if (!preg_match('/^https?:\/\//i', $siteDomain)) {
+            $probe = parse_url('https://' . $siteDomain);
+            $host = strtolower((string) ($probe['host'] ?? ''));
+            $scheme = ai_is_local_host($host) ? 'http' : 'https';
+            $siteDomain = $scheme . '://' . $siteDomain;
+        }
+
+        return rtrim($siteDomain, '/');
+    }
+}
+
+if (!function_exists('ai_site_scope_parts')) {
+    function ai_site_scope_parts(string $siteDomain): array
+    {
+        $baseUrl = ai_site_scope_base_url($siteDomain);
+        $parts = parse_url($baseUrl);
+
+        if (!$parts || empty($parts['scheme']) || empty($parts['host'])) {
+            return [];
+        }
+
+        $path = '/' . ltrim((string) ($parts['path'] ?? '/'), '/');
+        $path = rtrim($path, '/');
+
+        if ($path === '') {
+            $path = '/';
+        }
+
+        return [
+            'base_url' => $baseUrl,
+            'scheme' => strtolower((string) $parts['scheme']),
+            'host' => ai_normalize_host((string) $parts['host']),
+            'raw_host' => strtolower((string) $parts['host']),
+            'port' => isset($parts['port']) ? (int) $parts['port'] : null,
+            'base_path' => $path,
+        ];
+    }
+}
+
+if (!function_exists('ai_normalize_internal_path')) {
+    function ai_normalize_internal_path(string $value): ?string
+    {
+        $value = trim($value);
+
+        if ($value === '' || str_contains($value, "\0") || str_contains($value, '\\')) {
+            return null;
+        }
+
+        if (str_starts_with($value, '//')) {
+            return null;
+        }
+
+        $value = strtok($value, '#') ?: $value;
+        $query = '';
+        $queryPosition = strpos($value, '?');
+
+        if ($queryPosition !== false) {
+            $query = substr($value, $queryPosition);
+            $value = substr($value, 0, $queryPosition);
+        }
+
+        if (!str_starts_with($value, '/')) {
+            return null;
+        }
+
+        $segments = [];
+
+        foreach (explode('/', $value) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+
+            if ($segment === '..') {
+                if (!$segments) {
+                    return null;
+                }
+
+                array_pop($segments);
+                continue;
+            }
+
+            $segments[] = $segment;
+        }
+
+        $normalized = '/' . implode('/', $segments);
+
+        if ($normalized !== '/') {
+            $normalized = rtrim($normalized, '/');
+        }
+
+        return $normalized . $query;
+    }
+}
+
+if (!function_exists('ai_url_belongs_to_site_scope')) {
+    function ai_url_belongs_to_site_scope(string $url, string $siteDomain): bool
+    {
+        $scope = ai_site_scope_parts($siteDomain);
+        $parts = parse_url(trim($url));
+
+        if (!$scope || !$parts || empty($parts['scheme']) || empty($parts['host'])) {
             return false;
         }
 
-        if ($host === $siteHost) {
+        if (ai_normalize_host((string) $parts['host']) !== $scope['host']) {
+            return false;
+        }
+
+        $urlPort = isset($parts['port']) ? (int) $parts['port'] : null;
+
+        if ($scope['port'] !== null && $urlPort !== $scope['port']) {
+            return false;
+        }
+
+        if ($scope['port'] === null && $urlPort !== null) {
+            return false;
+        }
+
+        $urlPath = '/' . ltrim((string) ($parts['path'] ?? '/'), '/');
+        $urlPath = rtrim($urlPath, '/');
+
+        if ($urlPath === '') {
+            $urlPath = '/';
+        }
+
+        $basePath = $scope['base_path'];
+
+        if ($basePath === '/') {
             return true;
         }
 
-        return str_ends_with($host, '.' . $siteHost);
+        return $urlPath === $basePath || str_starts_with($urlPath, $basePath . '/');
+    }
+}
+
+if (!function_exists('ai_internal_path_for_url')) {
+    function ai_internal_path_for_url(string $url, string $siteDomain): ?string
+    {
+        if (!ai_url_belongs_to_site_scope($url, $siteDomain)) {
+            return null;
+        }
+
+        $scope = ai_site_scope_parts($siteDomain);
+        $parts = parse_url($url);
+        $urlPath = '/' . ltrim((string) ($parts['path'] ?? '/'), '/');
+        $basePath = $scope['base_path'];
+
+        if ($basePath !== '/' && str_starts_with($urlPath, $basePath)) {
+            $urlPath = substr($urlPath, strlen($basePath));
+        }
+
+        $urlPath = '/' . ltrim($urlPath, '/');
+        $urlPath = ai_normalize_internal_path($urlPath) ?: '/';
+
+        if (!empty($parts['query'])) {
+            $urlPath .= '?' . $parts['query'];
+        }
+
+        return $urlPath;
+    }
+}
+
+if (!function_exists('ai_site_url_from_internal_path')) {
+    function ai_site_url_from_internal_path(string $siteDomain, string $internalPath): ?string
+    {
+        $scope = ai_site_scope_parts($siteDomain);
+        $internalPath = ai_normalize_internal_path($internalPath);
+
+        if (!$scope || $internalPath === null) {
+            return null;
+        }
+
+        $query = '';
+        $queryPosition = strpos($internalPath, '?');
+
+        if ($queryPosition !== false) {
+            $query = substr($internalPath, $queryPosition);
+            $internalPath = substr($internalPath, 0, $queryPosition);
+        }
+
+        $basePath = $scope['base_path'] === '/' ? '' : $scope['base_path'];
+        $path = $internalPath === '/'
+            ? ($basePath === '' ? '/' : $basePath)
+            : $basePath . '/' . ltrim($internalPath, '/');
+
+        $port = $scope['port'] !== null ? ':' . $scope['port'] : '';
+        $url = $scope['scheme'] . '://' . $scope['raw_host'] . $port . $path . $query;
+
+        return ai_url_belongs_to_site_scope($url, $siteDomain) ? $url : null;
+    }
+}
+
+if (!function_exists('ai_internal_path_matches_prefix')) {
+    function ai_internal_path_matches_prefix(string $internalPath, string $prefix): bool
+    {
+        $internalPath = strtok($internalPath, '?') ?: $internalPath;
+        $prefix = str_replace('*', '', $prefix);
+        $internalPath = ai_normalize_internal_path($internalPath);
+        $prefix = ai_normalize_internal_path($prefix);
+
+        if ($internalPath === null || $prefix === null) {
+            return false;
+        }
+
+        if ($prefix === '/') {
+            return true;
+        }
+
+        return $internalPath === $prefix || str_starts_with($internalPath, $prefix . '/');
     }
 }
 
@@ -135,62 +362,67 @@ if (!function_exists('ai_validate_crawl_source')) {
     {
         $sourceType = trim($sourceType);
         $sourceValue = trim($sourceValue);
-
         $allowedTypes = ['url', 'path_prefix', 'sitemap'];
 
         if (!in_array($sourceType, $allowedTypes, true)) {
             json_response([
                 'success' => false,
-                'message' => 'Invalid crawl source type'
+                'message' => 'نوع منبع خزش معتبر نیست.'
             ], 422);
         }
 
         if ($sourceValue === '') {
             json_response([
                 'success' => false,
-                'message' => 'Crawl source value is required'
+                'message' => 'مسیر داخلی خزش الزامی است.'
             ], 422);
         }
 
         if (mb_strlen($sourceValue) > 1000) {
             json_response([
                 'success' => false,
-                'message' => 'Crawl source value is too long'
+                'message' => 'مسیر خزش بیش از حد طولانی است.'
             ], 422);
-        }
-
-        if ($sourceType === 'path_prefix') {
-            if (!str_starts_with($sourceValue, '/')) {
-                json_response([
-                    'success' => false,
-                    'message' => 'Path prefix must start with /'
-                ], 422);
-            }
-
-            return $sourceValue;
         }
 
         if (preg_match('/^https?:\/\//i', $sourceValue)) {
-            $urlHost = parse_url($sourceValue, PHP_URL_HOST);
-
-            if (!$urlHost || !ai_host_belongs_to_site($urlHost, $siteDomain)) {
+            if (!ai_url_belongs_to_site_scope($sourceValue, $siteDomain)) {
                 json_response([
                     'success' => false,
-                    'message' => 'Crawl source must belong to the selected site domain'
+                    'message' => 'فقط آدرس‌های داخلی همان سایت قابل ثبت هستند.'
                 ], 422);
             }
 
-            return strtok($sourceValue, '#') ?: $sourceValue;
+            $sourceValue = ai_internal_path_for_url($sourceValue, $siteDomain) ?: '';
         }
 
-        if (!str_starts_with($sourceValue, '/')) {
+        if (str_starts_with($sourceValue, '//')) {
             json_response([
                 'success' => false,
-                'message' => 'Crawl source must be a full URL or a path starting with /'
+                'message' => 'ثبت دامنه یا آدرس خارجی مجاز نیست؛ فقط مسیر داخلی وارد کنید.'
             ], 422);
         }
 
-        return $sourceValue;
+        $sourceValue = str_replace('*', '', $sourceValue);
+        $normalized = ai_normalize_internal_path($sourceValue);
+
+        if ($normalized === null) {
+            json_response([
+                'success' => false,
+                'message' => 'مسیر باید با / شروع شود و نباید به خارج از سایت اشاره کند.'
+            ], 422);
+        }
+
+        $resolvedUrl = ai_site_url_from_internal_path($siteDomain, $normalized);
+
+        if (!$resolvedUrl || !ai_url_belongs_to_site_scope($resolvedUrl, $siteDomain)) {
+            json_response([
+                'success' => false,
+                'message' => 'مسیر واردشده خارج از محدوده سایت انتخاب‌شده است.'
+            ], 422);
+        }
+
+        return $normalized;
     }
 }
 

@@ -34,35 +34,27 @@ if (!function_exists('ai_normalize_text')) {
 if (!function_exists('ai_site_base_url')) {
     function ai_site_base_url(string $domain): string
     {
-        $domain = trim($domain);
+        return ai_site_scope_base_url($domain);
+    }
+}
 
-        if (preg_match('/^https?:\/\//i', $domain)) {
-            return rtrim($domain, '/');
-        }
+if (!function_exists('ai_url_path_has_trailing_slash')) {
+    function ai_url_path_has_trailing_slash(string $url): bool
+    {
+        $path = parse_url(trim($url), PHP_URL_PATH);
 
-        $host = strtolower($domain);
-
-        if (
-            $host === 'localhost' ||
-            str_ends_with($host, '.local') ||
-            str_starts_with($host, '127.') ||
-            str_starts_with($host, '192.168.')
-        ) {
-            return 'http://' . rtrim($domain, '/');
-        }
-
-        return 'https://' . rtrim($domain, '/');
+        return is_string($path) && $path !== '/' && str_ends_with($path, '/');
     }
 }
 
 if (!function_exists('ai_clean_url')) {
-    function ai_clean_url(string $url): string
+    function ai_clean_url(string $url, bool $preserveTrailingSlash = false): string
     {
         $url = trim($url);
         $url = strtok($url, '#') ?: $url;
         $url = preg_replace('/\s+/u', '', $url);
 
-        if (strlen($url) > 1) {
+        if (!$preserveTrailingSlash && strlen($url) > 1) {
             $url = rtrim($url, '/');
         }
 
@@ -94,11 +86,14 @@ if (!function_exists('ai_absolute_url')) {
         }
 
         if (preg_match('/^https?:\/\//i', $href)) {
-            return ai_clean_url($href);
+            return ai_clean_url($href, ai_url_path_has_trailing_slash($href));
         }
 
         if (str_starts_with($href, '//')) {
-            return ai_clean_url($baseParts['scheme'] . ':' . $href);
+            return ai_clean_url(
+                $baseParts['scheme'] . ':' . $href,
+                ai_url_path_has_trailing_slash($href)
+            );
         }
 
         $scheme = $baseParts['scheme'];
@@ -106,7 +101,10 @@ if (!function_exists('ai_absolute_url')) {
         $port = isset($baseParts['port']) ? ':' . $baseParts['port'] : '';
 
         if (str_starts_with($href, '/')) {
-            return ai_clean_url($scheme . '://' . $host . $port . $href);
+            return ai_clean_url(
+                $scheme . '://' . $host . $port . $href,
+                ai_url_path_has_trailing_slash($href)
+            );
         }
 
         $path = $baseParts['path'] ?? '/';
@@ -128,12 +126,18 @@ if (!function_exists('ai_absolute_url')) {
             $segments[] = $segment;
         }
 
-        return ai_clean_url($scheme . '://' . $host . $port . '/' . implode('/', $segments));
+        $resolvedUrl = $scheme . '://' . $host . $port . '/' . implode('/', $segments);
+
+        if (ai_url_path_has_trailing_slash($href) && !str_ends_with($resolvedUrl, '/')) {
+            $resolvedUrl .= '/';
+        }
+
+        return ai_clean_url($resolvedUrl, ai_url_path_has_trailing_slash($href));
     }
 }
 
 if (!function_exists('ai_fetch_url')) {
-    function ai_fetch_url(string $url): array
+    function ai_fetch_url(string $url, ?string $siteDomain = null): array
     {
         $url = ai_clean_url($url);
 
@@ -142,9 +146,25 @@ if (!function_exists('ai_fetch_url')) {
                 'success' => false,
                 'status_code' => 0,
                 'body' => '',
-                'error' => 'Invalid URL'
+                'error' => 'Invalid URL',
+                'effective_url' => $url,
+                'content_type' => null,
             ];
         }
+
+        if ($siteDomain !== null && !ai_url_belongs_to_site_scope($url, $siteDomain)) {
+            return [
+                'success' => false,
+                'status_code' => 0,
+                'body' => '',
+                'error' => 'URL is outside the selected site scope',
+                'effective_url' => $url,
+                'content_type' => null,
+            ];
+        }
+
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $isLocal = ai_is_local_host($host);
 
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
@@ -154,58 +174,121 @@ if (!function_exists('ai_fetch_url')) {
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_MAXREDIRS => 3,
                 CURLOPT_CONNECTTIMEOUT => 8,
-                CURLOPT_TIMEOUT => 15,
-                CURLOPT_USERAGENT => 'AI-Chat-SaaS-Crawler/1.0',
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => false,
+                CURLOPT_TIMEOUT => 20,
+                CURLOPT_USERAGENT => 'AI-Chat-SaaS-Crawler/1.1',
+                CURLOPT_SSL_VERIFYPEER => !$isLocal,
+                CURLOPT_SSL_VERIFYHOST => $isLocal ? 0 : 2,
                 CURLOPT_HTTPHEADER => [
-                    'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,text/xml;q=0.9,*/*;q=0.5',
                 ],
             ]);
 
             $body = curl_exec($ch);
             $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $rawEffectiveUrl = (string) (curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $url);
+            $effectiveUrl = ai_clean_url(
+                $rawEffectiveUrl,
+                ai_url_path_has_trailing_slash($rawEffectiveUrl)
+            );
+            $contentType = (string) (curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '');
             $error = curl_error($ch);
 
             curl_close($ch);
+
+            if ($siteDomain !== null && !ai_url_belongs_to_site_scope($effectiveUrl, $siteDomain)) {
+                return [
+                    'success' => false,
+                    'status_code' => $statusCode,
+                    'body' => '',
+                    'error' => 'Redirect target is outside the selected site scope',
+                    'effective_url' => $effectiveUrl,
+                    'content_type' => $contentType ?: null,
+                ];
+            }
 
             return [
                 'success' => $body !== false && $statusCode >= 200 && $statusCode < 400,
                 'status_code' => $statusCode,
                 'body' => $body !== false ? (string) $body : '',
-                'error' => $error ?: null
+                'error' => $error ?: null,
+                'effective_url' => $effectiveUrl,
+                'content_type' => $contentType ?: null,
             ];
         }
 
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 15,
-                'ignore_errors' => true,
-                'header' => "User-Agent: AI-Chat-SaaS-Crawler/1.0\r\nAccept: text/html\r\n"
-            ],
-            'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false,
-            ]
-        ]);
+        $currentUrl = $url;
 
-        $body = @file_get_contents($url, false, $context);
-        $statusCode = 0;
+        for ($redirects = 0; $redirects <= 3; $redirects++) {
+            if ($siteDomain !== null && !ai_url_belongs_to_site_scope($currentUrl, $siteDomain)) {
+                return [
+                    'success' => false,
+                    'status_code' => 0,
+                    'body' => '',
+                    'error' => 'Redirect target is outside the selected site scope',
+                    'effective_url' => $currentUrl,
+                    'content_type' => null,
+                ];
+            }
 
-        if (isset($http_response_header) && is_array($http_response_header)) {
-            foreach ($http_response_header as $header) {
-                if (preg_match('/HTTP\/\S+\s+(\d+)/', $header, $matches)) {
-                    $statusCode = (int) $matches[1];
-                    break;
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 20,
+                    'ignore_errors' => true,
+                    'follow_location' => 0,
+                    'max_redirects' => 0,
+                    'header' => "User-Agent: AI-Chat-SaaS-Crawler/1.1\r\nAccept: text/html,application/xhtml+xml,application/xml,text/xml\r\n"
+                ],
+                'ssl' => [
+                    'verify_peer' => !$isLocal,
+                    'verify_peer_name' => !$isLocal,
+                ]
+            ]);
+
+            $body = @file_get_contents($currentUrl, false, $context);
+            $statusCode = 0;
+            $location = null;
+            $contentType = null;
+
+            if (isset($http_response_header) && is_array($http_response_header)) {
+                foreach ($http_response_header as $header) {
+                    if (preg_match('/HTTP\/\S+\s+(\d+)/', $header, $matches)) {
+                        $statusCode = (int) $matches[1];
+                    } elseif (stripos($header, 'Location:') === 0) {
+                        $location = trim(substr($header, 9));
+                    } elseif (stripos($header, 'Content-Type:') === 0) {
+                        $contentType = trim(substr($header, 13));
+                    }
                 }
             }
+
+            if ($statusCode >= 300 && $statusCode < 400 && $location) {
+                $nextUrl = ai_absolute_url($currentUrl, $location);
+
+                if (!$nextUrl) {
+                    break;
+                }
+
+                $currentUrl = $nextUrl;
+                continue;
+            }
+
+            return [
+                'success' => $body !== false && $statusCode >= 200 && $statusCode < 400,
+                'status_code' => $statusCode,
+                'body' => $body !== false ? (string) $body : '',
+                'error' => $body === false ? 'Failed to fetch URL' : null,
+                'effective_url' => $currentUrl,
+                'content_type' => $contentType,
+            ];
         }
 
         return [
-            'success' => $body !== false && $statusCode >= 200 && $statusCode < 400,
-            'status_code' => $statusCode,
-            'body' => $body !== false ? (string) $body : '',
-            'error' => $body === false ? 'Failed to fetch URL' : null
+            'success' => false,
+            'status_code' => 0,
+            'body' => '',
+            'error' => 'Too many redirects',
+            'effective_url' => $currentUrl,
+            'content_type' => null,
         ];
     }
 }
@@ -619,6 +702,21 @@ if (!function_exists('ai_generate_questions_from_chunk')) {
     }
 }
 
+if (!function_exists('ai_count_words')) {
+    function ai_count_words(string $text): int
+    {
+        $text = trim(ai_normalize_text(strip_tags($text)));
+
+        if ($text === '') {
+            return 0;
+        }
+
+        $words = preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return count($words);
+    }
+}
+
 if (!function_exists('ai_store_page_knowledge')) {
     function ai_store_page_knowledge(PDO $pdo, array $site, ?int $crawlRunId, ?int $sourceId, string $url, int $statusCode, array $content, ?string $categoryHint = null): array
     {
@@ -627,7 +725,7 @@ if (!function_exists('ai_store_page_knowledge')) {
         $crawlMarker = $crawlRunId ?? 0;
 
         $text = $content['clean_text'] ?? '';
-        $wordCount = str_word_count(strip_tags($text));
+        $wordCount = ai_count_words($text);
 
         $detected = ai_detect_category_and_intent(
             $url,
@@ -647,7 +745,7 @@ if (!function_exists('ai_store_page_knowledge')) {
 
         try {
             $existingPageStmt = $pdo->prepare("
-                SELECT id, content_hash
+                SELECT id, content_hash, crawl_status
                 FROM ai_pages
                 WHERE site_id = :site_id
                   AND url_hash = :url_hash
@@ -739,6 +837,35 @@ if (!function_exists('ai_store_page_knowledge')) {
             $pageId = (int) $pdo->lastInsertId();
 
             if ($contentUnchanged) {
+                // اگر منبع قبلاً غیرفعال شده بود، محتوای بدون تغییر پس از خزش مجدد دوباره فعال می‌شود.
+                if (($existingPage['crawl_status'] ?? null) === 'ignored') {
+                    $reactivateChunksStmt = $pdo->prepare("
+                        UPDATE ai_content_chunks
+                        SET status = 'active'
+                        WHERE page_id = :page_id
+                          AND tenant_id = :tenant_id
+                          AND status = 'archived'
+                    ");
+                    $reactivateChunksStmt->execute([
+                        ':page_id' => $pageId,
+                        ':tenant_id' => $tenantId,
+                    ]);
+
+                    $reactivateQuestionsStmt = $pdo->prepare("
+                        UPDATE ai_generated_questions
+                        SET status = 'active'
+                        WHERE page_id = :page_id
+                          AND tenant_id = :tenant_id
+                          AND is_user_edited = 0
+                          AND source_type = 'template'
+                          AND status = 'archived'
+                    ");
+                    $reactivateQuestionsStmt->execute([
+                        ':page_id' => $pageId,
+                        ':tenant_id' => $tenantId,
+                    ]);
+                }
+
                 $freshnessStmt = $pdo->prepare("
                     UPDATE ai_generated_questions
                     SET last_seen_crawl_run_id = :crawl_run_id

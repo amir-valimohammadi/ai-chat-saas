@@ -85,7 +85,10 @@ try {
         json_response([
             'success' => true,
             'message' => 'AI crawl source updated successfully',
-            'item_id' => (int) $existing['id']
+            'item_id' => (int) $existing['id'],
+            'source_value' => $sourceValue,
+            'resolved_url' => ai_site_url_from_internal_path((string) $site['domain'], $sourceValue),
+            'requires_recrawl' => true
         ]);
     }
 
@@ -125,7 +128,9 @@ try {
     json_response([
         'success' => true,
         'message' => 'AI crawl source created successfully',
-        'item_id' => (int) $pdo->lastInsertId()
+        'item_id' => (int) $pdo->lastInsertId(),
+        'source_value' => $sourceValue,
+        'resolved_url' => ai_site_url_from_internal_path((string) $site['domain'], $sourceValue)
     ], 201);
 } catch (Exception $e) {
     json_response([
