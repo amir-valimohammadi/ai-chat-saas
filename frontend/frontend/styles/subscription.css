@@ -310,3 +310,68 @@
     }
 }
 .subscription-alert.is-warning{border-color:#f59e0b;background:#fffbeb}.subscription-alert.is-danger{border-color:#ef4444;background:#fef2f2}.subscription-payment-list{display:grid;gap:8px}.subscription-payment-row{display:grid;grid-template-columns:1.2fr .7fr 1.2fr 1fr;gap:12px;align-items:center;padding:12px;border:1px solid var(--border,#e5e7eb);border-radius:12px}.subscription-payment-row time{color:#64748b}@media(max-width:700px){.subscription-payment-row{grid-template-columns:1fr 1fr}}
+
+/* Subscription lifecycle polish */
+.subscription-alert {
+    position: relative;
+    overflow: hidden;
+}
+
+.subscription-alert::before {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 5px;
+    height: 100%;
+    content: "";
+    background: currentColor;
+}
+
+.subscription-alert h2,
+.subscription-alert strong { margin: 0; font-size: 14px; }
+.subscription-alert p { margin: 5px 0 0; color: #64748b; font-size: 10.5px; line-height: 1.8; }
+
+.subscription-payment-list { display: grid; gap: 8px; }
+.subscription-payment-row {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(150px, 1.1fr) minmax(95px, .65fr) minmax(150px, 1fr) minmax(145px, .85fr);
+    gap: 10px;
+    align-items: center;
+    padding: 11px 12px;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 13px;
+    font-size: 10.5px;
+}
+
+.subscription-payment-row strong { color: #0f172a; font-size: 11px; }
+.subscription-payment-row time { color: #64748b; font-size: 9.5px; }
+.subscription-record-status {
+    width: fit-content;
+    padding: 5px 8px;
+    border-radius: 999px;
+    color: #475569;
+    background: #e2e8f0;
+    font-size: 9px;
+    font-weight: 900;
+}
+.subscription-record-status.is-active,
+.subscription-record-status.is-paid { color: #166534; background: #dcfce7; }
+.subscription-record-status.is-trial { color: #4338ca; background: #e0e7ff; }
+.subscription-record-status.is-past_due,
+.subscription-record-status.is-pending { color: #9a3412; background: #ffedd5; }
+.subscription-record-status.is-expired,
+.subscription-record-status.is-failed,
+.subscription-record-status.is-cancelled { color: #b91c1c; background: #fee2e2; }
+.subscription-record-status.is-suspended,
+.subscription-record-status.is-refunded { color: #0369a1; background: #e0f2fe; }
+
+@media (max-width: 760px) {
+    .subscription-payment-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+    .subscription-payment-row { grid-template-columns: 1fr; }
+}
