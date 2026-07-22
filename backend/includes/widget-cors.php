@@ -108,6 +108,16 @@ if (!function_exists('get_extra_widget_allowed_hosts')) {
     }
 }
 
+if (!function_exists('is_platform_widget_origin_allowed')) {
+    function is_platform_widget_origin_allowed(string $origin): bool
+    {
+        $originHost = normalize_origin_host($origin);
+        $frontendHost = normalize_site_domain((string) app_config('frontend_url', ''));
+
+        return hosts_match_for_widget($originHost, $frontendHost);
+    }
+}
+
 if (!function_exists('is_extra_widget_origin_allowed')) {
     function is_extra_widget_origin_allowed(string $origin): bool
     {
@@ -186,6 +196,11 @@ if (!function_exists('validate_widget_origin_or_fail')) {
         }
 
         if (!app_is_production() && is_local_widget_origin($origin)) {
+            send_widget_cors_headers($origin);
+            return;
+        }
+
+        if (is_platform_widget_origin_allowed($origin)) {
             send_widget_cors_headers($origin);
             return;
         }

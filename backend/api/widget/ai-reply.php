@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../includes/plan-limits.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
 require_once __DIR__ . '/../../includes/subscription.php';
+require_once __DIR__ . '/../../includes/hosted-support.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -221,30 +222,39 @@ try {
         ]);
     }
 
-    $onlineStmt = $pdo->prepare("
-        SELECT COUNT(*) AS online_count
-        FROM users
-        INNER JOIN sites ON sites.tenant_id = users.tenant_id
-        WHERE sites.id = :site_id
-          AND users.is_active = 1
-          AND users.role IN ('customer_admin', 'agent')
-          AND users.availability_status = 'online'
-          AND users.last_seen_at IS NOT NULL
-          AND users.last_seen_at >= (NOW() - INTERVAL 2 MINUTE)
+    $hostedPageStmt = $pdo->prepare("
+        SELECT timezone
+        FROM hosted_support_pages
+        WHERE site_id = :site_id
+        LIMIT 1
     ");
-
-    $onlineStmt->execute([
+    $hostedPageStmt->execute([
         ':site_id' => (int) $conversation['site_id'],
     ]);
+    $hostedPage = $hostedPageStmt->fetch();
 
-    $onlineData = $onlineStmt->fetch();
-    $isSupportOnline = ((int) ($onlineData['online_count'] ?? 0)) > 0;
+    $supportStatus = hosted_support_compute_status(
+        $pdo,
+        (int) $conversation['site_id'],
+        $hostedPage['timezone'] ?? 'Asia/Tehran'
+    );
 
-    if ($isSupportOnline) {
+    if ($supportStatus['support_online']) {
         json_response([
             'success' => true,
             'skipped' => true,
             'reason' => 'support_online'
+        ]);
+    }
+
+    if (
+        !$supportStatus['is_within_business_hours']
+        && !$supportStatus['offline']['ai_after_hours_enabled']
+    ) {
+        json_response([
+            'success' => true,
+            'skipped' => true,
+            'reason' => 'after_hours_ai_disabled'
         ]);
     }
 

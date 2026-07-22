@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/widget-cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/hosted-support.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response([
@@ -44,6 +45,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT
             sites.id,
+            sites.tenant_id,
             sites.name,
             sites.domain,
             sites.site_key,
@@ -75,24 +77,23 @@ try {
 
     validate_widget_origin_or_fail($site['domain']);
 
-    $onlineStmt = $pdo->prepare("
-        SELECT COUNT(*) AS online_count
-        FROM users
-        INNER JOIN sites ON sites.tenant_id = users.tenant_id
-        WHERE sites.id = :site_id
-          AND users.is_active = 1
-          AND users.role IN ('customer_admin', 'agent')
-          AND users.availability_status = 'online'
-          AND users.last_seen_at IS NOT NULL
-          AND users.last_seen_at >= (NOW() - INTERVAL 2 MINUTE)
+    $pageStmt = $pdo->prepare("
+        SELECT public_slug, timezone
+        FROM hosted_support_pages
+        WHERE site_id = :site_id
+          AND is_active = 1
+        LIMIT 1
     ");
-
-    $onlineStmt->execute([
+    $pageStmt->execute([
         ':site_id' => (int) $site['id'],
     ]);
+    $hostedPage = $pageStmt->fetch();
 
-    $onlineData = $onlineStmt->fetch();
-    $isSupportOnline = ((int) ($onlineData['online_count'] ?? 0)) > 0;
+    $supportStatus = hosted_support_compute_status(
+        $pdo,
+        (int) $site['id'],
+        $hostedPage['timezone'] ?? 'Asia/Tehran'
+    );
 
     json_response([
         'success' => true,
@@ -103,10 +104,17 @@ try {
             'logo_url' => $site['logo_url'],
             'welcome_message' => $site['welcome_message'] ?: 'سلام، چطور می‌تونیم کمکتون کنیم؟',
             'ai_mode' => $site['ai_mode'],
-            'support_online' => $isSupportOnline,
-            'support_status_text' => $isSupportOnline
-                ? 'پشتیبانی آنلاین است'
-                : 'پشتیبانی در حال حاضر آنلاین نیست؛ ممکن است پاسخ کمی زمان ببرد.',
+            'support_online' => $supportStatus['support_online'],
+            'support_status_text' => $supportStatus['status_text'],
+            'is_within_business_hours' => $supportStatus['is_within_business_hours'],
+            'chat_available' => $supportStatus['chat_available'],
+            'ai_available' => $supportStatus['ai_available'],
+            'offline_behavior' => $supportStatus['offline']['offline_behavior'],
+            'offline_message' => $supportStatus['offline']['offline_message'],
+            'next_opening' => $supportStatus['next_opening'],
+            'hosted_support_url' => $hostedPage
+                ? hosted_support_public_url($hostedPage['public_slug'])
+                : null,
         ]
     ]);
 } catch (Exception $e) {

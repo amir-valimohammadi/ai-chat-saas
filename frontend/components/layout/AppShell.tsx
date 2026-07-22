@@ -291,6 +291,12 @@ export default function AppShell({
                         description: "ظاهر و رفتار ویجت",
                     },
                     {
+                        href: "/hosted-support",
+                        label: "صفحه پشتیبانی",
+                        icon: "↗",
+                        description: "لینک اختصاصی و ساعت کاری",
+                    },
+                    {
                         href: "/team",
                         label: "تیم پشتیبانی",
                         icon: "☰",

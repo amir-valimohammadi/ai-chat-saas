@@ -247,3 +247,72 @@
     .orbit-contact-section{padding:28px 14px 78px}.orbit-contact-layout{padding:30px 20px;border-radius:23px}.orbit-contact-copy h2{font-size:27px}
     .orbit-faq-copy{position:static}
 }
+
+/* Hosted support page feature */
+.orbit-hosted-section {
+    width: min(1180px, calc(100% - 48px));
+    margin: 34px auto 0;
+    padding: 64px;
+    display: grid;
+    grid-template-columns: .9fr 1.1fr;
+    gap: 48px;
+    align-items: center;
+    border-radius: 28px;
+    background: linear-gradient(135deg, #eef8f5, #ffffff 62%);
+    border: 1px solid #cfe2dc;
+    box-shadow: 0 22px 65px rgba(35,75,64,.07);
+    position: relative;
+    overflow: hidden;
+}
+.orbit-hosted-section::before {
+    content: "";
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    left: -120px;
+    top: -130px;
+    background: rgba(15,118,110,.08);
+}
+.orbit-hosted-copy { position: relative; z-index: 1; }
+.orbit-hosted-copy h2 { margin: 14px 0 14px; font-size: 34px; line-height: 1.45; }
+.orbit-hosted-copy > p { margin: 0; color: var(--orbit-muted); line-height: 2; font-size: 14px; }
+.orbit-hosted-copy ul { list-style: none; padding: 0; margin: 24px 0; display: grid; gap: 11px; }
+.orbit-hosted-copy li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #36564d; }
+.orbit-hosted-copy li svg { color: var(--orbit-primary); }
+.orbit-hosted-copy > a { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: white; background: var(--orbit-primary); border-radius: 13px; padding: 11px 16px; font-weight: 800; font-size: 12px; }
+.orbit-hosted-preview { position: relative; z-index: 1; }
+.orbit-hosted-browser { border: 1px solid #d4e4df; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 26px 70px rgba(30,70,59,.14); transform: perspective(1200px) rotateY(-4deg) rotateX(2deg); }
+.orbit-hosted-browser > header { height: 42px; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: #f4f8f7; border-bottom: 1px solid #dfebe7; direction: ltr; }
+.orbit-hosted-browser > header span { width: 8px; height: 8px; border-radius: 50%; background: #cbd8d4; }
+.orbit-hosted-browser > header b { margin-left: 10px; font-size: 8px; color: #7d8f89; font-weight: 600; }
+.orbit-hosted-browser > main { min-height: 330px; display: grid; grid-template-columns: .85fr 1.15fr; }
+.orbit-hosted-browser aside { padding: 30px 22px; background: linear-gradient(145deg, #174a42, #0f766e); color: white; display: flex; flex-direction: column; justify-content: center; }
+.orbit-hosted-browser aside > i { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: rgba(255,255,255,.16); font-style: normal; font-weight: 900; margin-bottom: 14px; }
+.orbit-hosted-browser aside > small { opacity: .65; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
+.orbit-hosted-browser aside h3 { margin: 8px 0; font-size: 18px; }
+.orbit-hosted-browser aside p { margin: 0; opacity: .78; line-height: 1.8; font-size: 10px; }
+.orbit-hosted-browser aside > div { margin-top: 22px; display: grid; gap: 3px; padding: 10px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.08); border-radius: 12px; }
+.orbit-hosted-browser aside > div span { font-size: 9px; }
+.orbit-hosted-browser aside > div small { opacity: .7; font-size: 8px; }
+.orbit-hosted-browser main > section { display: flex; flex-direction: column; background: #fbfdfc; }
+.orbit-hosted-browser main > section > header { height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #e3ece9; }
+.orbit-hosted-browser main > section > header strong { font-size: 10px; }
+.orbit-hosted-browser main > section > header small { color: #16a34a; font-size: 8px; }
+.orbit-hosted-chat { flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.orbit-hosted-chat p { max-width: 80%; margin: 0; padding: 9px 11px; border: 1px solid #dfe9e6; background: white; border-radius: 12px 12px 12px 4px; color: #48615b; line-height: 1.7; font-size: 9px; }
+.orbit-hosted-chat p.user { align-self: flex-start; margin-right: auto; color: white; background: #0f766e; border-color: #0f766e; border-radius: 12px 12px 4px 12px; }
+.orbit-hosted-browser main > section > footer { margin: 10px; border: 1px solid #dbe7e3; background: white; border-radius: 11px; padding: 9px 10px; display: flex; justify-content: space-between; color: #9aa8a4; font-size: 8px; }
+.orbit-hosted-browser main > section > footer b { color: #0f766e; }
+.orbit-hosted-channels { margin-top: 18px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #6f817b; font-size: 9px; font-weight: 800; }
+.orbit-hosted-channels i { width: 22px; height: 1px; background: #c9d9d4; }
+@media (max-width: 900px) {
+    .orbit-hosted-section { width: calc(100% - 28px); padding: 36px 20px; grid-template-columns: 1fr; gap: 30px; }
+    .orbit-hosted-copy h2 { font-size: 29px; }
+    .orbit-hosted-browser { transform: none; }
+}
+@media (max-width: 560px) {
+    .orbit-hosted-browser > main { grid-template-columns: 1fr; }
+    .orbit-hosted-browser aside { min-height: 220px; }
+    .orbit-hosted-browser main > section { min-height: 300px; }
+}

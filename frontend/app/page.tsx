@@ -300,9 +300,10 @@ export default function HomePage() {
                 <a href="#platform"><span>01</span><strong>قابلیت‌ها</strong><small>ساختار یکپارچه محصول</small></a>
                 <a href="#intelligence"><span>02</span><strong>موتور هوشمند</strong><small>پاسخ فارسی و منبع</small></a>
                 <a href="#workflow"><span>03</span><strong>راه‌اندازی</strong><small>چهار مرحله روشن</small></a>
-                <a href="#widget"><span>04</span><strong>ویجت</strong><small>تجربه مطابق برند</small></a>
-                <a href="#plans"><span>05</span><strong>پلن‌ها</strong><small>انتخاب ظرفیت مناسب</small></a>
-                <a href="#contact" className="is-highlighted"><span>06</span><strong>شروع همکاری</strong><small>ثبت درخواست مشاوره</small></a>
+                <a href="#hosted"><span>04</span><strong>بدون وب‌سایت</strong><small>صفحه پشتیبانی اختصاصی</small></a>
+                <a href="#widget"><span>05</span><strong>ویجت</strong><small>تجربه مطابق برند</small></a>
+                <a href="#plans"><span>06</span><strong>پلن‌ها</strong><small>انتخاب ظرفیت مناسب</small></a>
+                <a href="#contact" className="is-highlighted"><span>07</span><strong>شروع همکاری</strong><small>ثبت درخواست مشاوره</small></a>
             </nav>
 
             <section className="orbit-section orbit-section--surface orbit-section--platform" id="platform">
@@ -393,10 +394,54 @@ export default function HomePage() {
                 </div>
             </section>
 
+            <section className="orbit-hosted-section" id="hosted">
+                <div className="orbit-hosted-copy" data-reveal>
+                    <span className="orbit-kicker"><Icon name="globe" size={17}/> 04 · پشتیبانی حتی بدون وب‌سایت</span>
+                    <h2>یک لینک اختصاصی؛ یک مرکز پشتیبانی کامل</h2>
+                    <p>
+                        کسب‌وکار برای شروع پشتیبانی آنلاین به وب‌سایت نیاز ندارد. یک صفحه برندشده با لینک مستقل، گفتگوی زنده، پاسخ هوشمند، ساعت کاری و راه‌های تماس در اختیارش قرار می‌گیرد.
+                    </p>
+                    <ul>
+                        <li><Icon name="check" size={17}/> مناسب اینستاگرام، واتساپ، پیامک و QR Code</li>
+                        <li><Icon name="check" size={17}/> نمایش ساعت پاسخ‌گویی و وضعیت آنلاین واقعی</li>
+                        <li><Icon name="check" size={17}/> ادامه گفتگو با همان Inbox و موتور دانش</li>
+                        <li><Icon name="check" size={17}/> رنگ، عنوان، شماره تماس و واتساپ اختصاصی</li>
+                    </ul>
+                    <a href="#contact">درخواست صفحه اختصاصی <Icon name="arrow" size={17}/></a>
+                </div>
+
+                <div className="orbit-hosted-preview" data-reveal>
+                    <div className="orbit-hosted-browser">
+                        <header><span/><span/><span/><b>your-platform.com/support/brand</b></header>
+                        <main>
+                            <aside>
+                                <i>س</i>
+                                <small>Support Center</small>
+                                <h3>پشتیبانی فروشگاه سپهر</h3>
+                                <p>برای دریافت راهنمایی یا پیگیری سفارش، گفتگو را آغاز کنید.</p>
+                                <div><span>● پشتیبانی آنلاین</span><small>شنبه تا پنجشنبه، ۹ تا ۱۸</small></div>
+                            </aside>
+                            <section>
+                                <header><strong>گفتگو با پشتیبانی</strong><small>آنلاین</small></header>
+                                <div className="orbit-hosted-chat">
+                                    <p>سلام 👋 چطور می‌توانیم راهنمایی‌تان کنیم؟</p>
+                                    <p className="user">برای پیگیری سفارشم پیام دادم.</p>
+                                    <p>حتماً، شماره سفارش را بفرستید تا بررسی کنیم.</p>
+                                </div>
+                                <footer><span>پیام خود را بنویسید...</span><b>ارسال</b></footer>
+                            </section>
+                        </main>
+                    </div>
+                    <div className="orbit-hosted-channels">
+                        <span>Instagram Bio</span><i/> <span>WhatsApp</span><i/> <span>QR Code</span>
+                    </div>
+                </div>
+            </section>
+
             <section className="orbit-widget-section orbit-widget-section--surface" id="widget">
                 <div className="orbit-widget-showcase" data-reveal>
                     <div className="orbit-widget-copy">
-                        <span className="orbit-kicker"><Icon name="chat" size={17}/> 04 · تجربه‌ای مطابق برند شما</span>
+                        <span className="orbit-kicker"><Icon name="chat" size={17}/> 05 · تجربه‌ای مطابق برند شما</span>
                         <h2>ویجتی هماهنگ با ظاهر سایت شما</h2>
                         <p>ظاهر و رفتار ویجت برای هر سایت به‌صورت مستقل قابل تنظیم است.</p>
                         <div className="orbit-customization-list">
@@ -439,7 +484,7 @@ export default function HomePage() {
 
             <section className="orbit-section orbit-section--surface orbit-section--plans" id="plans">
                 <div className="orbit-section-heading orbit-section-heading--center" data-reveal>
-                    <span className="orbit-kicker"><Icon name="layers" size={17}/> 05 · پلن‌های قابل توسعه</span>
+                    <span className="orbit-kicker"><Icon name="layers" size={17}/> 06 · پلن‌های قابل توسعه</span>
                     <h2>پلن‌های ساده و قابل توسعه</h2>
                     <p>ساختار پلن‌ها در پنل سوپرادمین قابل مدیریت است و دسترسی به قابلیت‌ها بر اساس هر پلن کنترل می‌شود.</p>
                 </div>

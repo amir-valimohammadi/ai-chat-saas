@@ -26,6 +26,8 @@ import "../styles/subscription.css";
 import "../styles/sites.css";
 import "../styles/landing.css";
 import "../styles/auth.css";
+import "../styles/hosted-support.css";
+import "../styles/hosted-support-settings.css";
 export const metadata = {
     title: "AI Chat SaaS | پلتفرم چت و پشتیبانی هوشمند",
     description: "ویجت چت، مدیریت تیم پشتیبانی، خزش دانش سایت و موتور پاسخ هوشمند فارسی",

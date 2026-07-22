@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/upload.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/hosted-support.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -93,6 +94,23 @@ try {
     }
 
     validate_widget_origin_or_fail($conversation['domain']);
+
+    $siteId = (int) $conversation['site_id'];
+    $supportStatus = hosted_support_compute_status(
+        $pdo,
+        $siteId,
+        hosted_support_site_timezone($pdo, $siteId)
+    );
+
+    if (!$supportStatus['chat_available']) {
+        json_response([
+            'success' => false,
+            'message' => $supportStatus['offline']['offline_message']
+                ?: 'پشتیبانی در حال حاضر امکان دریافت فایل جدید را ندارد.',
+            'code' => 'support_closed',
+            'next_opening' => $supportStatus['next_opening'],
+        ], 403);
+    }
 
     if ($conversation['status'] === 'closed') {
         json_response([

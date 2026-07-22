@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/contact-requests.php';
+require_once __DIR__ . '/../../includes/hosted-support.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -34,6 +35,14 @@ $planId = isset($input['plan_id']) ? (int) $input['plan_id'] : null;
 
 $siteName = trim($input['site_name'] ?? '');
 $domain = trim($input['domain'] ?? '');
+$accessMode = trim((string) ($input['access_mode'] ?? 'widget'));
+$hostedSlugInput = hosted_support_normalize_slug((string) ($input['hosted_slug'] ?? ''));
+$hostedPageTitle = trim((string) ($input['hosted_page_title'] ?? ''));
+$hostedPageSubtitle = trim((string) ($input['hosted_page_subtitle'] ?? 'پشتیبانی و ارتباط مستقیم'));
+
+if (!in_array($accessMode, ['widget', 'hosted', 'both'], true)) {
+    $accessMode = 'widget';
+}
 
 $adminName = trim($input['admin_name'] ?? '');
 $adminEmail = trim($input['admin_email'] ?? '');
@@ -60,10 +69,27 @@ if ($siteName === '') {
     $siteName = $tenantName;
 }
 
-if ($domain === '') {
+$requiresWebsiteDomain = in_array($accessMode, ['widget', 'both'], true);
+$createsHostedPage = in_array($accessMode, ['hosted', 'both'], true);
+
+if ($requiresWebsiteDomain && $domain === '') {
     json_response([
         'success' => false,
-        'message' => 'Domain is required'
+        'message' => 'Domain is required for widget installation'
+    ], 422);
+}
+
+if ($domain !== '' && (mb_strlen($domain, 'UTF-8') > 255 || preg_match('/[\r\n\s]/', $domain))) {
+    json_response([
+        'success' => false,
+        'message' => 'Domain is invalid'
+    ], 422);
+}
+
+if ($hostedSlugInput !== '' && !hosted_support_slug_is_valid($hostedSlugInput)) {
+    json_response([
+        'success' => false,
+        'message' => 'Hosted support slug is invalid'
     ], 422);
 }
 
@@ -159,6 +185,29 @@ try {
             'success' => false,
             'message' => 'A user with this email already exists'
         ], 409);
+    }
+
+    $hostedSlug = null;
+    if ($createsHostedPage) {
+        if ($hostedSlugInput !== '') {
+            $slugStmt = $pdo->prepare("SELECT id FROM hosted_support_pages WHERE public_slug = :slug LIMIT 1");
+            $slugStmt->execute([':slug' => $hostedSlugInput]);
+
+            if ($slugStmt->fetch()) {
+                json_response([
+                    'success' => false,
+                    'message' => 'Hosted support link is already in use'
+                ], 409);
+            }
+
+            $hostedSlug = $hostedSlugInput;
+        } else {
+            $hostedSlug = hosted_support_generate_slug($pdo, $tenantName);
+        }
+
+        if ($accessMode === 'hosted') {
+            $domain = hosted_support_public_url($hostedSlug);
+        }
     }
 
     $domainStmt = $pdo->prepare("
@@ -278,6 +327,41 @@ try {
 
     $siteId = (int) $pdo->lastInsertId();
 
+    $hostedUrl = null;
+    if ($createsHostedPage && $hostedSlug !== null) {
+        $pageTitle = $hostedPageTitle !== ''
+            ? $hostedPageTitle
+            : ($tenantName . ' | پشتیبانی آنلاین');
+
+        $hostedStmt = $pdo->prepare("
+            INSERT INTO hosted_support_pages (
+                tenant_id, site_id, public_slug, page_title, page_subtitle,
+                page_description, primary_color, contact_phone, whatsapp_phone,
+                timezone, require_name, require_phone, show_business_hours,
+                show_faq, is_active
+            ) VALUES (
+                :tenant_id, :site_id, :public_slug, :page_title, :page_subtitle,
+                :page_description, :primary_color, :contact_phone, :whatsapp_phone,
+                :timezone, 1, 1, 1, 1, 1
+            )
+        ");
+        $hostedStmt->execute([
+            ':tenant_id' => $tenantId,
+            ':site_id' => $siteId,
+            ':public_slug' => $hostedSlug,
+            ':page_title' => $pageTitle,
+            ':page_subtitle' => $hostedPageSubtitle !== '' ? $hostedPageSubtitle : null,
+            ':page_description' => 'برای دریافت راهنمایی، پیگیری یا مشاوره، گفتگو را آغاز کنید.',
+            ':primary_color' => strtolower($brandColor),
+            ':contact_phone' => $ownerPhone !== '' ? $ownerPhone : null,
+            ':whatsapp_phone' => $ownerPhone !== '' ? $ownerPhone : null,
+            ':timezone' => (string) app_config('timezone', 'Asia/Tehran'),
+        ]);
+
+        hosted_support_ensure_defaults($pdo, $siteId);
+        $hostedUrl = hosted_support_public_url($hostedSlug);
+    }
+
     $passwordHash = password_hash($adminPassword, PASSWORD_DEFAULT);
 
     $userStmt = $pdo->prepare("
@@ -366,7 +450,9 @@ try {
 
     $pdo->commit();
 
-    $installCode = '<script src="https://yourdomain.com/widget.js" data-site-key="' . htmlspecialchars($siteKey, ENT_QUOTES, 'UTF-8') . '"></script>';
+    $installCode = in_array($accessMode, ['widget', 'both'], true)
+        ? '<script src="' . htmlspecialchars((string) app_config('widget_script_url'), ENT_QUOTES, 'UTF-8') . '" data-site-key="' . htmlspecialchars($siteKey, ENT_QUOTES, 'UTF-8') . '"></script>'
+        : null;
 
     json_response([
         'success' => true,
@@ -383,7 +469,15 @@ try {
             'domain' => $domain,
             'site_key' => $siteKey,
             'install_code' => $installCode,
+            'access_mode' => $accessMode,
+            'hosted_support_url' => $hostedUrl,
+            'hosted_support_slug' => $hostedSlug,
         ],
+        'hosted_support' => $hostedUrl ? [
+            'url' => $hostedUrl,
+            'slug' => $hostedSlug,
+            'active' => true,
+        ] : null,
         'admin_user' => [
             'id' => $adminUserId,
             'name' => $adminName,

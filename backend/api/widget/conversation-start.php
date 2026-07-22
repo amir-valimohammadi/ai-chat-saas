@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/hosted-support.php';
 require_once __DIR__ . '/../../includes/subscription.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -116,6 +117,22 @@ try {
     validate_widget_origin_or_fail($site['domain']);
 
     $siteId = (int) $site['id'];
+    $supportStatus = hosted_support_compute_status(
+        $pdo,
+        $siteId,
+        hosted_support_site_timezone($pdo, $siteId)
+    );
+
+    if (!$supportStatus['chat_available']) {
+        json_response([
+            'success' => false,
+            'message' => $supportStatus['offline']['offline_message']
+                ?: 'پشتیبانی در حال حاضر امکان دریافت گفتگوی جدید را ندارد.',
+            'code' => 'support_closed',
+            'next_opening' => $supportStatus['next_opening'],
+        ], 403);
+    }
+
     $tenantId = (int) $site['tenant_id'];
 
     $visitorStmt = $pdo->prepare("
