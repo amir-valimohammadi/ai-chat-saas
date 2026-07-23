@@ -115,7 +115,7 @@
 
 .conversations-kpi-strip {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -265,6 +265,12 @@
     border-color: #fecaca;
 }
 
+.conversations-row.mentioned {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    box-shadow: inset 3px 0 0 #f59e0b;
+}
+
 .conversation-cell-main,
 .conversation-cell-agent,
 .conversation-cell-contact {
@@ -294,6 +300,12 @@
     color: #b91c1c;
     background: #fee2e2;
     font-size: 10.5px;
+}
+
+.conversation-title-row b.mention-badge {
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
 }
 
 .conversation-cell-main p {
@@ -478,4 +490,29 @@
         padding: 12px;
         border-radius: 16px;
     }
+}
+
+/* Messaging phase 3 notification controls */
+.conversations-header-actions {
+    flex-wrap: wrap;
+}
+
+.conversation-visitor-online,
+.conversation-visitor-offline {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.conversation-visitor-online {
+    background: #ecfdf5;
+    color: #15803d;
+}
+
+.conversation-visitor-offline {
+    background: #f1f5f9;
+    color: #64748b;
 }

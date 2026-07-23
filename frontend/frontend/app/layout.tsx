@@ -21,13 +21,16 @@ import "../styles/super-admin-plans.css";
 import "../styles/super-admin-subscriptions.css";
 import "../styles/super-admin-ai-monitoring.css";
 import "../styles/super-admin-audit-logs.css";
+import "../styles/super-admin-requests.css";
 import "../styles/subscription.css";
 import "../styles/sites.css";
-import "../styles/super-admin-subscriptions.css";
-import "../styles/subscription.css";
+import "../styles/landing.css";
+import "../styles/auth.css";
+import "../styles/hosted-support.css";
+import "../styles/hosted-support-settings.css";
 export const metadata = {
-    title: "AI Chat SaaS Panel",
-    description: "Admin and support panel for AI Chat SaaS",
+    title: "AI Chat SaaS | پلتفرم چت و پشتیبانی هوشمند",
+    description: "ویجت چت، مدیریت تیم پشتیبانی، خزش دانش سایت و موتور پاسخ هوشمند فارسی",
 };
 
 export default function RootLayout({

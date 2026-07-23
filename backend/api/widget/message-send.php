@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
 require_once __DIR__ . '/../../includes/hosted-support.php';
+require_once __DIR__ . '/../../includes/message-helpers.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -23,6 +24,7 @@ $siteKey = trim($input['site_key'] ?? '');
 $visitorId = isset($input['visitor_id']) ? (int) $input['visitor_id'] : 0;
 $conversationId = isset($input['conversation_id']) ? (int) $input['conversation_id'] : 0;
 $content = trim($input['content'] ?? '');
+$replyToMessageId = isset($input['reply_to_message_id']) ? (int) $input['reply_to_message_id'] : 0;
 
 if ($siteKey === '' || $visitorId <= 0 || $conversationId <= 0 || $content === '') {
     json_response([
@@ -114,19 +116,25 @@ try {
         ], 422);
     }
 
+    $replyTarget = validate_reply_target_or_fail($pdo, $conversationId, $replyToMessageId, 'visitor');
+
     $pdo->beginTransaction();
 
     $messageStmt = $pdo->prepare("
         INSERT INTO messages (
             conversation_id,
             sender_type,
+            message_type,
             sender_id,
+            reply_to_message_id,
             content,
             is_read
         ) VALUES (
             :conversation_id,
             'visitor',
+            'text',
             :sender_id,
+            :reply_to_message_id,
             :content,
             0
         )
@@ -135,6 +143,7 @@ try {
     $messageStmt->execute([
         ':conversation_id' => $conversationId,
         ':sender_id' => $visitorId,
+        ':reply_to_message_id' => $replyTarget ? (int) $replyTarget['id'] : null,
         ':content' => $content,
     ]);
 
@@ -165,6 +174,8 @@ try {
             'conversation_id' => $conversationId,
             'sender_type' => 'visitor',
             'sender_id' => $visitorId,
+            'message_type' => 'text',
+            'reply_to_message_id' => $replyTarget ? (int) $replyTarget['id'] : null,
             'content' => $content,
             'created_at' => date('Y-m-d H:i:s'),
         ]

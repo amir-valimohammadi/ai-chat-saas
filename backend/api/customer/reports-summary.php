@@ -83,6 +83,7 @@ try {
         INNER JOIN sites ON sites.id = conversations.site_id
         WHERE sites.tenant_id = :tenant_id
           AND messages.created_at >= :start_date
+          AND messages.message_type <> 'internal_note'
           " . ($siteId > 0 ? " AND sites.id = :site_id " : "") . "
     ");
 
@@ -118,6 +119,7 @@ try {
                     FROM messages m2
                     WHERE m2.conversation_id = conversations.id
                       AND m2.sender_type = 'agent'
+                      AND m2.message_type <> 'internal_note'
                 )
             )
         ) AS avg_first_response_minutes
@@ -133,6 +135,7 @@ try {
               SELECT 1 FROM messages ma
               WHERE ma.conversation_id = conversations.id
                 AND ma.sender_type = 'agent'
+                AND ma.message_type <> 'internal_note'
           )
     ");
 

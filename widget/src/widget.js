@@ -28,13 +28,23 @@
   };
 
   const POLLING_INTERVAL = 2500;
+  const QUICK_EMOJIS = ["😀", "😂", "😍", "🙏", "👍", "❤️", "🎉", "🔥", "✅", "🤝"];
+  const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
   const MAX_UPLOAD_SIZE = 3 * 1024 * 1024;
+  const MAX_AUDIO_UPLOAD_SIZE = 10 * 1024 * 1024;
   const ALLOWED_UPLOAD_TYPES = new Set([
     "image/jpeg",
     "image/png",
     "image/gif",
     "image/webp",
     "application/pdf",
+    "audio/webm",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/wav",
+    "audio/x-wav",
   ]);
 
   let siteConfig = null;
@@ -44,10 +54,19 @@
   let pollingTimer = null;
   let isOpen = false;
   let isSending = false;
-  let hasUnreadAgentMessage = false;
+  let unreadAgentMessageCount = 0;
   let agentTypingText = "پشتیبان در حال نوشتن...";
   let previewShowTimer = null;
   let previewHideTimer = null;
+  let lastMessageSyncAt = "";
+  let replyingToMessage = null;
+  let editingMessage = null;
+  let mediaRecorder = null;
+  let recordingStream = null;
+  let recordingChunks = [];
+  let recordingTimer = null;
+  let recordingSeconds = 0;
+  const messageCache = new Map();
 
   const browserId = getOrCreateBrowserId();
 
@@ -179,7 +198,9 @@
       .ai-chat-reset:focus-visible,
       .ai-chat-primary:focus-visible,
       .ai-chat-send-button:focus-visible,
-      .ai-chat-file-button:focus-visible {
+      .ai-chat-file-button:focus-visible,
+      .ai-chat-record-button:focus-visible,
+      .ai-chat-message-action:focus-visible {
         outline: 3px solid var(--ai-chat-primary-ring);
         outline-offset: 3px;
       }
@@ -809,6 +830,81 @@
         flex: 0 0 17px;
       }
 
+      .ai-chat-message.deleted {
+        opacity: 0.7;
+        font-style: italic;
+        box-shadow: none;
+      }
+
+      .ai-chat-reply-preview {
+        display: grid;
+        gap: 1px;
+        margin-bottom: 6px;
+        padding: 6px 7px;
+        border-right: 3px solid currentColor;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.14);
+        opacity: 0.9;
+      }
+
+      .ai-chat-message.agent .ai-chat-reply-preview,
+      .ai-chat-message.ai .ai-chat-reply-preview,
+      .ai-chat-message.system .ai-chat-reply-preview {
+        border-right-color: var(--ai-chat-primary);
+        background: var(--ai-chat-surface-soft);
+      }
+
+      .ai-chat-reply-preview strong {
+        font-size: 9.5px;
+      }
+
+      .ai-chat-reply-preview span {
+        overflow: hidden;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .ai-chat-message-meta-row {
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .ai-chat-message-actions {
+        display: flex;
+        gap: 3px;
+        flex-wrap: wrap;
+      }
+
+      .ai-chat-message-action {
+        padding: 2px 5px;
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        border-radius: 6px;
+        color: inherit;
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 8.5px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+
+      .ai-chat-message.agent .ai-chat-message-action,
+      .ai-chat-message.ai .ai-chat-message-action,
+      .ai-chat-message.system .ai-chat-message-action {
+        border-color: var(--ai-chat-border);
+        color: var(--ai-chat-muted);
+        background: var(--ai-chat-surface-soft);
+      }
+
+      .ai-chat-audio {
+        width: min(245px, 62vw);
+        height: 36px;
+        margin-top: 7px;
+        display: block;
+      }
+
       .ai-chat-typing {
         width: fit-content;
         display: none;
@@ -848,6 +944,52 @@
 
       .ai-chat-dot:nth-child(3) {
         animation-delay: 240ms;
+      }
+
+      .ai-chat-composer-context {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        padding: 7px 8px;
+        border: 1px solid color-mix(in srgb, var(--ai-chat-primary) 25%, var(--ai-chat-border));
+        border-radius: 11px;
+        color: var(--ai-chat-text-soft);
+        background: var(--ai-chat-primary-soft);
+      }
+
+      .ai-chat-composer-context.show {
+        display: flex;
+      }
+
+      .ai-chat-composer-context > div {
+        min-width: 0;
+        display: grid;
+        gap: 1px;
+      }
+
+      .ai-chat-composer-context strong {
+        color: var(--ai-chat-primary);
+        font-size: 9.5px;
+      }
+
+      .ai-chat-composer-context span {
+        overflow: hidden;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .ai-chat-composer-context button {
+        width: 26px;
+        height: 26px;
+        flex: 0 0 26px;
+        border: 0;
+        border-radius: 8px;
+        color: var(--ai-chat-primary);
+        background: #ffffff;
+        cursor: pointer;
       }
 
       .ai-chat-footer {
@@ -893,7 +1035,8 @@
       }
 
       .ai-chat-send-button,
-      .ai-chat-file-button {
+      .ai-chat-file-button,
+      .ai-chat-record-button {
         width: 39px;
         height: 39px;
         flex: 0 0 39px;
@@ -911,10 +1054,18 @@
         background: var(--ai-chat-primary);
       }
 
-      .ai-chat-file-button {
+      .ai-chat-file-button,
+      .ai-chat-record-button {
         border: 1px solid var(--ai-chat-border);
         color: var(--ai-chat-primary);
         background: #ffffff;
+      }
+
+      .ai-chat-record-button.recording {
+        color: #dc2626;
+        border-color: #fecaca;
+        background: #fef2f2;
+        animation: aiChatRecordPulse 1.1s infinite;
       }
 
       .ai-chat-send-button:hover {
@@ -922,20 +1073,23 @@
         transform: translateY(-1px);
       }
 
-      .ai-chat-file-button:hover {
+      .ai-chat-file-button:hover,
+      .ai-chat-record-button:hover {
         background: var(--ai-chat-primary-soft);
         transform: translateY(-1px);
       }
 
       .ai-chat-send-button:disabled,
-      .ai-chat-file-button:disabled {
+      .ai-chat-file-button:disabled,
+      .ai-chat-record-button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
         transform: none;
       }
 
       .ai-chat-send-button svg,
-      .ai-chat-file-button svg {
+      .ai-chat-file-button svg,
+      .ai-chat-record-button svg {
         width: 18px;
         height: 18px;
       }
@@ -956,6 +1110,11 @@
 
       .ai-chat-footer.chat-active .ai-chat-upload-hint {
         display: inline;
+      }
+
+      @keyframes aiChatRecordPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.16); }
+        50% { box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.05); }
       }
 
       @keyframes aiChatOpen {
@@ -1057,6 +1216,113 @@
           transition-duration: 0.001ms !important;
         }
       }
+
+      .ai-chat-emoji-wrap {
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .ai-chat-emoji-button {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px;
+        border: 0;
+        border-radius: 11px;
+        color: var(--ai-chat-text-soft);
+        background: transparent;
+        cursor: pointer;
+        font-size: 18px;
+      }
+
+      .ai-chat-emoji-button:hover {
+        color: var(--ai-chat-primary);
+        background: var(--ai-chat-primary-soft);
+      }
+
+      .ai-chat-emoji-picker {
+        position: absolute;
+        z-index: 40;
+        right: 0;
+        bottom: calc(100% + 10px);
+        width: 205px;
+        display: none;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5px;
+        padding: 9px;
+        border: 1px solid var(--ai-chat-border);
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 16px 38px rgba(15, 23, 42, .18);
+      }
+
+      .ai-chat-emoji-picker.show {
+        display: grid;
+      }
+
+      .ai-chat-emoji-picker button {
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--ai-chat-surface-soft);
+        cursor: pointer;
+        font-size: 18px;
+      }
+
+      .ai-chat-reactions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 7px;
+      }
+
+      .ai-chat-reaction-chip,
+      .ai-chat-reaction-option {
+        min-width: 27px;
+        height: 27px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        border: 1px solid var(--ai-chat-border);
+        border-radius: 999px;
+        background: rgba(255,255,255,.86);
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      .ai-chat-reaction-chip.mine {
+        border-color: var(--ai-chat-primary);
+        background: var(--ai-chat-primary-soft);
+      }
+
+      .ai-chat-reaction-chip span {
+        font-size: 9px;
+        font-weight: 800;
+      }
+
+      .ai-chat-reaction-options {
+        display: inline-flex;
+        gap: 2px;
+        opacity: 0;
+        max-width: 0;
+        overflow: hidden;
+        transition: opacity 160ms ease, max-width 180ms ease;
+      }
+
+      .ai-chat-message:hover .ai-chat-reaction-options,
+      .ai-chat-reaction-options:focus-within {
+        opacity: 1;
+        max-width: 190px;
+      }
+
+      @media (max-width: 640px) {
+        .ai-chat-reaction-options {
+          opacity: 1;
+          max-width: 190px;
+        }
+      }
     </style>
 
     <div class="ai-chat-root" data-root>
@@ -1115,6 +1381,14 @@
         </main>
 
         <footer class="ai-chat-footer" data-footer>
+          <div class="ai-chat-composer-context" data-composer-context>
+            <div>
+              <strong data-composer-context-title>پاسخ به پیام</strong>
+              <span data-composer-context-text></span>
+            </div>
+            <button type="button" data-composer-context-cancel aria-label="لغو">×</button>
+          </div>
+
           <form class="ai-chat-send-row" data-send-form>
             <button
               class="ai-chat-file-button"
@@ -1131,9 +1405,28 @@
             <input
               type="file"
               data-file-input
-              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav"
               hidden
             />
+
+
+            <button
+              class="ai-chat-record-button"
+              type="button"
+              data-record-button
+              aria-label="ضبط پیام صوتی"
+              title="پیام صوتی"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8" />
+                <path d="M6.5 11a5.5 5.5 0 0 0 11 0M12 16.5V21M9 21h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+
+            <div class="ai-chat-emoji-wrap">
+              <button class="ai-chat-emoji-button" type="button" data-emoji-button aria-label="انتخاب ایموجی" title="ایموجی">😊</button>
+              <div class="ai-chat-emoji-picker" data-emoji-picker></div>
+            </div>
 
             <textarea
               class="ai-chat-textarea"
@@ -1158,7 +1451,7 @@
           </form>
 
           <div class="ai-chat-footer-meta">
-            <span class="ai-chat-upload-hint">حداکثر حجم فایل: ۳ مگابایت</span>
+            <span class="ai-chat-upload-hint">فایل ۳ مگابایت · صوت ۱۰ مگابایت</span>
             <span>Powered by AI Chat SaaS</span>
           </div>
         </footer>
@@ -1215,7 +1508,18 @@
     sendButton: shadow.querySelector("[data-send-button]"),
     fileButton: shadow.querySelector("[data-file-button]"),
     fileInput: shadow.querySelector("[data-file-input]"),
+    recordButton: shadow.querySelector("[data-record-button]"),
+    emojiButton: shadow.querySelector("[data-emoji-button]"),
+    emojiPicker: shadow.querySelector("[data-emoji-picker]"),
+    composerContext: shadow.querySelector("[data-composer-context]"),
+    composerContextTitle: shadow.querySelector("[data-composer-context-title]"),
+    composerContextText: shadow.querySelector("[data-composer-context-text]"),
+    composerContextCancel: shadow.querySelector("[data-composer-context-cancel]"),
   };
+
+  elements.emojiPicker.innerHTML = QUICK_EMOJIS.map(function (emoji) {
+    return `<button type="button" data-compose-emoji="${emoji}">${emoji}</button>`;
+  }).join("");
 
   bindEvents();
   schedulePreview();
@@ -1236,6 +1540,18 @@
     });
 
     elements.fileInput.addEventListener("change", handleWidgetFileChange);
+    elements.recordButton.addEventListener("click", toggleVoiceRecording);
+    elements.emojiButton.addEventListener("click", function () {
+      elements.emojiPicker.classList.toggle("show");
+    });
+    elements.emojiPicker.addEventListener("click", function (event) {
+      const button = event.target.closest?.("[data-compose-emoji]");
+      if (!button) return;
+      insertEmojiAtCursor(button.dataset.composeEmoji || "");
+      elements.emojiPicker.classList.remove("show");
+    });
+    elements.composerContextCancel.addEventListener("click", clearComposerContext);
+    elements.body.addEventListener("click", handleMessageActionClick);
 
     elements.messageInput.addEventListener("input", function () {
       autoResizeTextarea(elements.messageInput);
@@ -1264,7 +1580,21 @@
       }
     });
 
-    window.addEventListener("beforeunload", stopPolling);
+    window.addEventListener("beforeunload", function () {
+      stopPolling();
+      cleanupVoiceRecording();
+    });
+  }
+
+  function insertEmojiAtCursor(emoji) {
+    if (!emoji) return;
+    const input = elements.messageInput;
+    const start = typeof input.selectionStart === "number" ? input.selectionStart : input.value.length;
+    const end = typeof input.selectionEnd === "number" ? input.selectionEnd : input.value.length;
+    input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+    input.selectionStart = input.selectionEnd = start + emoji.length;
+    autoResizeTextarea(input);
+    input.focus();
   }
 
   function schedulePreview() {
@@ -1363,9 +1693,14 @@
       window.clearTimeout(previewHideTimer);
     }
 
-    hasUnreadAgentMessage = false;
+    unreadAgentMessageCount = 0;
     updateUnreadState();
     scrollToBottom();
+    if (visitor && conversation) {
+      loadMessages().catch(function (error) {
+        console.warn("AI Chat Widget read receipt failed:", error);
+      });
+    }
 
     window.setTimeout(function () {
       const focusTarget = visitor && conversation
@@ -1637,7 +1972,13 @@
       elements.messageInput.value = "";
       autoResizeTextarea(elements.messageInput);
 
-      await sendVisitorMessage(content);
+      if (editingMessage) {
+        await updateVisitorMessage(editingMessage.id, content);
+        clearComposerContext();
+      } else {
+        await sendVisitorMessage(content);
+        clearComposerContext();
+      }
       await loadMessages();
     } catch (error) {
       elements.messageInput.value = content;
@@ -1663,14 +2004,18 @@
       return;
     }
 
-    if (file.size > MAX_UPLOAD_SIZE) {
-      renderInlineError("حجم فایل باید کمتر از ۳ مگابایت باشد.");
+    const normalizedFileType = String(file.type || "").split(";", 1)[0].toLowerCase();
+    const isAudio = normalizedFileType.startsWith("audio/") || normalizedFileType === "video/webm";
+    const maxSize = isAudio ? MAX_AUDIO_UPLOAD_SIZE : MAX_UPLOAD_SIZE;
+
+    if (file.size > maxSize) {
+      renderInlineError(isAudio ? "حجم پیام صوتی باید کمتر از ۱۰ مگابایت باشد." : "حجم فایل باید کمتر از ۳ مگابایت باشد.");
       event.target.value = "";
       return;
     }
 
-    if (!ALLOWED_UPLOAD_TYPES.has(file.type)) {
-      renderInlineError("فقط تصویر با فرمت JPG، PNG، GIF، WEBP یا فایل PDF مجاز است.");
+    if (!ALLOWED_UPLOAD_TYPES.has(normalizedFileType) && normalizedFileType !== "video/webm") {
+      renderInlineError("فقط تصویر، PDF یا فایل صوتی با فرمت مجاز قابل ارسال است.");
       event.target.value = "";
       return;
     }
@@ -1681,11 +2026,12 @@
       setSendingState(true);
       clearInlineError();
 
-      await sendVisitorAttachment(file, currentText);
+      await sendVisitorAttachment(file, currentText, isAudio ? "voice" : "file");
 
       elements.messageInput.value = "";
       elements.fileInput.value = "";
       autoResizeTextarea(elements.messageInput);
+      clearComposerContext();
       await loadMessages();
     } catch (error) {
       renderInlineError("ارسال فایل با خطا مواجه شد. لطفاً دوباره تلاش کنید.");
@@ -1702,7 +2048,19 @@
 
     const fileUrl = String(attachment?.file_url || "");
     const originalName = String(attachment?.original_name || "فایل پیوست");
-    const isImage = String(attachment?.mime_type || "").startsWith("image/");
+    const mimeType = String(attachment?.mime_type || "");
+    const isImage = mimeType.startsWith("image/");
+    const isAudio = mimeType.startsWith("audio/");
+
+    if (isAudio) {
+      const audio = document.createElement("audio");
+      audio.className = "ai-chat-audio";
+      audio.controls = true;
+      audio.preload = "metadata";
+      audio.src = fileUrl;
+      wrapper.appendChild(audio);
+      return wrapper;
+    }
 
     if (isImage) {
       const link = document.createElement("a");
@@ -1739,13 +2097,15 @@
     return wrapper;
   }
 
-  async function sendVisitorAttachment(file, content) {
+  async function sendVisitorAttachment(file, content, messageType = "file") {
     const formData = new FormData();
 
     formData.append("site_key", siteKey);
     formData.append("visitor_id", String(visitor.id));
     formData.append("conversation_id", String(conversation.id));
-    formData.append("content", content || "فایل ارسال شد.");
+    formData.append("reply_to_message_id", String(replyingToMessage?.id || 0));
+    formData.append("message_type", messageType);
+    formData.append("content", content || (messageType === "voice" ? "پیام صوتی" : "فایل ارسال شد."));
     formData.append("file", file);
 
     const data = await fetchJson(`${apiBase}/widget/attachment-send.php`, {
@@ -1809,6 +2169,7 @@
         site_key: siteKey,
         visitor_id: visitor.id,
         conversation_id: conversation.id,
+        reply_to_message_id: replyingToMessage?.id || null,
         content,
       }),
     });
@@ -1832,7 +2193,9 @@
         `?site_key=${encodeURIComponent(siteKey)}` +
         `&visitor_id=${encodeURIComponent(visitor.id)}` +
         `&conversation_id=${encodeURIComponent(conversation.id)}` +
-        `&after_id=${encodeURIComponent(lastMessageId)}`;
+        `&after_id=${encodeURIComponent(lastMessageId)}` +
+        `&changed_after=${encodeURIComponent(lastMessageSyncAt)}` +
+        `&mark_read=${isOpen && !document.hidden ? "1" : "0"}`;
 
     const data = await fetchJson(url);
 
@@ -1843,6 +2206,10 @@
     if (Array.isArray(data.messages) && data.messages.length > 0) {
       appendMessages(data.messages);
     }
+
+    if (data.server_time) {
+      lastMessageSyncAt = data.server_time;
+    }
   }
 
   function appendMessages(messages) {
@@ -1852,53 +2219,416 @@
       return;
     }
 
+    let newUnreadInBatch = 0;
+
     for (const message of messages) {
       const messageId = Number(message?.id || 0);
 
-      if (!messageId || messageId <= lastMessageId) {
+      if (!messageId) {
         continue;
       }
 
+      const existing = messagesContainer.querySelector(`[data-message-id="${messageId}"]`);
       const senderType = normalizeSenderType(message?.sender_type);
       const isAgentSide = ["agent", "ai", "system"].includes(senderType);
 
-      if (isAgentSide && !isOpen) {
-        hasUnreadAgentMessage = true;
+      if (!existing && isAgentSide && !isOpen) {
+        unreadAgentMessageCount += 1;
+        newUnreadInBatch += 1;
       }
 
-      const row = document.createElement("div");
-      row.className = `ai-chat-message-row ${senderType}`;
+      messageCache.set(messageId, message);
+      const row = buildMessageRow(message);
 
-      if (senderType === "agent" || senderType === "ai") {
-        row.appendChild(createMiniAvatar());
+      if (existing) {
+        existing.replaceWith(row);
+      } else {
+        messagesContainer.appendChild(row);
       }
 
-      const messageElement = document.createElement("div");
-      messageElement.className = `ai-chat-message ${senderType}`;
-
-      const text = document.createElement("div");
-      text.textContent = String(message?.content || "");
-      messageElement.appendChild(text);
-
-      if (Array.isArray(message?.attachments)) {
-        for (const attachment of message.attachments) {
-          messageElement.appendChild(renderWidgetAttachment(attachment));
-        }
-      }
-
-      const time = document.createElement("div");
-      time.className = "ai-chat-message-time";
-      time.textContent = formatMessageTime(message?.created_at);
-      messageElement.appendChild(time);
-
-      row.appendChild(messageElement);
-      messagesContainer.appendChild(row);
       lastMessageId = Math.max(lastMessageId, messageId);
+    }
+
+    if (newUnreadInBatch > 0) {
+      playIncomingMessageSound();
     }
 
     updateUnreadState();
     hideTyping();
-    scrollToBottom();
+    if (isOpen) {
+      scrollToBottom();
+    }
+  }
+
+  function buildMessageRow(message) {
+    const messageId = Number(message?.id || 0);
+    const senderType = normalizeSenderType(message?.sender_type);
+    const row = document.createElement("div");
+    row.className = `ai-chat-message-row ${senderType}`;
+    row.dataset.messageId = String(messageId);
+
+    if (senderType === "agent" || senderType === "ai") {
+      row.appendChild(createMiniAvatar());
+    }
+
+    const messageElement = document.createElement("div");
+    messageElement.className = `ai-chat-message ${senderType}${message?.is_deleted ? " deleted" : ""}`;
+
+    if (message?.reply_to) {
+      const preview = document.createElement("div");
+      preview.className = "ai-chat-reply-preview";
+      const previewTitle = document.createElement("strong");
+      previewTitle.textContent = String(message.reply_to.sender_name || "پیام قبلی");
+      const previewText = document.createElement("span");
+      previewText.textContent = String(message.reply_to.content || "");
+      preview.append(previewTitle, previewText);
+      messageElement.appendChild(preview);
+    }
+
+    const text = document.createElement("div");
+    text.textContent = String(message?.content || "");
+    messageElement.appendChild(text);
+
+    if (!message?.is_deleted && Array.isArray(message?.attachments)) {
+      for (const attachment of message.attachments) {
+        messageElement.appendChild(renderWidgetAttachment(attachment));
+      }
+    }
+
+    if (!message?.is_deleted) {
+      const reactions = document.createElement("div");
+      reactions.className = "ai-chat-reactions";
+
+      if (Array.isArray(message?.reactions)) {
+        for (const reaction of message.reactions) {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = `ai-chat-reaction-chip${reaction?.mine ? " mine" : ""}`;
+          chip.dataset.messageReaction = String(reaction?.emoji || "");
+          chip.dataset.messageId = String(messageId);
+          chip.innerHTML = `${escapeHtml(String(reaction?.emoji || ""))}<span>${Number(reaction?.count || 0)}</span>`;
+          reactions.appendChild(chip);
+        }
+      }
+
+      const options = document.createElement("div");
+      options.className = "ai-chat-reaction-options";
+      for (const emoji of REACTION_EMOJIS) {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "ai-chat-reaction-option";
+        option.dataset.messageReaction = emoji;
+        option.dataset.messageId = String(messageId);
+        option.textContent = emoji;
+        options.appendChild(option);
+      }
+      reactions.appendChild(options);
+      messageElement.appendChild(reactions);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "ai-chat-message-meta-row";
+
+    const actions = document.createElement("div");
+    actions.className = "ai-chat-message-actions";
+
+    if (!message?.is_deleted) {
+      actions.appendChild(createMessageAction("reply", messageId, "پاسخ"));
+    }
+    if (message?.can_edit) {
+      actions.appendChild(createMessageAction("edit", messageId, "ویرایش"));
+    }
+    if (message?.can_delete) {
+      actions.appendChild(createMessageAction("delete", messageId, "حذف"));
+    }
+
+    const time = document.createElement("div");
+    time.className = "ai-chat-message-time";
+    const receiptLabel = senderType === "visitor" && !message?.is_deleted
+        ? message?.delivery_status === "read"
+            ? " · خوانده شد ✓✓"
+            : message?.delivery_status === "delivered"
+                ? " · تحویل شد ✓✓"
+                : " · ارسال شد ✓"
+        : "";
+    time.textContent = `${formatMessageTime(message?.created_at)}${message?.is_edited && !message?.is_deleted ? " · ویرایش‌شده" : ""}${message?.is_deleted ? " · حذف‌شده" : ""}${receiptLabel}`;
+
+    meta.append(actions, time);
+    messageElement.appendChild(meta);
+    row.appendChild(messageElement);
+    return row;
+  }
+
+  function createMessageAction(action, messageId, label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ai-chat-message-action";
+    button.dataset.messageAction = action;
+    button.dataset.messageId = String(messageId);
+    button.textContent = label;
+    return button;
+  }
+
+  function handleMessageActionClick(event) {
+    const reactionButton = event.target.closest?.("[data-message-reaction]");
+    if (reactionButton) {
+      const messageId = Number(reactionButton.dataset.messageId || 0);
+      const emoji = reactionButton.dataset.messageReaction || "";
+      toggleVisitorReaction(messageId, emoji);
+      return;
+    }
+
+    const button = event.target.closest?.("[data-message-action]");
+
+    if (!button) {
+      return;
+    }
+
+    const messageId = Number(button.dataset.messageId || 0);
+    const action = button.dataset.messageAction;
+    const message = messageCache.get(messageId);
+
+    if (!message) {
+      return;
+    }
+
+    if (action === "reply") {
+      editingMessage = null;
+      replyingToMessage = message;
+      elements.fileButton.disabled = isSending || !visitor || !conversation;
+      elements.recordButton.disabled = isSending || !visitor || !conversation;
+      elements.messageInput.value = "";
+      showComposerContext("پاسخ به پیام", message.content);
+      elements.messageInput.focus();
+      return;
+    }
+
+    if (action === "edit" && message.can_edit) {
+      replyingToMessage = null;
+      editingMessage = message;
+      elements.fileButton.disabled = true;
+      elements.recordButton.disabled = true;
+      elements.messageInput.value = String(message.content || "");
+      autoResizeTextarea(elements.messageInput);
+      showComposerContext("ویرایش پیام", message.content);
+      elements.messageInput.focus();
+      return;
+    }
+
+    if (action === "delete" && message.can_delete) {
+      deleteVisitorMessage(messageId);
+    }
+  }
+
+  function showComposerContext(title, text) {
+    elements.composerContextTitle.textContent = title;
+    elements.composerContextText.textContent = String(text || "").slice(0, 180);
+    elements.composerContext.classList.add("show");
+  }
+
+  function clearComposerContext() {
+    replyingToMessage = null;
+    editingMessage = null;
+    elements.composerContext.classList.remove("show");
+    elements.composerContextText.textContent = "";
+    elements.messageInput.value = "";
+    autoResizeTextarea(elements.messageInput);
+    const canCompose = Boolean(visitor && conversation);
+    elements.fileButton.disabled = isSending || !canCompose;
+    elements.recordButton.disabled = isSending || !canCompose;
+  }
+
+  async function toggleVisitorReaction(messageId, emoji) {
+    if (!visitor || !conversation || !messageId || !emoji) return;
+
+    try {
+      const data = await fetchJson(`${apiBase}/widget/message-reaction-toggle.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          site_key: siteKey,
+          visitor_id: visitor.id,
+          conversation_id: conversation.id,
+          message_id: messageId,
+          emoji: emoji,
+        }),
+      });
+
+      if (!data.success) throw new Error(data.message || "Failed to update reaction");
+      const cached = messageCache.get(messageId);
+      if (cached) {
+        appendMessages([{ ...cached, reactions: data.reactions || [] }]);
+      }
+    } catch (error) {
+      console.error("AI Chat Widget reaction failed:", error);
+      renderInlineError("ثبت واکنش انجام نشد.");
+    }
+  }
+
+  async function updateVisitorMessage(messageId, content) {
+    const data = await fetchJson(`${apiBase}/widget/message-update.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site_key: siteKey,
+        visitor_id: visitor.id,
+        conversation_id: conversation.id,
+        message_id: messageId,
+        content,
+      }),
+    });
+
+    if (!data.success) {
+      throw new Error(data.message || "Failed to update message");
+    }
+
+    const cached = messageCache.get(messageId);
+    if (cached) {
+      appendMessages([{ ...cached, content, is_edited: true, edited_at: data.data?.edited_at || new Date().toISOString() }]);
+    }
+  }
+
+  async function deleteVisitorMessage(messageId) {
+    if (!window.confirm("این پیام حذف شود؟")) {
+      return;
+    }
+
+    try {
+      setSendingState(true);
+      clearInlineError();
+      const data = await fetchJson(`${apiBase}/widget/message-delete.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          site_key: siteKey,
+          visitor_id: visitor.id,
+          conversation_id: conversation.id,
+          message_id: messageId,
+        }),
+      });
+
+      if (!data.success) {
+        throw new Error(data.message || "Failed to delete message");
+      }
+
+      const cached = messageCache.get(messageId);
+      if (cached) {
+        appendMessages([{
+          ...cached,
+          content: "این پیام حذف شده است.",
+          is_deleted: true,
+          deleted_at: data.data?.deleted_at || new Date().toISOString(),
+          can_edit: false,
+          can_delete: false,
+          attachments: [],
+        }]);
+      }
+
+      if (editingMessage?.id === messageId || replyingToMessage?.id === messageId) {
+        clearComposerContext();
+      }
+    } catch (error) {
+      renderInlineError("حذف پیام با خطا مواجه شد.");
+      console.error("AI Chat Widget delete message failed:", error);
+    } finally {
+      setSendingState(false);
+    }
+  }
+
+  async function toggleVoiceRecording() {
+    if (mediaRecorder?.state === "recording") {
+      mediaRecorder.stop();
+      return;
+    }
+
+    if (editingMessage) {
+      renderInlineError("هنگام ویرایش پیام امکان ضبط صدا وجود ندارد.");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      renderInlineError("مرورگر شما ضبط پیام صوتی را پشتیبانی نمی‌کند.");
+      return;
+    }
+
+    try {
+      clearInlineError();
+      recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+      const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+      mediaRecorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
+      recordingChunks = [];
+      recordingSeconds = 0;
+
+      mediaRecorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          recordingChunks.push(event.data);
+        }
+      });
+
+      mediaRecorder.addEventListener("stop", async () => {
+        const type = mediaRecorder?.mimeType || "audio/webm";
+        const extension = type.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(recordingChunks, { type });
+        cleanupVoiceRecording();
+
+        if (!blob.size) {
+          renderInlineError("صدایی ضبط نشد.");
+          return;
+        }
+
+        if (blob.size > MAX_AUDIO_UPLOAD_SIZE) {
+          renderInlineError("حجم پیام صوتی باید کمتر از ۱۰ مگابایت باشد.");
+          return;
+        }
+
+        try {
+          setSendingState(true);
+          const file = new File([blob], `voice-${Date.now()}.${extension}`, { type });
+          await sendVisitorAttachment(file, elements.messageInput.value.trim(), "voice");
+          elements.messageInput.value = "";
+          clearComposerContext();
+          await loadMessages();
+        } catch (error) {
+          renderInlineError("ارسال پیام صوتی با خطا مواجه شد.");
+          console.error("AI Chat Widget voice upload failed:", error);
+        } finally {
+          setSendingState(false);
+        }
+      });
+
+      mediaRecorder.start(500);
+      elements.recordButton.classList.add("recording");
+      elements.recordButton.title = "توقف ضبط";
+      recordingTimer = window.setInterval(() => {
+        recordingSeconds += 1;
+        elements.recordButton.setAttribute("aria-label", `توقف ضبط، ${recordingSeconds} ثانیه`);
+        if (recordingSeconds >= 120 && mediaRecorder?.state === "recording") {
+          mediaRecorder.stop();
+        }
+      }, 1000);
+    } catch (error) {
+      cleanupVoiceRecording();
+      renderInlineError("دسترسی به میکروفن داده نشد.");
+      console.error("AI Chat Widget microphone failed:", error);
+    }
+  }
+
+  function cleanupVoiceRecording() {
+    if (recordingTimer) {
+      window.clearInterval(recordingTimer);
+      recordingTimer = null;
+    }
+    recordingStream?.getTracks().forEach((track) => track.stop());
+    recordingStream = null;
+    mediaRecorder = null;
+    recordingChunks = [];
+    recordingSeconds = 0;
+    elements.recordButton?.classList.remove("recording");
+    elements.recordButton?.setAttribute("aria-label", "ضبط پیام صوتی");
+    if (elements.recordButton) {
+      elements.recordButton.title = "پیام صوتی";
+    }
   }
 
   function createMiniAvatar() {
@@ -1997,7 +2727,11 @@
     visitor = null;
     conversation = null;
     lastMessageId = 0;
-    hasUnreadAgentMessage = false;
+    lastMessageSyncAt = "";
+    unreadAgentMessageCount = 0;
+    messageCache.clear();
+    clearComposerContext();
+    cleanupVoiceRecording();
     agentTypingText = "پشتیبان در حال نوشتن...";
 
     stopPolling();
@@ -2037,7 +2771,12 @@
   function setChatComposerActive(active) {
     elements.sendForm.classList.toggle("active", active);
     elements.footer.classList.toggle("chat-active", active);
-    elements.fileButton.disabled = !active || isSending;
+    elements.fileButton.disabled = !active || isSending || Boolean(editingMessage);
+    elements.recordButton.disabled = !active || isSending || Boolean(editingMessage);
+    elements.emojiButton.disabled = !active || isSending;
+    if (!active) {
+      elements.emojiPicker.classList.remove("show");
+    }
     elements.sendButton.disabled = !active || isSending;
     elements.messageInput.disabled = !active || isSending;
   }
@@ -2045,7 +2784,12 @@
   function setSendingState(active) {
     isSending = active;
     elements.sendButton.disabled = active;
-    elements.fileButton.disabled = active;
+    elements.fileButton.disabled = active || Boolean(editingMessage);
+    elements.recordButton.disabled = active || Boolean(editingMessage);
+    elements.emojiButton.disabled = active;
+    if (active) {
+      elements.emojiPicker.classList.remove("show");
+    }
     elements.messageInput.disabled = active;
   }
 
@@ -2058,9 +2802,35 @@
     textElement.textContent = active ? "در حال شروع گفتگو..." : "شروع گفتگو";
   }
 
+
+  function playIncomingMessageSound() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const context = new AudioContextClass();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(720, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(960, context.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.2);
+      oscillator.addEventListener("ended", function () { context.close().catch(function () {}); });
+    } catch (_) {
+      // Browser autoplay rules may block sound until the visitor interacts with the page.
+    }
+  }
+
   function updateUnreadState() {
-    elements.unread.classList.toggle("show", hasUnreadAgentMessage);
-    elements.button.classList.toggle("has-unread", hasUnreadAgentMessage);
+    const hasUnread = unreadAgentMessageCount > 0;
+    elements.unread.textContent = String(Math.min(unreadAgentMessageCount, 99));
+    elements.unread.classList.toggle("show", hasUnread);
+    elements.button.classList.toggle("has-unread", hasUnread);
   }
 
   function scrollToBottom() {

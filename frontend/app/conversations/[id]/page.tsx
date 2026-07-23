@@ -5,6 +5,7 @@
 
 import {
     FormEvent,
+    Fragment,
     useCallback,
     useEffect,
     useMemo,
@@ -14,6 +15,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest } from "@/lib/api";
+import { useMessageNotifications } from "@/hooks/useMessageNotifications";
 
 type Attachment = {
     id: number;
@@ -25,15 +27,63 @@ type Attachment = {
     created_at: string;
 };
 
+type ReplyPreview = {
+    id: number;
+    sender_type: "visitor" | "agent" | "ai" | "system";
+    sender_name: string | null;
+    content: string;
+    is_deleted: boolean;
+};
+
+type MessageReaction = {
+    emoji: string;
+    count: number;
+    mine: boolean;
+};
+
+type MentionedUser = {
+    id: number;
+    name: string;
+};
+
 type Message = {
     id: number;
     conversation_id: number;
     sender_type: "visitor" | "agent" | "ai" | "system";
+    message_type: "text" | "file" | "voice" | "system" | "internal_note";
+    is_internal: boolean;
     sender_id: number | null;
     sender_name: string | null;
+    reply_to_message_id: number | null;
+    reply_to: ReplyPreview | null;
     content: string;
     is_read: boolean;
+    delivered_at: string | null;
+    read_at: string | null;
+    delivery_status: "sent" | "delivered" | "read";
+    is_edited: boolean;
+    edited_at: string | null;
+    is_deleted: boolean;
+    deleted_at: string | null;
+    can_edit: boolean;
+    can_delete: boolean;
+    has_history: boolean;
     attachments?: Attachment[];
+    reactions: MessageReaction[];
+    mentioned_users: MentionedUser[];
+    mentioned_me: boolean;
+    created_at: string;
+};
+
+type MessageRevision = {
+    id: number;
+    message_id: number;
+    editor_type: "visitor" | "agent" | "system";
+    editor_id: number | null;
+    editor_name: string | null;
+    action: "edit" | "delete";
+    previous_content: string | null;
+    new_content: string | null;
     created_at: string;
 };
 
@@ -64,8 +114,17 @@ type ConversationDetail = {
         phone: string | null;
         browser_id: string | null;
         ip_address: string | null;
+        user_agent: string | null;
+        last_seen_at: string | null;
+        is_online: boolean;
     };
     messages: Message[];
+    first_unread_message_id: number | null;
+    pagination: {
+        limit: number;
+        oldest_message_id: number | null;
+        has_more: boolean;
+    };
 };
 
 type AiSuggestion = {
@@ -115,6 +174,9 @@ const statusLabels: Record<string, string> = {
     closed: "بسته‌شده",
 };
 
+const quickEmojis = ["😀", "😂", "😍", "🙏", "👍", "❤️", "🎉", "🔥", "✅", "🤝"];
+const reactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
 const conversationStatuses = [
     { value: "new", label: "جدید" },
     { value: "open", label: "باز" },
@@ -129,6 +191,7 @@ export default function ConversationShowPage() {
     const router = useRouter();
     const params = useParams();
     const conversationId = Number(params.id);
+    const messageNotifications = useMessageNotifications("گفتگو • AI Chat SaaS");
 
     const [conversation, setConversation] = useState<ConversationDetail | null>(
         null
@@ -140,8 +203,18 @@ export default function ConversationShowPage() {
     );
 
     const [reply, setReply] = useState("");
+    const [composerMode, setComposerMode] = useState<"public" | "internal">("public");
+    const [selectedMentionIds, setSelectedMentionIds] = useState<number[]>([]);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+    const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+    const [messageHistory, setMessageHistory] = useState<MessageRevision[] | null>(null);
+    const [historyMessageId, setHistoryMessageId] = useState<number | null>(null);
     const [quickReplySearch, setQuickReplySearch] = useState("");
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedMessageType, setSelectedMessageType] = useState<"file" | "voice">("file");
+    const [recording, setRecording] = useState(false);
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [activePanel, setActivePanel] = useState<
         "quick" | "ai" | "manage" | "info"
     >("quick");
@@ -159,12 +232,24 @@ export default function ConversationShowPage() {
     const [loadingAgents, setLoadingAgents] = useState(false);
     const [changingStatus, setChangingStatus] = useState(false);
     const [assigningAgent, setAssigningAgent] = useState(false);
+    const [mutatingMessage, setMutatingMessage] = useState(false);
+    const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+    const [hasMoreMessages, setHasMoreMessages] = useState(false);
+    const [firstUnreadMessageId, setFirstUnreadMessageId] = useState<number | null>(null);
+    const [showJumpToBottom, setShowJumpToBottom] = useState(false);
 
     const messagesRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastTypingSentAtRef = useRef(0);
     const isCurrentlyTypingRef = useRef(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordingChunksRef = useRef<Blob[]>([]);
+    const recordingStreamRef = useRef<MediaStream | null>(null);
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const latestVisitorMessageIdRef = useRef(0);
+    const initialConversationLoadedRef = useRef(false);
+    const shouldAutoScrollRef = useRef(true);
 
     const title = conversation
         ? conversation.visitor.name || "کاربر بدون نام"
@@ -246,15 +331,129 @@ export default function ConversationShowPage() {
                 setLoading(true);
             }
 
-            const data = await apiRequest(
-                `/agent/conversation-show.php?conversation_id=${conversationId}`
-            );
+            const stage = messagesRef.current;
+            const isNearBottom = !stage || stage.scrollHeight - stage.scrollTop - stage.clientHeight < 140;
+            shouldAutoScrollRef.current = !silent || isNearBottom;
 
-            setConversation(data.conversation);
+            const data = await apiRequest(
+                `/agent/conversation-show.php?conversation_id=${conversationId}&limit=100&mark_read=${document.hidden ? "0" : "1"}`
+            );
+            const incoming: ConversationDetail = data.conversation;
+            const incomingVisitorMessages = incoming.messages.filter(
+                (message) => message.sender_type === "visitor" && !message.is_internal
+            );
+            const newestVisitorMessage = incomingVisitorMessages.at(-1) || null;
+            const newestVisitorMessageId = newestVisitorMessage?.id || 0;
+
+            if (
+                initialConversationLoadedRef.current &&
+                newestVisitorMessage &&
+                newestVisitorMessageId > latestVisitorMessageIdRef.current
+            ) {
+                messageNotifications.notify({
+                    title: `پیام جدید از ${incoming.visitor.name || "کاربر سایت"}`,
+                    body: newestVisitorMessage.content || "پیام جدید دریافت شد.",
+                    tag: `conversation-${incoming.id}`,
+                    unreadCount: 1,
+                });
+
+                if (!isNearBottom) {
+                    setShowJumpToBottom(true);
+                }
+            }
+
+            latestVisitorMessageIdRef.current = Math.max(
+                latestVisitorMessageIdRef.current,
+                newestVisitorMessageId
+            );
+            initialConversationLoadedRef.current = true;
+
+            if (!silent && incoming.first_unread_message_id) {
+                setFirstUnreadMessageId(incoming.first_unread_message_id);
+            }
+
+            if (!silent) {
+                setHasMoreMessages(Boolean(incoming.pagination?.has_more));
+            }
+
+            setConversation((previous) => {
+                if (!previous) return incoming;
+
+                const merged = new Map<number, Message>();
+                for (const message of previous.messages) merged.set(message.id, message);
+                for (const message of incoming.messages) merged.set(message.id, message);
+
+                return {
+                    ...incoming,
+                    messages: Array.from(merged.values()).sort((a, b) => a.id - b.id),
+                };
+            });
         } catch (err) {
             setError(err instanceof Error ? err.message : "خطا در دریافت گفتگو");
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function loadOlderMessages() {
+        if (!conversation || loadingOlderMessages || !hasMoreMessages) return;
+
+        const oldestMessageId = conversation.messages[0]?.id;
+        if (!oldestMessageId) return;
+
+        const stage = messagesRef.current;
+        const previousScrollHeight = stage?.scrollHeight || 0;
+        const previousScrollTop = stage?.scrollTop || 0;
+        shouldAutoScrollRef.current = false;
+
+        try {
+            setLoadingOlderMessages(true);
+            const data = await apiRequest(
+                `/agent/conversation-show.php?conversation_id=${conversationId}&before_id=${oldestMessageId}&limit=50`
+            );
+            const olderConversation: ConversationDetail = data.conversation;
+
+            setConversation((current) => {
+                if (!current) return olderConversation;
+                const merged = new Map<number, Message>();
+                for (const message of olderConversation.messages) merged.set(message.id, message);
+                for (const message of current.messages) merged.set(message.id, message);
+                return {
+                    ...current,
+                    messages: Array.from(merged.values()).sort((a, b) => a.id - b.id),
+                };
+            });
+            setHasMoreMessages(Boolean(olderConversation.pagination?.has_more));
+
+            window.setTimeout(() => {
+                if (!messagesRef.current) return;
+                const addedHeight = messagesRef.current.scrollHeight - previousScrollHeight;
+                messagesRef.current.scrollTop = previousScrollTop + addedHeight;
+            }, 0);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "خطا در دریافت پیام‌های قدیمی");
+        } finally {
+            setLoadingOlderMessages(false);
+        }
+    }
+
+    function scrollMessagesToBottom() {
+        if (!messagesRef.current) return;
+        shouldAutoScrollRef.current = true;
+        messagesRef.current.scrollTo({
+            top: messagesRef.current.scrollHeight,
+            behavior: "smooth",
+        });
+        setShowJumpToBottom(false);
+    }
+
+    function handleMessagesScroll() {
+        const stage = messagesRef.current;
+        if (!stage) return;
+        const isNearBottom = stage.scrollHeight - stage.scrollTop - stage.clientHeight < 140;
+        setShowJumpToBottom(!isNearBottom);
+        if (isNearBottom) {
+            setFirstUnreadMessageId(null);
         }
     }
 
@@ -335,19 +534,37 @@ export default function ConversationShowPage() {
     }, [conversationId]);
 
     useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                messageNotifications.setUnreadTitle(0);
+                loadConversation(true);
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, [conversationId]);
+
+    useEffect(() => {
         return () => {
             if (typingStopTimerRef.current) {
                 clearTimeout(typingStopTimerRef.current);
             }
 
             updateTypingStatus(false);
+            if (mediaRecorderRef.current?.state === "recording") {
+                mediaRecorderRef.current.stop();
+            } else {
+                cleanupRecorder();
+            }
         };
     }, [updateTypingStatus]);
 
     useEffect(() => {
         window.setTimeout(() => {
-            if (messagesRef.current) {
+            if (messagesRef.current && shouldAutoScrollRef.current) {
                 messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+                setShowJumpToBottom(false);
             }
         }, 0);
     }, [conversation?.messages?.length]);
@@ -362,21 +579,41 @@ export default function ConversationShowPage() {
         }
 
         try {
+            shouldAutoScrollRef.current = true;
             setSending(true);
             setError("");
 
-            await apiRequest("/agent/message-send.php", {
-                method: "POST",
-                body: JSON.stringify({
-                    conversation_id: conversationId,
-                    content,
-                }),
-            });
+            if (editingMessage) {
+                await apiRequest("/agent/message-update.php", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        message_id: editingMessage.id,
+                        content,
+                        mentioned_user_ids: composerMode === "internal" ? selectedMentionIds : [],
+                    }),
+                });
+            } else {
+                await apiRequest("/agent/message-send.php", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        conversation_id: conversationId,
+                        reply_to_message_id: replyingTo?.id || null,
+                        message_type: composerMode === "internal" ? "internal_note" : "text",
+                        mentioned_user_ids: composerMode === "internal" ? selectedMentionIds : [],
+                        content,
+                    }),
+                });
+            }
 
             stopAgentTyping();
             await updateTypingStatus(false);
 
             setReply("");
+            setEditingMessage(null);
+            setReplyingTo(null);
+            setComposerMode("public");
+            setSelectedMentionIds([]);
+            setShowEmojiPicker(false);
             await loadConversation(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : "ارسال پاسخ ناموفق بود");
@@ -390,10 +627,11 @@ export default function ConversationShowPage() {
             return;
         }
 
-        const maxSize = 3 * 1024 * 1024;
+        const isAudio = selectedFile.type.startsWith("audio/") || selectedMessageType === "voice";
+        const maxSize = isAudio ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
 
         if (selectedFile.size > maxSize) {
-            setError("حجم فایل باید کمتر از ۳ مگابایت باشد.");
+            setError(isAudio ? "حجم پیام صوتی باید کمتر از ۱۰ مگابایت باشد." : "حجم فایل باید کمتر از ۳ مگابایت باشد.");
             return;
         }
 
@@ -403,9 +641,18 @@ export default function ConversationShowPage() {
             "image/gif",
             "image/webp",
             "application/pdf",
+            "audio/webm",
+            "audio/ogg",
+            "audio/mpeg",
+            "audio/mp4",
+            "audio/x-m4a",
+            "audio/wav",
+            "audio/x-wav",
         ];
 
-        if (!allowedTypes.includes(selectedFile.type)) {
+        const normalizedFileType = selectedFile.type.split(";", 1)[0].toLowerCase();
+
+        if (!allowedTypes.includes(normalizedFileType)) {
             setError("فرمت فایل مجاز نیست.");
             return;
         }
@@ -418,7 +665,12 @@ export default function ConversationShowPage() {
 
             const formData = new FormData();
             formData.append("conversation_id", String(conversationId));
-            formData.append("content", reply.trim() || "فایل ارسال شد.");
+            formData.append("reply_to_message_id", String(replyingTo?.id || 0));
+            formData.append("message_type", selectedMessageType);
+            formData.append(
+                "content",
+                reply.trim() || (selectedMessageType === "voice" ? "پیام صوتی" : "فایل ارسال شد.")
+            );
             formData.append("file", selectedFile);
 
             const apiBase =
@@ -443,7 +695,9 @@ export default function ConversationShowPage() {
             await updateTypingStatus(false);
 
             setReply("");
+            setReplyingTo(null);
             setSelectedFile(null);
+            setSelectedMessageType("file");
 
             if (fileInputRef.current) {
                 fileInputRef.current.value = "";
@@ -454,6 +708,189 @@ export default function ConversationShowPage() {
             setError(err instanceof Error ? err.message : "ارسال فایل ناموفق بود");
         } finally {
             setSendingFile(false);
+        }
+    }
+
+    function startReplyToMessage(message: Message) {
+        setEditingMessage(null);
+        setComposerMode(message.is_internal ? "internal" : "public");
+        setSelectedMentionIds([]);
+        setReplyingTo(message);
+        setReply("");
+        window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
+    }
+
+    function startEditMessage(message: Message) {
+        setReplyingTo(null);
+        setEditingMessage(message);
+        setComposerMode(message.is_internal ? "internal" : "public");
+        setSelectedMentionIds(message.mentioned_users?.map((item) => item.id) || []);
+        setSelectedFile(null);
+        setReply(message.content);
+        window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
+    }
+
+    function cancelComposerMode() {
+        setReplyingTo(null);
+        setEditingMessage(null);
+        setComposerMode("public");
+        setSelectedMentionIds([]);
+        setShowEmojiPicker(false);
+        setReply("");
+        stopAgentTyping();
+    }
+
+    async function handleDeleteMessage(message: Message) {
+        if (!message.can_delete || mutatingMessage) {
+            return;
+        }
+
+        if (!window.confirm("این پیام حذف شود؟ متن قبلی فقط در تاریخچه مدیریتی باقی می‌ماند.")) {
+            return;
+        }
+
+        try {
+            setMutatingMessage(true);
+            setError("");
+            await apiRequest("/agent/message-delete.php", {
+                method: "POST",
+                body: JSON.stringify({ message_id: message.id }),
+            });
+            if (editingMessage?.id === message.id || replyingTo?.id === message.id) {
+                cancelComposerMode();
+            }
+            await loadConversation(true);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "حذف پیام ناموفق بود");
+        } finally {
+            setMutatingMessage(false);
+        }
+    }
+
+    async function handleShowMessageHistory(message: Message) {
+        try {
+            setHistoryMessageId(message.id);
+            setMessageHistory(null);
+            const data = await apiRequest(`/agent/message-history.php?message_id=${message.id}`);
+            setMessageHistory(data.revisions || []);
+        } catch (err) {
+            setHistoryMessageId(null);
+            setMessageHistory(null);
+            setError(err instanceof Error ? err.message : "دریافت تاریخچه پیام ناموفق بود");
+        }
+    }
+
+    function cleanupRecorder() {
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+        recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        setRecording(false);
+        setRecordingSeconds(0);
+    }
+
+    async function startVoiceRecording() {
+        if (recording || isClosed || editingMessage) {
+            return;
+        }
+
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+            setError("مرورگر شما ضبط پیام صوتی را پشتیبانی نمی‌کند.");
+            return;
+        }
+
+        try {
+            setError("");
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const preferredTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+            const mimeType = preferredTypes.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+            const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+            recordingChunksRef.current = [];
+            recordingStreamRef.current = stream;
+            mediaRecorderRef.current = recorder;
+
+            recorder.addEventListener("dataavailable", (event) => {
+                if (event.data.size > 0) {
+                    recordingChunksRef.current.push(event.data);
+                }
+            });
+
+            recorder.addEventListener("stop", () => {
+                const type = recorder.mimeType || "audio/webm";
+                const extension = type.includes("ogg") ? "ogg" : "webm";
+                const blob = new Blob(recordingChunksRef.current, { type });
+
+                if (blob.size > 0) {
+                    setSelectedFile(new File([blob], `voice-${Date.now()}.${extension}`, { type }));
+                    setSelectedMessageType("voice");
+                }
+
+                cleanupRecorder();
+            });
+
+            recorder.start(500);
+            setRecording(true);
+            setRecordingSeconds(0);
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingSeconds((value) => {
+                    if (value >= 119 && mediaRecorderRef.current?.state === "recording") {
+                        mediaRecorderRef.current.stop();
+                    }
+                    return value + 1;
+                });
+            }, 1000);
+        } catch {
+            cleanupRecorder();
+            setError("دسترسی به میکروفن داده نشد یا ضبط صدا شروع نشد.");
+        }
+    }
+
+    function stopVoiceRecording() {
+        if (mediaRecorderRef.current?.state === "recording") {
+            mediaRecorderRef.current.stop();
+        }
+    }
+
+    function insertComposerEmoji(emoji: string) {
+        setReply((value) => `${value}${emoji}`);
+        setShowEmojiPicker(false);
+        window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
+    }
+
+    function toggleMention(agent: AssignableAgent) {
+        const isSelected = selectedMentionIds.includes(agent.id);
+        setSelectedMentionIds((current) =>
+            isSelected
+                ? current.filter((id) => id !== agent.id)
+                : [...current, agent.id]
+        );
+
+        if (isSelected) {
+            setReply((value) => value.replaceAll(`@${agent.name}`, "").replace(/\s{2,}/g, " ").trimStart());
+        } else if (!reply.includes(`@${agent.name}`)) {
+            setReply((value) => `${value}${value && !value.endsWith(" ") ? " " : ""}@${agent.name} `);
+        }
+    }
+
+    async function handleToggleReaction(message: Message, emoji: string) {
+        try {
+            const data = await apiRequest("/agent/message-reaction-toggle.php", {
+                method: "POST",
+                body: JSON.stringify({ message_id: message.id, emoji }),
+            });
+
+            setConversation((current) => current ? {
+                ...current,
+                messages: current.messages.map((item) =>
+                    item.id === message.id ? { ...item, reactions: data.reactions || [] } : item
+                ),
+            } : current);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "ثبت واکنش ناموفق بود");
         }
     }
 
@@ -531,7 +968,11 @@ export default function ConversationShowPage() {
 
     async function handleUseSuggestion(suggestion: AiSuggestion) {
         setReply(suggestion.suggested_reply);
-        notifyAgentTyping(suggestion.suggested_reply);
+        if (composerMode === "public") {
+            notifyAgentTyping(suggestion.suggested_reply);
+        } else {
+            stopAgentTyping();
+        }
 
         try {
             await apiRequest("/agent/ai-suggestion-mark-used.php", {
@@ -558,7 +999,11 @@ export default function ConversationShowPage() {
 
     function handleUseQuickReply(item: QuickReply) {
         setReply(item.content);
-        notifyAgentTyping(item.content);
+        if (composerMode === "public") {
+            notifyAgentTyping(item.content);
+        } else {
+            stopAgentTyping();
+        }
     }
 
     function handleAppendQuickReply(item: QuickReply) {
@@ -566,7 +1011,11 @@ export default function ConversationShowPage() {
             const current = prev.trim();
             const nextValue = current ? `${current}\n\n${item.content}` : item.content;
 
-            notifyAgentTyping(nextValue);
+            if (composerMode === "public") {
+                notifyAgentTyping(nextValue);
+            } else {
+                stopAgentTyping();
+            }
 
             return nextValue;
         });
@@ -643,12 +1092,33 @@ export default function ConversationShowPage() {
                                     <div className="conversation-person-meta">
                                         <span>{visitorContact}</span>
                                         <span>{conversation.site.name}</span>
+                                        <span className={conversation.visitor.is_online ? "visitor-online" : "visitor-offline"}>
+                                            {conversation.visitor.is_online
+                                                ? "● آنلاین"
+                                                : `آخرین فعالیت: ${conversation.visitor.last_seen_at || "نامشخص"}`}
+                                        </span>
                                         <span>#{conversation.id}</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="conversation-head-actions">
+                                <button
+                                    className="btn secondary"
+                                    type="button"
+                                    onClick={() => messageNotifications.toggleSound()}
+                                    title="صدای پیام جدید"
+                                >
+                                    {messageNotifications.preferences.sound_enabled ? "🔔" : "🔕"}
+                                </button>
+                                <button
+                                    className="btn secondary"
+                                    type="button"
+                                    onClick={() => messageNotifications.enableBrowserNotifications()}
+                                    title="اعلان مرورگر"
+                                >
+                                    {messageNotifications.preferences.browser_notifications_enabled ? "اعلان فعال" : "فعال‌سازی اعلان"}
+                                </button>
                                 <button
                                     className="btn secondary"
                                     type="button"
@@ -688,7 +1158,20 @@ export default function ConversationShowPage() {
                             />
                         </div>
 
-                        <div className="conversation-message-stage-pro" ref={messagesRef}>
+                        <div className="conversation-message-stage-pro" ref={messagesRef} onScroll={handleMessagesScroll}>
+                            {hasMoreMessages && (
+                                <div className="conversation-load-older-wrap">
+                                    <button
+                                        className="btn secondary"
+                                        type="button"
+                                        onClick={loadOlderMessages}
+                                        disabled={loadingOlderMessages}
+                                    >
+                                        {loadingOlderMessages ? "در حال دریافت..." : "نمایش پیام‌های قدیمی‌تر"}
+                                    </button>
+                                </div>
+                            )}
+
                             {conversation.messages.length === 0 ? (
                                 <div className="conversation-empty-chat">
                                     <div>💬</div>
@@ -704,21 +1187,57 @@ export default function ConversationShowPage() {
                                     </div>
 
                                     {conversation.messages.map((message) => (
-                                        <MessageBubble key={message.id} message={message} />
+                                        <Fragment key={message.id}>
+                                            {message.id === firstUnreadMessageId && (
+                                                <div className="conversation-new-messages-divider">
+                                                    <span>پیام‌های جدید</span>
+                                                </div>
+                                            )}
+                                            <MessageBubble
+                                                message={message}
+                                                onReply={startReplyToMessage}
+                                                onEdit={startEditMessage}
+                                                onDelete={handleDeleteMessage}
+                                                onHistory={handleShowMessageHistory}
+                                                onReact={handleToggleReaction}
+                                                disabled={mutatingMessage}
+                                            />
+                                        </Fragment>
                                     ))}
                                 </>
                             )}
                         </div>
 
-                        <form onSubmit={handleSendReply} className="conversation-composer-pro">
+                        {showJumpToBottom && (
+                            <button
+                                className="conversation-jump-bottom"
+                                type="button"
+                                onClick={scrollMessagesToBottom}
+                            >
+                                ↓ رفتن به آخرین پیام
+                            </button>
+                        )}
+
+                        <form onSubmit={handleSendReply} className={`conversation-composer-pro ${composerMode === "internal" ? "internal-mode" : ""}`}>
+                            {(replyingTo || editingMessage) && (
+                                <div className="composer-context-banner">
+                                    <div>
+                                        <strong>{editingMessage ? "ویرایش پیام" : "پاسخ به پیام"}{composerMode === "internal" ? " · یادداشت داخلی" : ""}</strong>
+                                        <span>{editingMessage ? editingMessage.content : replyingTo?.content}</span>
+                                    </div>
+                                    <button type="button" onClick={cancelComposerMode}>انصراف</button>
+                                </div>
+                            )}
+
                             {selectedFile && (
                                 <div className="composer-file-preview">
-                                    <span>فایل انتخاب‌شده: {selectedFile.name}</span>
+                                    <span>{selectedMessageType === "voice" ? "پیام صوتی آماده ارسال" : `فایل انتخاب‌شده: ${selectedFile.name}`}</span>
 
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setSelectedFile(null);
+                                            setSelectedMessageType("file");
 
                                             if (fileInputRef.current) {
                                                 fileInputRef.current.value = "";
@@ -737,25 +1256,84 @@ export default function ConversationShowPage() {
                                     const nextValue = event.target.value;
 
                                     setReply(nextValue);
-                                    notifyAgentTyping(nextValue);
+                                    if (composerMode === "public") {
+                                        notifyAgentTyping(nextValue);
+                                    } else {
+                                        stopAgentTyping();
+                                    }
                                 }}
                                 placeholder={
                                     isClosed
                                         ? "این گفتگو بسته شده است."
-                                        : "پاسخ خود را برای کاربر بنویسید..."
+                                        : editingMessage
+                                            ? "متن ویرایش‌شده را بنویسید..."
+                                            : composerMode === "internal"
+                                                ? "یادداشت داخلی برای تیم بنویسید؛ برای منشن از @ استفاده کنید..."
+                                                : "پاسخ خود را برای کاربر بنویسید..."
                                 }
                                 disabled={isClosed}
                             />
 
+                            {composerMode === "internal" && assignableAgents.length > 0 && (
+                                <div className="composer-mentions">
+                                    <span>منشن همکار:</span>
+                                    {assignableAgents.map((agent) => (
+                                        <button
+                                            key={agent.id}
+                                            type="button"
+                                            className={selectedMentionIds.includes(agent.id) ? "selected" : ""}
+                                            onClick={() => toggleMention(agent)}
+                                        >
+                                            @{agent.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
                             <div className="conversation-composer-footer">
                                 <div className="conversation-composer-tools">
+                                    <button
+                                        className={`btn secondary ${composerMode === "internal" ? "active" : ""}`}
+                                        type="button"
+                                        onClick={() => {
+                                            stopAgentTyping();
+                                            setComposerMode((mode) => mode === "public" ? "internal" : "public");
+                                            setSelectedFile(null);
+                                            setSelectedMentionIds([]);
+                                            setReply("");
+                                            setShowEmojiPicker(false);
+                                        }}
+                                        disabled={isClosed || Boolean(editingMessage)}
+                                    >
+                                        {composerMode === "internal" ? "یادداشت داخلی فعال" : "یادداشت داخلی"}
+                                    </button>
+
+                                    <div className="composer-emoji-wrap">
+                                        <button
+                                            className="btn secondary"
+                                            type="button"
+                                            onClick={() => setShowEmojiPicker((value) => !value)}
+                                            disabled={isClosed}
+                                        >
+                                            Emoji
+                                        </button>
+                                        {showEmojiPicker && (
+                                            <div className="composer-emoji-picker">
+                                                {quickEmojis.map((emoji) => (
+                                                    <button key={emoji} type="button" onClick={() => insertComposerEmoji(emoji)}>{emoji}</button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <input
                                         ref={fileInputRef}
                                         type="file"
-                                        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
-                                        onChange={(event) =>
-                                            setSelectedFile(event.target.files?.[0] || null)
-                                        }
+                                        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav"
+                                        onChange={(event) => {
+                                            setSelectedFile(event.target.files?.[0] || null);
+                                            setSelectedMessageType(event.target.files?.[0]?.type.startsWith("audio/") ? "voice" : "file");
+                                        }}
                                         style={{ display: "none" }}
                                     />
 
@@ -763,9 +1341,18 @@ export default function ConversationShowPage() {
                                         className="btn secondary"
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        disabled={isClosed}
+                                        disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
                                     >
                                         پیوست
+                                    </button>
+
+                                    <button
+                                        className={`btn secondary ${recording ? "recording" : ""}`}
+                                        type="button"
+                                        onClick={recording ? stopVoiceRecording : startVoiceRecording}
+                                        disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                    >
+                                        {recording ? `توقف ضبط ${recordingSeconds}s` : "پیام صوتی"}
                                     </button>
 
                                     <button
@@ -785,7 +1372,7 @@ export default function ConversationShowPage() {
                                         className="btn secondary"
                                         type="button"
                                         onClick={handleSendAttachment}
-                                        disabled={sendingFile || isClosed || !selectedFile}
+                                        disabled={sendingFile || isClosed || !selectedFile || Boolean(editingMessage) || composerMode === "internal"}
                                     >
                                         {sendingFile ? "ارسال فایل..." : "ارسال فایل"}
                                     </button>
@@ -795,7 +1382,7 @@ export default function ConversationShowPage() {
                                         type="submit"
                                         disabled={sending || isClosed || reply.trim().length === 0}
                                     >
-                                        {sending ? "در حال ارسال..." : "ارسال پاسخ"}
+                                        {sending ? "در حال ذخیره..." : editingMessage ? "ذخیره ویرایش" : composerMode === "internal" ? "ثبت یادداشت" : "ارسال پاسخ"}
                                     </button>
                                 </div>
                             </div>
@@ -1091,22 +1678,85 @@ export default function ConversationShowPage() {
                     </aside>
                 </div>
             )}
+
+            {historyMessageId !== null && (
+                <div className="message-history-overlay" onClick={() => setHistoryMessageId(null)}>
+                    <section className="message-history-modal" onClick={(event) => event.stopPropagation()}>
+                        <header>
+                            <div>
+                                <strong>تاریخچه پیام #{historyMessageId}</strong>
+                                <span>ویرایش‌ها و حذف‌های ثبت‌شده</span>
+                            </div>
+                            <button type="button" onClick={() => setHistoryMessageId(null)}>×</button>
+                        </header>
+
+                        <div className="message-history-list">
+                            {messageHistory === null ? (
+                                <p>در حال دریافت تاریخچه...</p>
+                            ) : messageHistory.length === 0 ? (
+                                <p>تغییری برای این پیام ثبت نشده است.</p>
+                            ) : (
+                                messageHistory.map((revision) => (
+                                    <article key={revision.id}>
+                                        <div>
+                                            <strong>{revision.action === "delete" ? "حذف پیام" : "ویرایش پیام"}</strong>
+                                            <span>{revision.editor_name || (revision.editor_type === "visitor" ? "کاربر" : "سیستم")} · {revision.created_at}</span>
+                                        </div>
+                                        {revision.previous_content && <p><b>قبل:</b> {revision.previous_content}</p>}
+                                        {revision.new_content && <p><b>بعد:</b> {revision.new_content}</p>}
+                                    </article>
+                                ))
+                            )}
+                        </div>
+                    </section>
+                </div>
+            )}
         </AppShell>
     );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({
+    message,
+    onReply,
+    onEdit,
+    onDelete,
+    onHistory,
+    onReact,
+    disabled,
+}: {
+    message: Message;
+    onReply: (message: Message) => void;
+    onEdit: (message: Message) => void;
+    onDelete: (message: Message) => void;
+    onHistory: (message: Message) => void;
+    onReact: (message: Message, emoji: string) => void;
+    disabled: boolean;
+}) {
     const sender = getSenderMeta(message);
-    const sideClass = message.sender_type === "visitor" ? "from-visitor" : "from-agent";
+    const sideClass = message.is_internal ? "from-internal" : message.sender_type === "visitor" ? "from-visitor" : "from-agent";
 
     return (
-        <div className={`message-row-pro ${sideClass}`}>
+        <div className={`message-row-pro ${sideClass}`} id={`message-${message.id}`}>
             <ConversationAvatar name={sender.label} tone={sender.tone} small />
 
-            <div className={`message-bubble-pro ${sender.tone}`}>
+            <div className={`message-bubble-pro ${sender.tone} ${message.is_internal ? "internal-note" : ""} ${message.mentioned_me ? "mentioned-me" : ""} ${message.is_deleted ? "deleted" : ""}`}>
+                {message.is_internal && <div className="message-internal-label">🔒 فقط برای تیم پشتیبانی{message.mentioned_me ? " · شما منشن شده‌اید" : ""}</div>}
+                {message.reply_to && (
+                    <div className="message-reply-preview-pro">
+                        <strong>{message.reply_to.sender_name || "پیام قبلی"}</strong>
+                        <span>{message.reply_to.content}</span>
+                    </div>
+                )}
+
+                {message.mentioned_users?.length > 0 && (
+                    <div className="message-mentions-pro">
+                        {message.mentioned_users.map((user) => <span key={user.id}>@{user.name}</span>)}
+                    </div>
+                )}
+
                 <div className="message-body-pro">{message.content}</div>
 
-                {message.attachments && message.attachments.length > 0 && (
+                {!message.is_deleted && message.attachments && message.attachments.length > 0 && (
                     <div className="attachment-grid-pro">
                         {message.attachments.map((attachment) => (
                             <AttachmentPreview key={attachment.id} attachment={attachment} />
@@ -1114,9 +1764,52 @@ function MessageBubble({ message }: { message: Message }) {
                     </div>
                 )}
 
+                {!message.is_deleted && (
+                    <div className="message-reactions-pro">
+                        {message.reactions?.map((reaction) => (
+                            <button
+                                key={reaction.emoji}
+                                type="button"
+                                className={reaction.mine ? "mine" : ""}
+                                onClick={() => onReact(message, reaction.emoji)}
+                                disabled={disabled}
+                            >
+                                {reaction.emoji} <span>{reaction.count}</span>
+                            </button>
+                        ))}
+                        <div className="message-reaction-picker-pro">
+                            {reactionEmojis.map((emoji) => (
+                                <button key={emoji} type="button" onClick={() => onReact(message, emoji)} disabled={disabled}>{emoji}</button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="message-foot-pro">
                     <span>{sender.label}</span>
-                    <span>{message.created_at}</span>
+                    <span>
+                        {message.created_at}
+                        {message.is_edited && !message.is_deleted ? " · ویرایش‌شده" : ""}
+                        {message.is_deleted ? " · حذف‌شده" : ""}
+                        {message.sender_type === "agent" && !message.is_internal && !message.is_deleted
+                            ? ` · ${formatDeliveryStatus(message.delivery_status)}`
+                            : ""}
+                    </span>
+                </div>
+
+                <div className="message-actions-pro">
+                    {!message.is_deleted && (
+                        <button type="button" onClick={() => onReply(message)} disabled={disabled}>پاسخ</button>
+                    )}
+                    {message.can_edit && (
+                        <button type="button" onClick={() => onEdit(message)} disabled={disabled}>ویرایش</button>
+                    )}
+                    {message.can_delete && (
+                        <button type="button" onClick={() => onDelete(message)} disabled={disabled}>حذف</button>
+                    )}
+                    {message.has_history && (
+                        <button type="button" onClick={() => onHistory(message)} disabled={disabled}>تاریخچه</button>
+                    )}
                 </div>
             </div>
         </div>
@@ -1125,6 +1818,16 @@ function MessageBubble({ message }: { message: Message }) {
 
 function AttachmentPreview({ attachment }: { attachment: Attachment }) {
     const isImage = attachment.mime_type.startsWith("image/");
+    const isAudio = attachment.mime_type.startsWith("audio/");
+
+    if (isAudio) {
+        return (
+            <div className="attachment-audio-pro">
+                <audio controls preload="metadata" src={attachment.file_url} />
+                <span>{attachment.original_name} · {formatFileSize(attachment.file_size)}</span>
+            </div>
+        );
+    }
 
     return (
         <a
@@ -1225,6 +1928,10 @@ function getSenderMeta(message: Message): {
     label: string;
     tone: "visitor" | "agent" | "ai" | "system";
 } {
+    if (message.is_internal) {
+        return { label: message.sender_name ? `یادداشت ${message.sender_name}` : "یادداشت داخلی", tone: "system" };
+    }
+
     if (message.sender_type === "visitor") {
         return {
             label: "کاربر",
@@ -1264,6 +1971,13 @@ function getInitials(name: string) {
     }
 
     return cleanName.slice(0, 1);
+}
+
+
+function formatDeliveryStatus(status: "sent" | "delivered" | "read") {
+    if (status === "read") return "خوانده شد ✓✓";
+    if (status === "delivered") return "تحویل شد ✓✓";
+    return "ارسال شد ✓";
 }
 
 function formatFileSize(size: number) {

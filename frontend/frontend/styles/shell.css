@@ -390,3 +390,5 @@
         border-radius: var(--radius-md);
     }
 }
+.sidebar-link-badge{min-width:22px;height:22px;padding:0 6px;display:grid;place-items:center;color:white;font-size:9px;font-weight:900;border-radius:999px;background:#d05d65;box-shadow:0 6px 14px rgba(208,93,101,.2)}
+.sidebar-link.active .sidebar-link-badge{color:#a94750;background:white;box-shadow:none}

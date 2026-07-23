@@ -1,144 +1,64 @@
 <?php
 
-// مسیر فایل: ai-chat-saas/backend/api/agent/conversation-show.php
-// هدف: نمایش امن جزئیات یک گفتگو برای پشتیبان یا مدیر مشتری
+// Conversation details with replies, reactions, mentions, read receipts and optional history pagination.
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
+require_once __DIR__ . '/../../includes/message-helpers.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    json_response([
-        'success' => false,
-        'message' => 'Method not allowed'
-    ], 405);
+    json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 }
 
 $user = require_auth($pdo);
 require_role($user, ['customer_admin', 'agent']);
 
 $conversationId = isset($_GET['conversation_id']) ? (int) $_GET['conversation_id'] : 0;
+$beforeId = isset($_GET['before_id']) ? max(0, (int) $_GET['before_id']) : 0;
+$markRead = !isset($_GET['mark_read']) || (string) $_GET['mark_read'] === '1';
+$limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 100;
+$limit = max(20, min(100, $limit));
 
 if ($conversationId <= 0) {
-    json_response([
-        'success' => false,
-        'message' => 'conversation_id is required'
-    ], 422);
+    json_response(['success' => false, 'message' => 'conversation_id is required'], 422);
 }
 
 try {
-    $stmt = $pdo->prepare("
-        SELECT
-            conversations.id,
-            conversations.site_id,
-            conversations.visitor_id,
-            conversations.assigned_agent_id,
-            conversations.status,
-            conversations.source_page_url,
-            conversations.source_page_title,
-            conversations.ai_summary,
-            conversations.ai_category,
-            conversations.last_message_at,
-            conversations.created_at,
-            conversations.closed_at,
-
-            sites.name AS site_name,
-            sites.domain AS site_domain,
-            sites.tenant_id AS site_tenant_id,
-
-            visitors.name AS visitor_name,
-            visitors.email AS visitor_email,
-            visitors.phone AS visitor_phone,
-            visitors.browser_id AS visitor_browser_id,
-            visitors.ip_address AS visitor_ip_address,
-
-            assigned_agent.name AS assigned_agent_name,
-            assigned_agent.email AS assigned_agent_email
-        FROM conversations
-        INNER JOIN sites ON sites.id = conversations.site_id
-        INNER JOIN visitors ON visitors.id = conversations.visitor_id
-        LEFT JOIN users AS assigned_agent
-            ON assigned_agent.id = conversations.assigned_agent_id
-            AND assigned_agent.tenant_id = sites.tenant_id
-        WHERE conversations.id = :conversation_id
-        LIMIT 1
-    ");
-
-    $stmt->execute([
-        ':conversation_id' => $conversationId
-    ]);
-
+    $stmt = $pdo->prepare("\n        SELECT\n            conversations.id, conversations.site_id, conversations.visitor_id,\n            conversations.assigned_agent_id, conversations.status,\n            conversations.source_page_url, conversations.source_page_title,\n            conversations.ai_summary, conversations.ai_category,\n            conversations.last_message_at, conversations.created_at, conversations.closed_at,\n            sites.name AS site_name, sites.domain AS site_domain, sites.tenant_id AS site_tenant_id,\n            visitors.name AS visitor_name, visitors.email AS visitor_email,\n            visitors.phone AS visitor_phone, visitors.browser_id AS visitor_browser_id,\n            visitors.ip_address AS visitor_ip_address, visitors.user_agent AS visitor_user_agent,\n            visitors.last_seen_at AS visitor_last_seen_at,\n            assigned_agent.name AS assigned_agent_name, assigned_agent.email AS assigned_agent_email\n        FROM conversations\n        INNER JOIN sites ON sites.id = conversations.site_id\n        INNER JOIN visitors ON visitors.id = conversations.visitor_id\n        LEFT JOIN users AS assigned_agent\n            ON assigned_agent.id = conversations.assigned_agent_id\n            AND assigned_agent.tenant_id = sites.tenant_id\n        WHERE conversations.id = :conversation_id\n        LIMIT 1\n    ");
+    $stmt->execute([':conversation_id' => $conversationId]);
     $conversation = $stmt->fetch();
 
     if (!$conversation) {
-        json_response([
-            'success' => false,
-            'message' => 'Conversation not found'
-        ], 404);
+        json_response(['success' => false, 'message' => 'Conversation not found'], 404);
     }
 
-    // جلوگیری از IDOR:
-    // بعد از پیدا شدن گفتگو، دسترسی کاربر به site همان گفتگو بررسی می‌شود.
     require_site_access($pdo, $user, (int) $conversation['site_id']);
 
-    $messagesStmt = $pdo->prepare("
-        SELECT
-            messages.id,
-            messages.conversation_id,
-            messages.sender_type,
-            messages.sender_id,
-            messages.content,
-            messages.is_read,
-            messages.created_at,
-            users.name AS agent_name
-        FROM messages
-        LEFT JOIN users 
-            ON users.id = messages.sender_id
-            AND messages.sender_type = 'agent'
-        WHERE messages.conversation_id = :conversation_id
-        ORDER BY messages.id ASC
-    ");
+    $beforeSql = $beforeId > 0 ? ' AND messages.id < :before_id ' : '';
+    $messagesSql = "\n        SELECT\n            messages.id, messages.conversation_id, messages.sender_type,\n            messages.message_type, messages.sender_id, messages.reply_to_message_id,\n            messages.content, messages.is_read, messages.delivered_at, messages.read_at,\n            messages.edited_at, messages.deleted_at, messages.interaction_updated_at,\n            messages.created_at, users.name AS agent_name,\n            replied.id AS reply_id, replied.sender_type AS reply_sender_type,\n            replied.content AS reply_content, replied.deleted_at AS reply_deleted_at,\n            reply_agent.name AS reply_agent_name\n        FROM messages\n        LEFT JOIN users\n            ON users.id = messages.sender_id AND messages.sender_type = 'agent'\n        LEFT JOIN messages AS replied\n            ON replied.id = messages.reply_to_message_id\n            AND replied.conversation_id = messages.conversation_id\n        LEFT JOIN users AS reply_agent\n            ON reply_agent.id = replied.sender_id AND replied.sender_type = 'agent'\n        WHERE messages.conversation_id = :conversation_id\n        {$beforeSql}\n        ORDER BY messages.id DESC\n        LIMIT {$limit}\n    ";
 
-    $messagesStmt->execute([
-        ':conversation_id' => $conversationId
-    ]);
+    $messagesStmt = $pdo->prepare($messagesSql);
+    $messageParams = [':conversation_id' => $conversationId];
+    if ($beforeId > 0) {
+        $messageParams[':before_id'] = $beforeId;
+    }
+    $messagesStmt->execute($messageParams);
+    $messages = array_reverse($messagesStmt->fetchAll());
 
-    $messages = $messagesStmt->fetchAll();
-
-    $messageIds = array_map(function ($message) {
-        return (int) $message['id'];
-    }, $messages);
-
+    $messageIds = array_map(static fn ($message) => (int) $message['id'], $messages);
     $attachmentsByMessageId = [];
 
-    if (count($messageIds) > 0) {
+    if ($messageIds) {
         $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
-
-        $attachmentsStmt = $pdo->prepare("
-            SELECT
-                id,
-                message_id,
-                original_name,
-                file_url,
-                mime_type,
-                file_size,
-                created_at
-            FROM message_attachments
-            WHERE message_id IN ($placeholders)
-            ORDER BY id ASC
-        ");
-
+        $attachmentsStmt = $pdo->prepare("\n            SELECT id, message_id, original_name, file_url, mime_type, file_size, created_at\n            FROM message_attachments\n            WHERE message_id IN ($placeholders)\n            ORDER BY id ASC\n        ");
         $attachmentsStmt->execute($messageIds);
 
         foreach ($attachmentsStmt->fetchAll() as $attachment) {
             $messageId = (int) $attachment['message_id'];
-
-            if (!isset($attachmentsByMessageId[$messageId])) {
-                $attachmentsByMessageId[$messageId] = [];
-            }
-
+            $attachmentsByMessageId[$messageId] ??= [];
             $attachmentsByMessageId[$messageId][] = [
                 'id' => (int) $attachment['id'],
                 'message_id' => $messageId,
@@ -151,18 +71,81 @@ try {
         }
     }
 
-    // فقط بعد از تایید دسترسی، پیام‌های visitor را خوانده‌شده می‌کنیم.
-    $markReadStmt = $pdo->prepare("
-        UPDATE messages
-        SET is_read = 1
-        WHERE conversation_id = :conversation_id
-          AND sender_type = 'visitor'
-          AND is_read = 0
-    ");
+    $reactionsByMessageId = message_reactions_by_message_ids($pdo, $messageIds, 'agent', (int) $user['id']);
+    $mentionsByMessageId = message_mentions_by_message_ids($pdo, $messageIds);
 
-    $markReadStmt->execute([
-        ':conversation_id' => $conversationId
-    ]);
+    $firstUnreadMessageId = null;
+
+    if ($beforeId === 0) {
+        $unreadIds = mark_conversation_messages_received($pdo, $conversationId, ['visitor'], $markRead);
+        $visibleUnreadIds = array_values(array_intersect($unreadIds, $messageIds));
+        $firstUnreadMessageId = $visibleUnreadIds[0] ?? null;
+
+        if ($markRead) {
+            $markMentionsReadStmt = $pdo->prepare("\n            UPDATE message_mentions\n            INNER JOIN messages ON messages.id = message_mentions.message_id\n            SET message_mentions.read_at = NOW()\n            WHERE messages.conversation_id = :conversation_id\n              AND message_mentions.mentioned_user_id = :mentioned_user_id\n              AND message_mentions.read_at IS NULL\n        ");
+            $markMentionsReadStmt->execute([
+                ':conversation_id' => $conversationId,
+                ':mentioned_user_id' => (int) $user['id'],
+            ]);
+        }
+    }
+
+    $oldestMessageId = $messageIds ? min($messageIds) : null;
+    $hasMore = false;
+
+    if ($oldestMessageId !== null) {
+        $hasMoreStmt = $pdo->prepare("\n            SELECT 1\n            FROM messages\n            WHERE conversation_id = :conversation_id\n              AND id < :oldest_id\n            LIMIT 1\n        ");
+        $hasMoreStmt->execute([
+            ':conversation_id' => $conversationId,
+            ':oldest_id' => $oldestMessageId,
+        ]);
+        $hasMore = (bool) $hasMoreStmt->fetchColumn();
+    }
+
+    $presentedMessages = array_map(function ($message) use (
+        $attachmentsByMessageId,
+        $reactionsByMessageId,
+        $mentionsByMessageId,
+        $user
+    ) {
+        $messageId = (int) $message['id'];
+        $isDeleted = $message['deleted_at'] !== null;
+        $canModify = message_can_be_modified_by($message, 'agent', (int) $user['id']);
+        $mentionedUsers = $isDeleted ? [] : ($mentionsByMessageId[$messageId] ?? []);
+        $mentionedMe = count(array_filter(
+            $mentionedUsers,
+            static fn ($mentionedUser) => (int) $mentionedUser['id'] === (int) $user['id']
+        )) > 0;
+
+        return [
+            'id' => $messageId,
+            'conversation_id' => (int) $message['conversation_id'],
+            'sender_type' => $message['sender_type'],
+            'message_type' => $message['message_type'],
+            'is_internal' => $message['message_type'] === 'internal_note',
+            'sender_id' => $message['sender_id'] !== null ? (int) $message['sender_id'] : null,
+            'sender_name' => $message['sender_type'] === 'agent' ? $message['agent_name'] : null,
+            'reply_to_message_id' => $message['reply_to_message_id'] !== null ? (int) $message['reply_to_message_id'] : null,
+            'reply_to' => $message['reply_id'] !== null ? message_reply_snapshot($message) : null,
+            'content' => $isDeleted ? 'این پیام حذف شده است.' : $message['content'],
+            'is_read' => $message['read_at'] !== null || (bool) $message['is_read'],
+            'delivered_at' => $message['delivered_at'],
+            'read_at' => $message['read_at'],
+            'delivery_status' => message_delivery_status($message['delivered_at'], $message['read_at']),
+            'is_edited' => $message['edited_at'] !== null,
+            'edited_at' => $message['edited_at'],
+            'is_deleted' => $isDeleted,
+            'deleted_at' => $message['deleted_at'],
+            'can_edit' => $canModify,
+            'can_delete' => $canModify,
+            'has_history' => $message['edited_at'] !== null || $isDeleted,
+            'attachments' => $isDeleted ? [] : ($attachmentsByMessageId[$messageId] ?? []),
+            'reactions' => $isDeleted ? [] : ($reactionsByMessageId[$messageId] ?? []),
+            'mentioned_users' => $mentionedUsers,
+            'mentioned_me' => $mentionedMe,
+            'created_at' => $message['created_at'],
+        ];
+    }, $messages);
 
     json_response([
         'success' => true,
@@ -193,28 +176,23 @@ try {
                 'phone' => $conversation['visitor_phone'],
                 'browser_id' => $conversation['visitor_browser_id'],
                 'ip_address' => $conversation['visitor_ip_address'],
+                'user_agent' => $conversation['visitor_user_agent'],
+                'last_seen_at' => $conversation['visitor_last_seen_at'],
+                'is_online' => visitor_is_recently_online($conversation['visitor_last_seen_at']),
             ],
-            'messages' => array_map(function ($message) use ($attachmentsByMessageId) {
-                $messageId = (int) $message['id'];
-
-                return [
-                    'id' => $messageId,
-                    'conversation_id' => (int) $message['conversation_id'],
-                    'sender_type' => $message['sender_type'],
-                    'sender_id' => $message['sender_id'] !== null ? (int) $message['sender_id'] : null,
-                    'sender_name' => $message['sender_type'] === 'agent' ? $message['agent_name'] : null,
-                    'content' => $message['content'],
-                    'is_read' => (bool) $message['is_read'],
-                    'attachments' => $attachmentsByMessageId[$messageId] ?? [],
-                    'created_at' => $message['created_at'],
-                ];
-            }, $messages)
-        ]
+            'messages' => $presentedMessages,
+            'first_unread_message_id' => $firstUnreadMessageId,
+            'pagination' => [
+                'limit' => $limit,
+                'oldest_message_id' => $oldestMessageId,
+                'has_more' => $hasMore,
+            ],
+        ],
     ]);
 } catch (Exception $e) {
-    json_response([
-        'success' => false,
-        'message' => 'Failed to load conversation',
-        'error' => $e->getMessage()
-    ], 500);
+    $payload = ['success' => false, 'message' => 'Failed to load conversation'];
+    if (!app_is_production()) {
+        $payload['error'] = $e->getMessage();
+    }
+    json_response($payload, 500);
 }

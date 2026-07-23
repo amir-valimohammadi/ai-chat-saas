@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
+import { useMessageNotifications } from "@/hooks/useMessageNotifications";
 
 type StatusFilter =
     | ""
@@ -35,6 +36,8 @@ type Conversation = {
         name: string | null;
         email: string | null;
         phone: string | null;
+        last_seen_at: string | null;
+        is_online: boolean;
     };
     source_page_url: string | null;
     source_page_title: string | null;
@@ -43,6 +46,8 @@ type Conversation = {
     created_at: string;
     unread_count: number;
     has_unread: boolean;
+    unread_mention_count: number;
+    has_unread_mention: boolean;
 };
 
 const statusLabels: Record<string, string> = {
@@ -76,6 +81,7 @@ const activeStatuses = [
 
 export default function ConversationsPage() {
     const router = useRouter();
+    const messageNotifications = useMessageNotifications("AI Chat SaaS Panel");
 
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [status, setStatus] = useState<StatusFilter>("");
@@ -117,9 +123,15 @@ export default function ConversationsPage() {
 
             setConversations(loadedConversations);
 
+            const totalUnread = loadedConversations.reduce(
+                (sum, item) => sum + (item.unread_count || 0),
+                0
+            );
+            messageNotifications.setUnreadTitle(totalUnread);
+
             setKnownLastMessageMap((prev) => {
                 const next = { ...prev };
-                let hasNewMessage = false;
+                let newestUnreadConversation: Conversation | null = null;
 
                 for (const conversation of loadedConversations) {
                     const oldValue = prev[conversation.id];
@@ -131,26 +143,24 @@ export default function ConversationsPage() {
                         oldValue !== newValue &&
                         conversation.has_unread
                     ) {
-                        hasNewMessage = true;
+                        newestUnreadConversation = newestUnreadConversation || conversation;
                     }
 
                     next[conversation.id] = newValue;
                 }
 
-                if (hasNewMessage) {
-                    setNewMessageNotice("پیام جدید دریافت شد.");
+                if (newestUnreadConversation) {
+                    const visitorName = newestUnreadConversation.visitor.name || "کاربر سایت";
+                    const body = newestUnreadConversation.last_message || "پیام جدید دریافت شد.";
+                    setNewMessageNotice(`پیام جدید از ${visitorName}`);
+                    messageNotifications.notify({
+                        title: `پیام جدید از ${visitorName}`,
+                        body,
+                        tag: `conversation-${newestUnreadConversation.id}`,
+                        unreadCount: totalUnread,
+                    });
 
-                    if (typeof document !== "undefined") {
-                        document.title = "پیام جدید • AI Chat SaaS";
-                    }
-
-                    window.setTimeout(() => {
-                        setNewMessageNotice("");
-
-                        if (typeof document !== "undefined") {
-                            document.title = "AI Chat SaaS Panel";
-                        }
-                    }, 5000);
+                    window.setTimeout(() => setNewMessageNotice(""), 5000);
                 }
 
                 return next;
@@ -264,6 +274,11 @@ export default function ConversationsPage() {
                 .length,
             unreadCount: conversations.reduce((sum, item) => sum + (item.unread_count || 0), 0),
             unreadConversations: conversations.filter((item) => item.has_unread).length,
+            unreadMentionCount: conversations.reduce(
+                (sum, item) => sum + (item.unread_mention_count || 0),
+                0
+            ),
+            mentionConversations: conversations.filter((item) => item.has_unread_mention).length,
             followUpCount: conversations.filter((item) => item.status === "follow_up").length,
         };
     }, [conversations]);
@@ -278,6 +293,26 @@ export default function ConversationsPage() {
             description="مدیریت پیام‌های کاربران سایت، پاسخ‌گویی، پیگیری و ارجاع گفتگوها"
             actions={
                 <div className="conversations-header-actions">
+                    <button
+                        className="btn secondary"
+                        type="button"
+                        onClick={() => messageNotifications.toggleSound()}
+                        disabled={messageNotifications.loading}
+                        title="روشن یا خاموش کردن صدای پیام جدید"
+                    >
+                        {messageNotifications.preferences.sound_enabled ? "🔔 صدا روشن" : "🔕 صدا خاموش"}
+                    </button>
+
+                    <button
+                        className="btn secondary"
+                        type="button"
+                        onClick={() => messageNotifications.enableBrowserNotifications()}
+                        disabled={messageNotifications.loading}
+                        title="فعال‌کردن اعلان مرورگر"
+                    >
+                        {messageNotifications.preferences.browser_notifications_enabled ? "اعلان مرورگر فعال" : "فعال‌سازی اعلان"}
+                    </button>
+
                     <div className={`presence-control ${availabilityStatus}`}>
                         <span className="presence-dot" />
 
@@ -336,6 +371,11 @@ export default function ConversationsPage() {
                         tone={stats.unreadCount > 0 ? "danger" : "default"}
                     />
                     <InboxKpi
+                        label="منشن من"
+                        value={stats.unreadMentionCount}
+                        tone={stats.unreadMentionCount > 0 ? "warning" : "default"}
+                    />
+                    <InboxKpi
                         label="بدون مسئول"
                         value={stats.unassignedCount}
                         tone={stats.unassignedCount > 0 ? "warning" : "default"}
@@ -353,9 +393,9 @@ export default function ConversationsPage() {
                             onClick={() => {
                                 setNewMessageNotice("");
 
-                                if (typeof document !== "undefined") {
-                                    document.title = "AI Chat SaaS Panel";
-                                }
+                                messageNotifications.setUnreadTitle(
+                                    conversations.reduce((sum, item) => sum + (item.unread_count || 0), 0)
+                                );
                             }}
                         >
                             بستن
@@ -441,9 +481,13 @@ export default function ConversationsPage() {
                                 return (
                                     <article
                                         key={conversation.id}
-                                        className={`conversations-row ${
-                                            conversation.has_unread ? "unread" : ""
-                                        }`}
+                                        className={[
+                                            "conversations-row",
+                                            conversation.has_unread ? "unread" : "",
+                                            conversation.has_unread_mention ? "mentioned" : "",
+                                        ]
+                                            .filter(Boolean)
+                                            .join(" ")}
                                         onClick={() => router.push(`/conversations/${conversation.id}`)}
                                     >
                                         <div className="conversation-cell-main">
@@ -454,8 +498,18 @@ export default function ConversationsPage() {
 
                                                 <span>#{conversation.id}</span>
 
+                                                <span className={conversation.visitor.is_online ? "conversation-visitor-online" : "conversation-visitor-offline"}>
+                                                    {conversation.visitor.is_online ? "● آنلاین" : "آفلاین"}
+                                                </span>
+
                                                 {conversation.has_unread && (
                                                     <b>{conversation.unread_count} جدید</b>
+                                                )}
+
+                                                {conversation.has_unread_mention && (
+                                                    <b className="mention-badge">
+                                                        @ {conversation.unread_mention_count} منشن
+                                                    </b>
                                                 )}
                                             </div>
 

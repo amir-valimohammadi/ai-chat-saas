@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/message-helpers.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -23,6 +24,8 @@ require_role($user, ['customer_admin', 'agent']);
 
 $conversationId = isset($_POST['conversation_id']) ? (int) $_POST['conversation_id'] : 0;
 $content = trim($_POST['content'] ?? '');
+$replyToMessageId = isset($_POST['reply_to_message_id']) ? (int) $_POST['reply_to_message_id'] : 0;
+$requestedMessageType = trim($_POST['message_type'] ?? 'file');
 
 if ($conversationId <= 0) {
     json_response([
@@ -94,7 +97,17 @@ try {
         ], 422);
     }
 
+    $replyTarget = validate_reply_target_or_fail($pdo, $conversationId, $replyToMessageId);
+
+    if ($replyTarget && $replyTarget['message_type'] === 'internal_note') {
+        json_response([
+            'success' => false,
+            'message' => 'A public attachment cannot reference an internal note',
+        ], 422);
+    }
+
     $attachment = save_chat_attachment($_FILES['file'], 'agent');
+    $messageType = normalize_message_type($requestedMessageType, $attachment['mime_type']);
 
     $pdo->beginTransaction();
 
@@ -104,13 +117,17 @@ try {
         INSERT INTO messages (
             conversation_id,
             sender_type,
+            message_type,
             sender_id,
+            reply_to_message_id,
             content,
             is_read
         ) VALUES (
             :conversation_id,
             'agent',
+            :message_type,
             :sender_id,
+            :reply_to_message_id,
             :content,
             0
         )
@@ -118,7 +135,9 @@ try {
 
     $messageStmt->execute([
         ':conversation_id' => $conversationId,
+        ':message_type' => $messageType,
         ':sender_id' => $user['id'],
+        ':reply_to_message_id' => $replyTarget ? (int) $replyTarget['id'] : null,
         ':content' => $messageContent,
     ]);
 
@@ -182,6 +201,8 @@ try {
             'sender_type' => 'agent',
             'sender_id' => (int) $user['id'],
             'sender_name' => $user['name'],
+            'message_type' => $messageType,
+            'reply_to_message_id' => $replyTarget ? (int) $replyTarget['id'] : null,
             'content' => $messageContent,
             'attachment' => public_attachment_payload($attachment),
             'created_at' => date('Y-m-d H:i:s'),

@@ -143,7 +143,8 @@ try {
                 email = COALESCE(NULLIF(:email, ''), email),
                 phone = COALESCE(NULLIF(:phone, ''), phone),
                 ip_address = :ip_address,
-                user_agent = :user_agent
+                user_agent = :user_agent,
+                last_seen_at = NOW()
             WHERE id = :id
         ");
 
@@ -164,7 +165,8 @@ try {
                 phone,
                 browser_id,
                 ip_address,
-                user_agent
+                user_agent,
+                last_seen_at
             ) VALUES (
                 :site_id,
                 :name,
@@ -172,7 +174,8 @@ try {
                 :phone,
                 :browser_id,
                 :ip_address,
-                :user_agent
+                :user_agent,
+                NOW()
             )
         ");
 

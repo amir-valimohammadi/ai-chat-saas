@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/widget-cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/message-helpers.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -22,6 +23,16 @@ $siteKey = trim($_GET['site_key'] ?? '');
 $visitorId = isset($_GET['visitor_id']) ? (int) $_GET['visitor_id'] : 0;
 $conversationId = isset($_GET['conversation_id']) ? (int) $_GET['conversation_id'] : 0;
 $afterId = isset($_GET['after_id']) ? (int) $_GET['after_id'] : 0;
+$changedAfterRaw = trim($_GET['changed_after'] ?? '');
+$changedAfter = null;
+$markRead = isset($_GET['mark_read']) && (string) $_GET['mark_read'] === '1';
+
+if ($changedAfterRaw !== '') {
+    $timestamp = strtotime($changedAfterRaw);
+    if ($timestamp !== false) {
+        $changedAfter = date('Y-m-d H:i:s', $timestamp);
+    }
+}
 
 $afterId = max(0, $afterId);
 
@@ -108,23 +119,51 @@ try {
 
     $stmt = $pdo->prepare("
         SELECT
-            id,
-            conversation_id,
-            sender_type,
-            sender_id,
-            content,
-            is_read,
-            created_at
+            messages.id,
+            messages.conversation_id,
+            messages.sender_type,
+            messages.message_type,
+            messages.sender_id,
+            messages.reply_to_message_id,
+            messages.content,
+            messages.is_read,
+            messages.delivered_at,
+            messages.read_at,
+            messages.edited_at,
+            messages.deleted_at,
+            messages.interaction_updated_at,
+            messages.created_at,
+            replied.id AS reply_id,
+            replied.sender_type AS reply_sender_type,
+            replied.content AS reply_content,
+            replied.deleted_at AS reply_deleted_at,
+            reply_agent.name AS reply_agent_name
         FROM messages
-        WHERE conversation_id = :conversation_id
-          AND id > :after_id
-        ORDER BY id ASC
+        LEFT JOIN messages AS replied
+            ON replied.id = messages.reply_to_message_id
+            AND replied.conversation_id = messages.conversation_id
+            AND replied.message_type <> 'internal_note'
+        LEFT JOIN users AS reply_agent
+            ON reply_agent.id = replied.sender_id
+            AND replied.sender_type = 'agent'
+        WHERE messages.conversation_id = :conversation_id
+          AND messages.message_type <> 'internal_note'
+          AND (
+              messages.id > :after_id
+              OR (:changed_after_edited IS NOT NULL AND messages.edited_at >= :changed_after_edited)
+              OR (:changed_after_deleted IS NOT NULL AND messages.deleted_at >= :changed_after_deleted)
+              OR (:changed_after_interaction IS NOT NULL AND messages.interaction_updated_at >= :changed_after_interaction)
+          )
+        ORDER BY messages.id ASC
         LIMIT 100
     ");
 
     $stmt->execute([
         ':conversation_id' => $conversationId,
         ':after_id' => $afterId,
+        ':changed_after_edited' => $changedAfter,
+        ':changed_after_deleted' => $changedAfter,
+        ':changed_after_interaction' => $changedAfter,
     ]);
 
     $messages = $stmt->fetchAll();
@@ -173,19 +212,74 @@ try {
         }
     }
 
+    $reactionsByMessageId = message_reactions_by_message_ids(
+        $pdo,
+        $messageIds,
+        'visitor',
+        $visitorId
+    );
+
+    // Every successful poll is a visitor heartbeat. Agent/AI messages are delivered
+    // when the widget receives them, and are read only while the chat is visible/open.
+    $visitorHeartbeatStmt = $pdo->prepare("
+        UPDATE visitors
+        SET last_seen_at = NOW()
+        WHERE id = :visitor_id AND site_id = :site_id
+    ");
+    $visitorHeartbeatStmt->execute([
+        ':visitor_id' => $visitorId,
+        ':site_id' => (int) $conversation['site_id'],
+    ]);
+
+    mark_conversation_messages_received(
+        $pdo,
+        $conversationId,
+        ['agent', 'ai', 'system'],
+        $markRead
+    );
+
+    // Reflect the receipt update in the current response without another query.
+    $receiptNow = date('Y-m-d H:i:s');
+    foreach ($messages as &$messageRow) {
+        if (in_array($messageRow['sender_type'], ['agent', 'ai', 'system'], true)) {
+            $messageRow['delivered_at'] = $messageRow['delivered_at'] ?: $receiptNow;
+            if ($markRead) {
+                $messageRow['read_at'] = $messageRow['read_at'] ?: $receiptNow;
+                $messageRow['is_read'] = 1;
+            }
+        }
+    }
+    unset($messageRow);
+
     json_response([
         'success' => true,
-        'messages' => array_map(function ($message) use ($attachmentsByMessageId) {
+        'server_time' => date('Y-m-d H:i:s'),
+        'messages' => array_map(function ($message) use ($attachmentsByMessageId, $reactionsByMessageId, $visitorId) {
             $messageId = (int) $message['id'];
+            $isDeleted = $message['deleted_at'] !== null;
+            $canModify = message_can_be_modified_by($message, 'visitor', $visitorId);
 
             return [
                 'id' => $messageId,
                 'conversation_id' => (int) $message['conversation_id'],
                 'sender_type' => $message['sender_type'],
+                'message_type' => $message['message_type'],
                 'sender_id' => $message['sender_id'] !== null ? (int) $message['sender_id'] : null,
-                'content' => $message['content'],
-                'is_read' => (bool) $message['is_read'],
-                'attachments' => $attachmentsByMessageId[$messageId] ?? [],
+                'reply_to_message_id' => $message['reply_to_message_id'] !== null ? (int) $message['reply_to_message_id'] : null,
+                'reply_to' => $message['reply_id'] !== null ? message_reply_snapshot($message) : null,
+                'content' => $isDeleted ? 'این پیام حذف شده است.' : $message['content'],
+                'is_read' => $message['read_at'] !== null || (bool) $message['is_read'],
+                'delivered_at' => $message['delivered_at'],
+                'read_at' => $message['read_at'],
+                'delivery_status' => message_delivery_status($message['delivered_at'], $message['read_at']),
+                'is_edited' => $message['edited_at'] !== null,
+                'edited_at' => $message['edited_at'],
+                'is_deleted' => $isDeleted,
+                'deleted_at' => $message['deleted_at'],
+                'can_edit' => $canModify,
+                'can_delete' => $canModify,
+                'attachments' => $isDeleted ? [] : ($attachmentsByMessageId[$messageId] ?? []),
+                'reactions' => $isDeleted ? [] : ($reactionsByMessageId[$messageId] ?? []),
                 'created_at' => $message['created_at'],
             ];
         }, $messages),

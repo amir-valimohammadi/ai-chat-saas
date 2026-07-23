@@ -13,6 +13,13 @@ if (!function_exists('get_upload_max_bytes')) {
     }
 }
 
+if (!function_exists('get_upload_audio_max_bytes')) {
+    function get_upload_audio_max_bytes(): int
+    {
+        return max(get_upload_max_bytes(), (int) app_env('UPLOAD_AUDIO_MAX_BYTES', 10 * 1024 * 1024));
+    }
+}
+
 if (!function_exists('get_upload_max_image_pixels')) {
     function get_upload_max_image_pixels(): int
     {
@@ -30,6 +37,12 @@ if (!function_exists('get_allowed_upload_types')) {
             'gif' => ['image/gif'],
             'webp' => ['image/webp'],
             'pdf' => ['application/pdf', 'application/x-pdf'],
+            'webm' => ['audio/webm', 'video/webm', 'application/octet-stream'],
+            'ogg' => ['audio/ogg', 'application/ogg'],
+            'oga' => ['audio/ogg', 'application/ogg'],
+            'mp3' => ['audio/mpeg', 'audio/mp3', 'application/octet-stream'],
+            'm4a' => ['audio/mp4', 'audio/x-m4a', 'video/mp4', 'application/octet-stream'],
+            'wav' => ['audio/wav', 'audio/x-wav', 'audio/wave'],
         ];
     }
 }
@@ -330,6 +343,27 @@ if (!function_exists('file_has_forbidden_payload')) {
     }
 }
 
+if (!function_exists('audio_upload_signature_is_valid')) {
+    function audio_upload_signature_is_valid(string $tmpPath, string $extension): bool
+    {
+        $prefix = read_upload_prefix($tmpPath, 32);
+
+        if ($prefix === '') {
+            return false;
+        }
+
+        return match ($extension) {
+            'webm' => str_starts_with($prefix, "\x1A\x45\xDF\xA3"),
+            'ogg', 'oga' => str_starts_with($prefix, 'OggS'),
+            'wav' => str_starts_with($prefix, 'RIFF') && substr($prefix, 8, 4) === 'WAVE',
+            'mp3' => str_starts_with($prefix, 'ID3')
+                || (isset($prefix[1]) && ord($prefix[0]) === 0xFF && (ord($prefix[1]) & 0xE0) === 0xE0),
+            'm4a' => strlen($prefix) >= 12 && substr($prefix, 4, 4) === 'ftyp',
+            default => false,
+        };
+    }
+}
+
 if (!function_exists('pdf_has_active_content')) {
     function pdf_has_active_content(string $tmpPath): bool
     {
@@ -406,7 +440,12 @@ if (!function_exists('validate_uploaded_file_or_fail')) {
         }
 
         $actualSize = (int) $actualSize;
-        $maxBytes = get_upload_max_bytes();
+        $originalName = sanitize_original_file_name($file['name'] ?? 'uploaded-file');
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $audioExtensions = ['webm', 'ogg', 'oga', 'mp3', 'm4a', 'wav'];
+        $maxBytes = in_array($extension, $audioExtensions, true)
+            ? get_upload_audio_max_bytes()
+            : get_upload_max_bytes();
 
         if ($actualSize <= 0 || $actualSize > $maxBytes) {
             json_response([
@@ -422,8 +461,6 @@ if (!function_exists('validate_uploaded_file_or_fail')) {
             ], 422);
         }
 
-        $originalName = sanitize_original_file_name($file['name'] ?? 'uploaded-file');
-
         if (file_name_has_dangerous_extension($originalName)) {
             json_response([
                 'success' => false,
@@ -431,7 +468,6 @@ if (!function_exists('validate_uploaded_file_or_fail')) {
             ], 422);
         }
 
-        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
         $allowedTypes = get_allowed_upload_types();
 
         if ($extension === '' || !array_key_exists($extension, $allowedTypes)) {
@@ -448,7 +484,7 @@ if (!function_exists('validate_uploaded_file_or_fail')) {
             ], 422);
         }
 
-        if (file_has_forbidden_payload($tmpPath)) {
+        if (!in_array($extension, $audioExtensions, true) && file_has_forbidden_payload($tmpPath)) {
             json_response([
                 'success' => false,
                 'message' => 'File content is not allowed'
@@ -462,6 +498,13 @@ if (!function_exists('validate_uploaded_file_or_fail')) {
             json_response([
                 'success' => false,
                 'message' => 'File MIME type is not allowed'
+            ], 422);
+        }
+
+        if (in_array($extension, $audioExtensions, true) && !audio_upload_signature_is_valid($tmpPath, $extension)) {
+            json_response([
+                'success' => false,
+                'message' => 'Invalid audio file'
             ], 422);
         }
 
@@ -517,6 +560,14 @@ if (!function_exists('validate_uploaded_file_or_fail')) {
                     'message' => 'PDF content is not allowed'
                 ], 422);
             }
+        }
+
+        if ($extension === 'webm' && in_array($mimeType, ['video/webm', 'application/octet-stream'], true)) {
+            $mimeType = 'audio/webm';
+        } elseif ($extension === 'm4a' && in_array($mimeType, ['video/mp4', 'application/octet-stream'], true)) {
+            $mimeType = 'audio/mp4';
+        } elseif ($extension === 'mp3' && $mimeType === 'application/octet-stream') {
+            $mimeType = 'audio/mpeg';
         }
 
         return [

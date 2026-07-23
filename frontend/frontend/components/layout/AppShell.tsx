@@ -53,6 +53,7 @@ export default function AppShell({
     const pathname = usePathname();
 
     const [user, setUser] = useState<User | null>(null);
+    const [newRequestCount, setNewRequestCount] = useState(0);
 
     useEffect(() => {
         const authUser = getAuthUser();
@@ -64,6 +65,34 @@ export default function AppShell({
 
         setUser(authUser);
     }, [router]);
+
+    useEffect(() => {
+        if (user?.role !== "super_admin") {
+            setNewRequestCount(0);
+            return;
+        }
+
+        let active = true;
+
+        async function loadRequestCount() {
+            try {
+                const data = await apiRequest("/super-admin/contact-requests-count.php");
+                if (active) {
+                    setNewRequestCount(Number(data.new_count || 0));
+                }
+            } catch {
+                // شمارنده نباید مانع نمایش پنل شود.
+            }
+        }
+
+        loadRequestCount();
+        const timer = window.setInterval(loadRequestCount, 60000);
+
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+        };
+    }, [user?.role]);
 
     useEffect(() => {
         const authUser = getAuthUser();
@@ -113,6 +142,12 @@ export default function AppShell({
                             label: "داشبورد",
                             icon: "⌂",
                             description: "نمای کلی سیستم",
+                        },
+                        {
+                            href: "/super-admin/contact-requests",
+                            label: "درخواست‌ها",
+                            icon: "✉",
+                            description: "مشاوره، خرید و راه‌اندازی",
                         },
                         {
                             href: "/super-admin/customers",
@@ -256,6 +291,12 @@ export default function AppShell({
                         description: "ظاهر و رفتار ویجت",
                     },
                     {
+                        href: "/hosted-support",
+                        label: "صفحه پشتیبانی",
+                        icon: "↗",
+                        description: "لینک اختصاصی و ساعت کاری",
+                    },
+                    {
                         href: "/team",
                         label: "تیم پشتیبانی",
                         icon: "☰",
@@ -365,6 +406,12 @@ export default function AppShell({
                                                     </small>
                                                 )}
                                             </span>
+
+                                            {link.href === "/super-admin/contact-requests" && newRequestCount > 0 && (
+                                                <span className="sidebar-link-badge">
+                                                    {newRequestCount > 99 ? "99+" : newRequestCount}
+                                                </span>
+                                            )}
 
                                             <span className="sidebar-link-arrow">
                                                 ‹

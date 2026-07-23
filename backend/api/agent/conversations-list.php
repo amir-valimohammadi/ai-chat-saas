@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/message-helpers.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response([
@@ -38,6 +39,8 @@ if ($status !== '' && in_array($status, $allowedStatuses, true)) {
     $params[':status'] = $status;
 }
 
+$params[':mention_user_id'] = (int) $user['id'];
+
 try {
     if ($user['role'] === 'customer_admin') {
         $sql = "
@@ -56,6 +59,7 @@ try {
                 visitors.name AS visitor_name,
                 visitors.email AS visitor_email,
                 visitors.phone AS visitor_phone,
+                visitors.last_seen_at AS visitor_last_seen_at,
 
                 assigned_agent.id AS assigned_agent_id,
                 assigned_agent.name AS assigned_agent_name,
@@ -65,6 +69,7 @@ try {
                     SELECT content
                     FROM messages
                     WHERE messages.conversation_id = conversations.id
+                      AND messages.message_type <> 'internal_note'
                     ORDER BY messages.id DESC
                     LIMIT 1
                 ) AS last_message,
@@ -74,8 +79,20 @@ try {
                     FROM messages
                     WHERE messages.conversation_id = conversations.id
                       AND messages.sender_type = 'visitor'
-                      AND messages.is_read = 0
-                ) AS unread_count
+                      AND messages.read_at IS NULL
+                ) AS unread_count,
+
+                (
+                    SELECT COUNT(*)
+                    FROM message_mentions
+                    INNER JOIN messages AS mention_messages
+                        ON mention_messages.id = message_mentions.message_id
+                    WHERE mention_messages.conversation_id = conversations.id
+                      AND mention_messages.message_type = 'internal_note'
+                      AND mention_messages.deleted_at IS NULL
+                      AND message_mentions.mentioned_user_id = :mention_user_id
+                      AND message_mentions.read_at IS NULL
+                ) AS unread_mention_count
             FROM conversations
             INNER JOIN sites ON sites.id = conversations.site_id
             INNER JOIN visitors ON visitors.id = conversations.visitor_id
@@ -106,6 +123,7 @@ try {
                 visitors.name AS visitor_name,
                 visitors.email AS visitor_email,
                 visitors.phone AS visitor_phone,
+                visitors.last_seen_at AS visitor_last_seen_at,
 
                 assigned_agent.id AS assigned_agent_id,
                 assigned_agent.name AS assigned_agent_name,
@@ -115,6 +133,7 @@ try {
                     SELECT content
                     FROM messages
                     WHERE messages.conversation_id = conversations.id
+                      AND messages.message_type <> 'internal_note'
                     ORDER BY messages.id DESC
                     LIMIT 1
                 ) AS last_message,
@@ -124,8 +143,20 @@ try {
                     FROM messages
                     WHERE messages.conversation_id = conversations.id
                       AND messages.sender_type = 'visitor'
-                      AND messages.is_read = 0
-                ) AS unread_count
+                      AND messages.read_at IS NULL
+                ) AS unread_count,
+
+                (
+                    SELECT COUNT(*)
+                    FROM message_mentions
+                    INNER JOIN messages AS mention_messages
+                        ON mention_messages.id = message_mentions.message_id
+                    WHERE mention_messages.conversation_id = conversations.id
+                      AND mention_messages.message_type = 'internal_note'
+                      AND mention_messages.deleted_at IS NULL
+                      AND message_mentions.mentioned_user_id = :mention_user_id
+                      AND message_mentions.read_at IS NULL
+                ) AS unread_mention_count
             FROM conversations
             INNER JOIN sites ON sites.id = conversations.site_id
             INNER JOIN visitors ON visitors.id = conversations.visitor_id
@@ -164,6 +195,8 @@ try {
                     'name' => $conversation['visitor_name'],
                     'email' => $conversation['visitor_email'],
                     'phone' => $conversation['visitor_phone'],
+                    'last_seen_at' => $conversation['visitor_last_seen_at'],
+                    'is_online' => visitor_is_recently_online($conversation['visitor_last_seen_at']),
                 ],
                 'assigned_agent' => $conversation['assigned_agent_id'] !== null ? [
                     'id' => (int) $conversation['assigned_agent_id'],
@@ -177,6 +210,8 @@ try {
                 'created_at' => $conversation['created_at'],
                 'unread_count' => (int) ($conversation['unread_count'] ?? 0),
                 'has_unread' => ((int) ($conversation['unread_count'] ?? 0)) > 0,
+                'unread_mention_count' => (int) ($conversation['unread_mention_count'] ?? 0),
+                'has_unread_mention' => ((int) ($conversation['unread_mention_count'] ?? 0)) > 0,
             ];
         }, $conversations)
     ]);
