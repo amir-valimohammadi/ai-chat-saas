@@ -27,6 +27,25 @@ type Attachment = {
     created_at: string;
 };
 
+type AttachmentLibraryItem = Attachment & {
+    category: "image" | "audio" | "document" | "other";
+    sender_type: string;
+    sender_name: string;
+    message_content: string;
+};
+
+type MessageSearchResult = {
+    id: number;
+    conversation_id: number;
+    sender_type: string;
+    sender_name: string;
+    message_type: string;
+    content: string;
+    snippet: string;
+    created_at: string;
+    attachment_count: number;
+};
+
 type ReplyPreview = {
     id: number;
     sender_type: "visitor" | "agent" | "ai" | "system";
@@ -90,11 +109,23 @@ type MessageRevision = {
 type ConversationDetail = {
     id: number;
     status: string;
+    priority: "low" | "normal" | "high" | "urgent";
+    is_pinned: boolean;
+    pinned_at: string | null;
+    is_archived: boolean;
+    archived_at: string | null;
     assigned_agent: {
         id: number;
         name: string;
         email: string;
     } | null;
+    department: { id: number; name: string; color: string; routing_strategy: string } | null;
+    queue_status: "none" | "waiting" | "assigned";
+    queue_position: number | null;
+    queued_at: string | null;
+    assigned_at: string | null;
+    assignment_method: string | null;
+    queue_message: string | null;
     source_page_url: string | null;
     source_page_title: string | null;
     ai_summary: string | null;
@@ -118,6 +149,11 @@ type ConversationDetail = {
         last_seen_at: string | null;
         is_online: boolean;
     };
+    assignment_history: {
+        id: number; action: string; assignment_method: string | null; department_name: string | null;
+        from_agent_name: string | null; to_agent_name: string | null; actor_name: string | null;
+        note: string | null; created_at: string;
+    }[];
     messages: Message[];
     first_unread_message_id: number | null;
     pagination: {
@@ -162,7 +198,12 @@ type AssignableAgent = {
     last_seen_at: string | null;
     availability_status: string;
     is_online: boolean;
+    active_conversation_count: number;
+    max_active_conversations: number | null;
+    routing_weight: number | null;
 };
+
+type DepartmentOption = { id: number; name: string; description: string | null; color: string; routing_strategy: string; queue_enabled: boolean; member_count: number; waiting_count: number };
 
 const statusLabels: Record<string, string> = {
     new: "جدید",
@@ -201,6 +242,9 @@ export default function ConversationShowPage() {
     const [assignableAgents, setAssignableAgents] = useState<AssignableAgent[]>(
         []
     );
+    const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+    const [loadingDepartments, setLoadingDepartments] = useState(false);
+    const [transferringDepartment, setTransferringDepartment] = useState(false);
 
     const [reply, setReply] = useState("");
     const [composerMode, setComposerMode] = useState<"public" | "internal">("public");
@@ -216,7 +260,7 @@ export default function ConversationShowPage() {
     const [recording, setRecording] = useState(false);
     const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [activePanel, setActivePanel] = useState<
-        "quick" | "ai" | "manage" | "info"
+        "quick" | "ai" | "manage" | "files" | "info"
     >("quick");
 
     const [error, setError] = useState("");
@@ -237,6 +281,17 @@ export default function ConversationShowPage() {
     const [hasMoreMessages, setHasMoreMessages] = useState(false);
     const [firstUnreadMessageId, setFirstUnreadMessageId] = useState<number | null>(null);
     const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+    const [showMessageSearch, setShowMessageSearch] = useState(false);
+    const [messageSearchQuery, setMessageSearchQuery] = useState("");
+    const [messageSearchResults, setMessageSearchResults] = useState<MessageSearchResult[]>([]);
+    const [searchingMessages, setSearchingMessages] = useState(false);
+    const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
+    const [attachmentItems, setAttachmentItems] = useState<AttachmentLibraryItem[]>([]);
+    const [attachmentSummary, setAttachmentSummary] = useState({ total_files: 0, total_bytes: 0, image_count: 0, audio_count: 0, document_count: 0, other_count: 0 });
+    const [attachmentType, setAttachmentType] = useState<"" | "image" | "audio" | "document" | "other">("");
+    const [attachmentSearch, setAttachmentSearch] = useState("");
+    const [loadingAttachments, setLoadingAttachments] = useState(false);
+    const [managementLoading, setManagementLoading] = useState(false);
 
     const messagesRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -515,6 +570,118 @@ export default function ConversationShowPage() {
         }
     }
 
+    async function loadDepartments() {
+        try {
+            setLoadingDepartments(true);
+            const data = await apiRequest(`/agent/departments-list.php?conversation_id=${conversationId}`);
+            setDepartments(data.departments || []);
+        } catch {
+            // مدیریت گفتگو بدون این لیست هم قابل استفاده است.
+        } finally {
+            setLoadingDepartments(false);
+        }
+    }
+
+    async function searchMessages() {
+        const query = messageSearchQuery.trim();
+        if (query.length < 2) {
+            setMessageSearchResults([]);
+            return;
+        }
+
+        try {
+            setSearchingMessages(true);
+            setError("");
+            const data = await apiRequest(
+                `/agent/messages-search.php?conversation_id=${conversationId}&q=${encodeURIComponent(query)}&limit=60`
+            );
+            setMessageSearchResults(data.results || []);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "جست‌وجوی پیام ناموفق بود");
+        } finally {
+            setSearchingMessages(false);
+        }
+    }
+
+    async function focusMessageById(messageId: number) {
+        try {
+            setError("");
+            if (!conversation?.messages.some((message) => message.id === messageId)) {
+                const data = await apiRequest(
+                    `/agent/conversation-show.php?conversation_id=${conversationId}&around_id=${messageId}&limit=100&mark_read=0`
+                );
+                const context: ConversationDetail = data.conversation;
+                setConversation((current) => {
+                    if (!current) return context;
+                    const merged = new Map<number, Message>();
+                    for (const message of current.messages) merged.set(message.id, message);
+                    for (const message of context.messages) merged.set(message.id, message);
+                    return { ...current, messages: Array.from(merged.values()).sort((a, b) => a.id - b.id) };
+                });
+            }
+
+            setHighlightedMessageId(messageId);
+            window.setTimeout(() => {
+                document.getElementById(`message-${messageId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 100);
+            window.setTimeout(() => setHighlightedMessageId(null), 2600);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "بازکردن پیام ناموفق بود");
+        }
+    }
+
+    async function focusSearchResult(result: MessageSearchResult) {
+        await focusMessageById(result.id);
+    }
+
+    async function loadAttachments() {
+        if (!conversationId) return;
+        try {
+            setLoadingAttachments(true);
+            const params = new URLSearchParams({ conversation_id: String(conversationId), limit: "100" });
+            if (attachmentType) params.set("type", attachmentType);
+            if (attachmentSearch.trim()) params.set("q", attachmentSearch.trim());
+            const data = await apiRequest(`/agent/conversation-attachments-list.php?${params.toString()}`);
+            setAttachmentItems(data.items || []);
+            setAttachmentSummary(data.summary || attachmentSummary);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "دریافت فایل‌های گفتگو ناموفق بود");
+        } finally {
+            setLoadingAttachments(false);
+        }
+    }
+
+    async function updateConversationManagement(payload: Record<string, unknown>) {
+        try {
+            setManagementLoading(true);
+            setError("");
+            await apiRequest("/agent/conversation-management-update.php", {
+                method: "POST",
+                body: JSON.stringify({ conversation_id: conversationId, ...payload }),
+            });
+            await loadConversation(true);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "بروزرسانی مدیریت گفتگو ناموفق بود");
+        } finally {
+            setManagementLoading(false);
+        }
+    }
+
+    useEffect(() => {
+        if (!showMessageSearch) return;
+        const timer = window.setTimeout(() => {
+            if (messageSearchQuery.trim().length >= 2) searchMessages();
+            else setMessageSearchResults([]);
+        }, 350);
+        return () => window.clearTimeout(timer);
+    }, [messageSearchQuery, showMessageSearch]);
+
+    useEffect(() => {
+        if (activePanel !== "files") return;
+        const timer = window.setTimeout(loadAttachments, attachmentSearch ? 300 : 0);
+        return () => window.clearTimeout(timer);
+    }, [activePanel, attachmentType, attachmentSearch, conversationId]);
+
     useEffect(() => {
         if (!conversationId) {
             router.push("/conversations");
@@ -525,6 +692,7 @@ export default function ConversationShowPage() {
         loadSuggestions();
         loadQuickReplies();
         loadAssignableAgents();
+        loadDepartments();
 
         const timer = window.setInterval(() => {
             loadConversation(true);
@@ -943,6 +1111,23 @@ export default function ConversationShowPage() {
         }
     }
 
+    async function handleTransferDepartment(departmentId: string) {
+        if (!departmentId || Number(departmentId) === conversation?.department?.id) return;
+        try {
+            setTransferringDepartment(true);
+            setError("");
+            await apiRequest("/agent/conversation-department-update.php", {
+                method: "POST",
+                body: JSON.stringify({ conversation_id: conversationId, department_id: Number(departmentId) }),
+            });
+            await Promise.all([loadConversation(true), loadAssignableAgents(), loadDepartments()]);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "انتقال دپارتمان ناموفق بود");
+        } finally {
+            setTransferringDepartment(false);
+        }
+    }
+
     async function handleGenerateAiSuggestion() {
         try {
             setGeneratingAi(true);
@@ -1122,6 +1307,14 @@ export default function ConversationShowPage() {
                                 <button
                                     className="btn secondary"
                                     type="button"
+                                    onClick={() => setShowMessageSearch((value) => !value)}
+                                >
+                                    {showMessageSearch ? "بستن جست‌وجو" : "جست‌وجوی پیام"}
+                                </button>
+
+                                <button
+                                    className="btn secondary"
+                                    type="button"
                                     onClick={() => loadConversation(true)}
                                 >
                                     بروزرسانی
@@ -1156,7 +1349,35 @@ export default function ConversationShowPage() {
                                 label="صفحه ورود"
                                 value={conversation.source_page_title || "نامشخص"}
                             />
+                            <InfoPill label="اولویت" value={priorityLabel(conversation.priority)} />
+                            <InfoPill label="مدیریت" value={`${conversation.is_pinned ? "سنجاق" : "عادی"}${conversation.is_archived ? " · آرشیو" : ""}`} />
                         </div>
+
+                        {showMessageSearch && (
+                            <section className="conversation-message-search-pro">
+                                <div className="conversation-message-search-input">
+                                    <input
+                                        className="input"
+                                        value={messageSearchQuery}
+                                        onChange={(event) => setMessageSearchQuery(event.target.value)}
+                                        placeholder="جست‌وجو در تمام پیام‌ها و نام فایل‌های این گفتگو..."
+                                        autoFocus
+                                    />
+                                    <span>{searchingMessages ? "در حال جست‌وجو..." : `${messageSearchResults.length} نتیجه`}</span>
+                                </div>
+                                {messageSearchResults.length > 0 && (
+                                    <div className="conversation-message-search-results">
+                                        {messageSearchResults.map((result) => (
+                                            <button key={result.id} type="button" onClick={() => focusSearchResult(result)}>
+                                                <strong>{result.sender_name}</strong>
+                                                <span>{result.snippet || result.content}</span>
+                                                <small>#{result.id} · {result.created_at}{result.attachment_count ? ` · ${result.attachment_count} فایل` : ""}</small>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
+                        )}
 
                         <div className="conversation-message-stage-pro" ref={messagesRef} onScroll={handleMessagesScroll}>
                             {hasMoreMessages && (
@@ -1201,6 +1422,7 @@ export default function ConversationShowPage() {
                                                 onHistory={handleShowMessageHistory}
                                                 onReact={handleToggleReaction}
                                                 disabled={mutatingMessage}
+                                                highlighted={highlightedMessageId === message.id}
                                             />
                                         </Fragment>
                                     ))}
@@ -1443,6 +1665,14 @@ export default function ConversationShowPage() {
 
                             <button
                                 type="button"
+                                className={activePanel === "files" ? "active" : ""}
+                                onClick={() => setActivePanel("files")}
+                            >
+                                فایل‌ها
+                            </button>
+
+                            <button
+                                type="button"
                                 className={activePanel === "info" ? "active" : ""}
                                 onClick={() => setActivePanel("info")}
                             >
@@ -1597,6 +1827,29 @@ export default function ConversationShowPage() {
                                     </label>
                                 </div>
 
+                                <div className="manage-card-pro phase5-routing-card">
+                                    <label>
+                                        <span>دپارتمان گفتگو</span>
+                                        <select
+                                            className="input"
+                                            value={conversation.department ? String(conversation.department.id) : ""}
+                                            onChange={(event) => handleTransferDepartment(event.target.value)}
+                                            disabled={transferringDepartment || loadingDepartments || conversation.status === "closed"}
+                                        >
+                                            <option value="">بدون دپارتمان</option>
+                                            {departments.map((department) => (
+                                                <option key={department.id} value={department.id}>
+                                                    {department.name} · {department.waiting_count} در صف
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <div className="phase5-routing-summary">
+                                        <span>{conversation.queue_status === "waiting" ? `در صف شماره ${conversation.queue_position || "-"}` : conversation.assigned_agent ? "اختصاص داده‌شده" : "بدون مسئول"}</span>
+                                        <small>{conversation.department?.routing_strategy || "manual"}</small>
+                                    </div>
+                                </div>
+
                                 <div className="manage-card-pro">
                                     <label>
                                         <span>پشتیبان مسئول</span>
@@ -1618,11 +1871,62 @@ export default function ConversationShowPage() {
 
                                             {assignableAgents.map((agent) => (
                                                 <option key={agent.id} value={agent.id}>
-                                                    {agent.name} {agent.is_online ? "• Online" : "• Offline"}
+                                                    {agent.name} {agent.is_online ? "• Online" : "• Offline"} {agent.max_active_conversations ? `(${agent.active_conversation_count}/${agent.max_active_conversations})` : ""}
                                                 </option>
                                             ))}
                                         </select>
                                     </label>
+                                </div>
+
+                                {conversation.assignment_history?.length > 0 && (
+                                    <div className="manage-card-pro phase5-assignment-history">
+                                        <strong>تاریخچه مسیریابی</strong>
+                                        <div>
+                                            {conversation.assignment_history.slice(0, 6).map((item) => (
+                                                <article key={item.id}>
+                                                    <span>{assignmentActionLabel(item.action)}</span>
+                                                    <p>{item.department_name || "بدون دپارتمان"}{item.to_agent_name ? ` · ${item.to_agent_name}` : ""}</p>
+                                                    <small>{item.actor_name ? `توسط ${item.actor_name} · ` : ""}{item.created_at}</small>
+                                                </article>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="manage-card-pro">
+                                    <label>
+                                        <span>اولویت گفتگو</span>
+                                        <select
+                                            className="input"
+                                            value={conversation.priority}
+                                            onChange={(event) => updateConversationManagement({ priority: event.target.value })}
+                                            disabled={managementLoading}
+                                        >
+                                            <option value="urgent">فوری</option>
+                                            <option value="high">بالا</option>
+                                            <option value="normal">عادی</option>
+                                            <option value="low">کم</option>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div className="conversation-management-actions-pro">
+                                    <button
+                                        className="btn secondary"
+                                        type="button"
+                                        disabled={managementLoading}
+                                        onClick={() => updateConversationManagement({ is_pinned: !conversation.is_pinned })}
+                                    >
+                                        {conversation.is_pinned ? "برداشتن سنجاق" : "📌 سنجاق گفتگو"}
+                                    </button>
+                                    <button
+                                        className="btn secondary"
+                                        type="button"
+                                        disabled={managementLoading}
+                                        onClick={() => updateConversationManagement({ is_archived: !conversation.is_archived })}
+                                    >
+                                        {conversation.is_archived ? "بازگردانی از آرشیو" : "🗄️ انتقال به آرشیو"}
+                                    </button>
                                 </div>
 
                                 <div className="conversation-note-pro">
@@ -1632,6 +1936,69 @@ export default function ConversationShowPage() {
                                         مشخص assign کن و وضعیت را بعد از پاسخ‌گویی بروزرسانی کن.
                                     </p>
                                 </div>
+                            </section>
+                        )}
+
+                        {activePanel === "files" && (
+                            <section className="conversation-side-section-pro conversation-files-panel-pro">
+                                <SectionHead
+                                    title="فایل‌های گفتگو"
+                                    subtitle="تصاویر، صداها و اسناد ارسال‌شده"
+                                    badge={attachmentSummary.total_files}
+                                />
+
+                                <div className="conversation-file-summary-pro">
+                                    <InfoPill label="حجم کل" value={formatFileSize(attachmentSummary.total_bytes)} />
+                                    <InfoPill label="تصویر" value={attachmentSummary.image_count} />
+                                    <InfoPill label="صوت" value={attachmentSummary.audio_count} />
+                                    <InfoPill label="سند" value={attachmentSummary.document_count} />
+                                </div>
+
+                                <input
+                                    className="input"
+                                    value={attachmentSearch}
+                                    onChange={(event) => setAttachmentSearch(event.target.value)}
+                                    placeholder="جست‌وجوی نام فایل یا متن پیام..."
+                                />
+
+                                <div className="conversation-file-filter-pro">
+                                    {[
+                                        ["", "همه"],
+                                        ["image", "تصویر"],
+                                        ["audio", "صوت"],
+                                        ["document", "سند"],
+                                        ["other", "سایر"],
+                                    ].map(([value, label]) => (
+                                        <button
+                                            key={value || "all"}
+                                            type="button"
+                                            className={attachmentType === value ? "active" : ""}
+                                            onClick={() => setAttachmentType(value as typeof attachmentType)}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {loadingAttachments ? (
+                                    <p className="muted">در حال دریافت فایل‌ها...</p>
+                                ) : attachmentItems.length === 0 ? (
+                                    <EmptyPanel title="فایلی پیدا نشد" text="برای این فیلتر فایل ثبت‌شده‌ای وجود ندارد." />
+                                ) : (
+                                    <div className="conversation-file-library-pro">
+                                        {attachmentItems.map((attachment) => (
+                                            <article key={attachment.id}>
+                                                <AttachmentLibraryPreview attachment={attachment} />
+                                                <div>
+                                                    <strong>{attachment.original_name}</strong>
+                                                    <span>{attachment.sender_name} · {attachment.created_at}</span>
+                                                    <small>پیام #{attachment.message_id} · {formatFileSize(attachment.file_size)}</small>
+                                                </div>
+                                                <button type="button" onClick={() => focusMessageById(attachment.message_id)}>رفتن به پیام</button>
+                                            </article>
+                                        ))}
+                                    </div>
+                                )}
                             </section>
                         )}
 
@@ -1723,6 +2090,7 @@ function MessageBubble({
     onHistory,
     onReact,
     disabled,
+    highlighted,
 }: {
     message: Message;
     onReply: (message: Message) => void;
@@ -1731,12 +2099,13 @@ function MessageBubble({
     onHistory: (message: Message) => void;
     onReact: (message: Message, emoji: string) => void;
     disabled: boolean;
+    highlighted: boolean;
 }) {
     const sender = getSenderMeta(message);
     const sideClass = message.is_internal ? "from-internal" : message.sender_type === "visitor" ? "from-visitor" : "from-agent";
 
     return (
-        <div className={`message-row-pro ${sideClass}`} id={`message-${message.id}`}>
+        <div className={`message-row-pro ${sideClass} ${highlighted ? "message-search-highlight-pro" : ""}`} id={`message-${message.id}`}>
             <ConversationAvatar name={sender.label} tone={sender.tone} small />
 
             <div className={`message-bubble-pro ${sender.tone} ${message.is_internal ? "internal-note" : ""} ${message.mentioned_me ? "mentioned-me" : ""} ${message.is_deleted ? "deleted" : ""}`}>
@@ -1813,6 +2182,23 @@ function MessageBubble({
                 </div>
             </div>
         </div>
+    );
+}
+
+function AttachmentLibraryPreview({ attachment }: { attachment: AttachmentLibraryItem }) {
+    if (attachment.category === "image") {
+        return (
+            <a href={attachment.file_url} target="_blank" rel="noopener noreferrer" className="conversation-file-thumb-pro">
+                <img src={attachment.file_url} alt={attachment.original_name} />
+            </a>
+        );
+    }
+
+    const icon = attachment.category === "audio" ? "🎙️" : attachment.category === "document" ? "📄" : "📎";
+    return (
+        <a href={attachment.file_url} target="_blank" rel="noopener noreferrer" className="conversation-file-icon-pro" title={attachment.original_name}>
+            {icon}
+        </a>
     );
 }
 
@@ -1973,6 +2359,24 @@ function getInitials(name: string) {
     return cleanName.slice(0, 1);
 }
 
+
+function priorityLabel(priority: ConversationDetail["priority"]) {
+    const labels: Record<ConversationDetail["priority"], string> = {
+        low: "کم",
+        normal: "عادی",
+        high: "بالا",
+        urgent: "فوری",
+    };
+    return labels[priority] || priority;
+}
+
+function assignmentActionLabel(action: string) {
+    const labels: Record<string, string> = {
+        queued: "ورود به صف", auto_assigned: "اختصاص خودکار", manual_assigned: "اختصاص دستی",
+        unassigned: "حذف مسئول", department_transfer: "انتقال دپارتمان", queue_reassigned: "خروج از صف",
+    };
+    return labels[action] || action;
+}
 
 function formatDeliveryStatus(status: "sent" | "delivered" | "read") {
     if (status === "read") return "خوانده شد ✓✓";

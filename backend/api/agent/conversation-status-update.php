@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
+require_once __DIR__ . '/../../includes/routing.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -55,6 +56,8 @@ try {
             conversations.id,
             conversations.site_id,
             conversations.status,
+            conversations.department_id,
+            conversations.assigned_agent_id,
             sites.tenant_id AS site_tenant_id
         FROM conversations
         INNER JOIN sites ON sites.id = conversations.site_id
@@ -84,27 +87,45 @@ try {
         UPDATE conversations
         SET
             status = :status,
-            closed_at = CASE
-                WHEN :status = 'closed' THEN NOW()
-                ELSE NULL
-            END
+            closed_at = CASE WHEN :status = 'closed' THEN NOW() ELSE NULL END,
+            queue_status = CASE WHEN :status_queue = 'closed' THEN 'none' ELSE queue_status END,
+            queue_position = CASE WHEN :status_position = 'closed' THEN NULL ELSE queue_position END,
+            queued_at = CASE WHEN :status_queued = 'closed' THEN NULL ELSE queued_at END
         WHERE id = :conversation_id
     ");
 
     $stmt->execute([
         ':status' => $status,
+        ':status_queue' => $status,
+        ':status_position' => $status,
+        ':status_queued' => $status,
         ':conversation_id' => $conversationId,
     ]);
+
+    $queueResult = ['processed' => 0, 'assigned' => 0];
+    if ($status === 'closed' && $conversation['department_id'] !== null) {
+        $departmentId = (int) $conversation['department_id'];
+        routing_reindex_queue($pdo, $departmentId);
+        $department = routing_department(
+            $pdo,
+            $departmentId,
+            (int) $user['tenant_id'],
+            (int) $conversation['site_id'],
+            true
+        );
+        if ($department && $department['routing_strategy'] !== 'manual') {
+            $queueResult = routing_process_department_queue($pdo, $department, 1, (int) $user['id']);
+        }
+    }
 
     json_response([
         'success' => true,
         'message' => 'Conversation status updated successfully',
         'status' => $status,
+        'queue_result' => $queueResult,
     ]);
 } catch (Exception $e) {
-    json_response([
-        'success' => false,
-        'message' => 'Failed to update conversation status',
-        'error' => $e->getMessage()
-    ], 500);
+    $payload = ['success' => false, 'message' => 'Failed to update conversation status'];
+    if (!app_is_production()) $payload['error'] = $e->getMessage();
+    json_response($payload, 500);
 }

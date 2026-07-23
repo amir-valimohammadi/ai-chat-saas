@@ -302,6 +302,12 @@ export default function AppShell({
                         icon: "☰",
                         description: "کاربران و دسترسی‌ها",
                     },
+                    {
+                        href: "/departments",
+                        label: "دپارتمان‌ها",
+                        icon: "⇄",
+                        description: "صف و توزیع خودکار",
+                    },
                 ],
             },
             {

@@ -482,6 +482,21 @@
         background: var(--ai-chat-surface);
       }
 
+      .ai-chat-routing-status {
+        display: none;
+        margin: 0 0 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid #fed7aa;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: 12px;
+        line-height: 1.7;
+      }
+      .ai-chat-routing-status.show { display: flex; align-items: center; gap: 8px; }
+      .ai-chat-routing-status.assigned { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+      .ai-chat-routing-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+
       .ai-chat-loading-card {
         display: flex;
         align-items: center;
@@ -1735,6 +1750,18 @@
         </div>
       `;
 
+    const departments = Array.isArray(siteConfig?.departments) ? siteConfig.departments : [];
+    const showDepartmentSelect = Boolean(siteConfig?.department_selection_enabled) && departments.length > 1;
+    const defaultDepartmentId = Number(siteConfig?.default_department_id || departments.find((item) => item.is_default)?.id || departments[0]?.id || 0);
+    const departmentField = showDepartmentSelect ? `
+          <label class="ai-chat-field">
+            <span class="ai-chat-label">موضوع گفتگو</span>
+            <select class="ai-chat-input" data-department-input name="department_id">
+              ${departments.map((department) => `<option value="${Number(department.id)}" ${Number(department.id) === defaultDepartmentId ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("")}
+            </select>
+          </label>
+        ` : `<input type="hidden" data-department-input value="${defaultDepartmentId || ""}" />`;
+
     elements.body.innerHTML = `
       <section class="ai-chat-intro">
         <div class="ai-chat-intro-top">
@@ -1800,6 +1827,8 @@
             />
           </label>
 
+          ${departmentField}
+
           <label class="ai-chat-field">
             <span class="ai-chat-label">پیام شما</span>
             <textarea
@@ -1839,6 +1868,7 @@
     const phoneInput = shadow.querySelector("[data-phone-input]");
     const emailInput = shadow.querySelector("[data-email-input]");
     const firstMessageInput = shadow.querySelector("[data-first-message-input]");
+    const departmentInput = shadow.querySelector("[data-department-input]");
     const startButton = shadow.querySelector("[data-start-button]");
     const startButtonText = shadow.querySelector("[data-start-button-text]");
 
@@ -1846,6 +1876,7 @@
     const phone = phoneInput?.value.trim() || "";
     const email = emailInput?.value.trim() || "";
     const firstMessage = firstMessageInput?.value.trim() || "";
+    const departmentId = Number(departmentInput?.value || 0);
 
     clearInlineError();
 
@@ -1879,7 +1910,7 @@
       visitor = await startVisitor({ name, phone, email });
       writeStorageJson(STORAGE_KEYS.visitor, visitor);
 
-      conversation = await startConversation(visitor.id);
+      conversation = await startConversation(visitor.id, departmentId);
       writeStorageJson(STORAGE_KEYS.conversation, conversation);
 
       renderChat();
@@ -1915,7 +1946,7 @@
     return data.visitor;
   }
 
-  async function startConversation(visitorId) {
+  async function startConversation(visitorId, departmentId = 0) {
     const data = await fetchJson(`${apiBase}/widget/conversation-start.php`, {
       method: "POST",
       headers: {
@@ -1924,6 +1955,7 @@
       body: JSON.stringify({
         site_key: siteKey,
         visitor_id: visitorId,
+        department_id: departmentId || null,
         source_page_url: window.location.href,
         source_page_title: document.title,
       }),
@@ -1938,6 +1970,7 @@
 
   function renderChat() {
     elements.body.innerHTML = `
+      <div class="ai-chat-routing-status" data-routing-status role="status"></div>
       <div class="ai-chat-messages" data-messages>
         <div class="ai-chat-day-chip">امروز</div>
       </div>
@@ -1953,8 +1986,28 @@
     `;
 
     setChatComposerActive(true);
+    renderRoutingStatus(conversation);
     autoResizeTextarea(elements.messageInput);
     scrollToBottom();
+  }
+
+  function renderRoutingStatus(currentConversation) {
+    const box = shadow.querySelector("[data-routing-status]");
+    if (!box || !currentConversation) return;
+    const departmentName = currentConversation.department?.name || "پشتیبانی";
+    if (currentConversation.queue_status === "waiting") {
+      const position = currentConversation.queue_position ? `شماره ${currentConversation.queue_position}` : "در انتظار";
+      box.className = "ai-chat-routing-status show";
+      box.innerHTML = `<span class="ai-chat-routing-dot"></span><span>${escapeHtml(currentConversation.queue_message || `گفتگوی شما در صف ${departmentName} قرار گرفت.`)} <strong>${escapeHtml(position)}</strong></span>`;
+      return;
+    }
+    if (currentConversation.assigned_agent) {
+      box.className = "ai-chat-routing-status show assigned";
+      box.innerHTML = `<span class="ai-chat-routing-dot"></span><span>گفتگو به ${escapeHtml(currentConversation.assigned_agent.name || "پشتیبان")} در دپارتمان ${escapeHtml(departmentName)} اختصاص داده شد.</span>`;
+      return;
+    }
+    box.className = "ai-chat-routing-status";
+    box.innerHTML = "";
   }
 
   async function handleSendMessage(event) {
@@ -2201,6 +2254,12 @@
 
     if (!data.success) {
       throw new Error(data.message || "Failed to load messages");
+    }
+
+    if (data.conversation) {
+      conversation = { ...conversation, ...data.conversation };
+      writeStorageJson(STORAGE_KEYS.conversation, conversation);
+      renderRoutingStatus(conversation);
     }
 
     if (Array.isArray(data.messages) && data.messages.length > 0) {

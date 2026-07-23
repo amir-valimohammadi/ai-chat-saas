@@ -77,10 +77,21 @@ try {
             conversations.site_id,
             conversations.visitor_id,
             conversations.status,
+            conversations.department_id,
+            conversations.assigned_agent_id,
+            conversations.queue_status,
+            conversations.queue_position,
+            conversations.queued_at,
+            departments.name AS department_name,
+            departments.color AS department_color,
+            departments.queue_message,
+            assigned_agent.name AS assigned_agent_name,
             sites.domain
         FROM conversations
         INNER JOIN sites ON sites.id = conversations.site_id
         INNER JOIN tenants ON tenants.id = sites.tenant_id
+        LEFT JOIN departments ON departments.id = conversations.department_id
+        LEFT JOIN users AS assigned_agent ON assigned_agent.id = conversations.assigned_agent_id
         WHERE conversations.id = :conversation_id
           AND conversations.visitor_id = :visitor_id
           AND sites.site_key = :site_key
@@ -254,6 +265,22 @@ try {
     json_response([
         'success' => true,
         'server_time' => date('Y-m-d H:i:s'),
+        'conversation' => [
+            'id' => (int) $conversation['id'],
+            'status' => $conversation['status'],
+            'queue_status' => $conversation['queue_status'],
+            'queue_position' => $conversation['queue_position'] !== null ? (int) $conversation['queue_position'] : null,
+            'queue_message' => $conversation['queue_message'],
+            'department' => $conversation['department_id'] !== null ? [
+                'id' => (int) $conversation['department_id'],
+                'name' => $conversation['department_name'],
+                'color' => $conversation['department_color'],
+            ] : null,
+            'assigned_agent' => $conversation['assigned_agent_id'] !== null ? [
+                'id' => (int) $conversation['assigned_agent_id'],
+                'name' => $conversation['assigned_agent_name'],
+            ] : null,
+        ],
         'messages' => array_map(function ($message) use ($attachmentsByMessageId, $reactionsByMessageId, $visitorId) {
             $messageId = (int) $message['id'];
             $isDeleted = $message['deleted_at'] !== null;

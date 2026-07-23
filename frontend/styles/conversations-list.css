@@ -516,3 +516,133 @@
     background: #f1f5f9;
     color: #64748b;
 }
+
+/* Messaging phase 4: advanced inbox search, filters and bulk actions. */
+.phase4-search-row {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.8fr) repeat(4, minmax(130px, auto));
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 12px;
+}
+
+.phase4-advanced-filters {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+    gap: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: #f8fafc;
+}
+
+.phase4-advanced-filters > label {
+    display: grid;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.phase4-check-filters {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.phase4-filter-check {
+    display: inline-flex !important;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 7px !important;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    color: #334155 !important;
+    cursor: pointer;
+}
+
+.phase4-bulk-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(37, 99, 235, .22);
+    border-radius: 14px;
+    background: #eff6ff;
+}
+
+.phase4-bulk-bar .input { width: auto; min-width: 145px; }
+
+.phase4-table-head,
+.phase4-conversation-row {
+    grid-template-columns: 34px minmax(270px, 1.7fr) minmax(100px, .55fr) minmax(150px, .8fr) minmax(180px, 1fr) minmax(170px, auto);
+}
+
+.phase4-select-cell { display: flex; align-items: center; justify-content: center; }
+.phase4-select-cell input, .phase4-table-head input { width: 17px; height: 17px; accent-color: var(--primary); }
+
+.phase4-conversation-row.pinned { border-color: rgba(37, 99, 235, .36); background: linear-gradient(90deg, #fff, #f8fbff); }
+.phase4-conversation-row.priority-urgent { box-shadow: inset -4px 0 #dc2626; }
+.phase4-conversation-row.priority-high { box-shadow: inset -4px 0 #f59e0b; }
+
+.phase4-priority-badge,
+.phase4-pin-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 900;
+}
+.phase4-priority-badge.priority-urgent { background: #fef2f2; color: #b91c1c; }
+.phase4-priority-badge.priority-high { background: #fffbeb; color: #b45309; }
+.phase4-priority-badge.priority-normal { background: #f1f5f9; color: #475569; }
+.phase4-priority-badge.priority-low { background: #f0fdf4; color: #15803d; }
+.phase4-pin-badge { background: #eff6ff; color: #1d4ed8; }
+
+.phase4-row-actions { gap: 6px; }
+.phase4-icon-btn {
+    width: 34px;
+    height: 34px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+}
+
+.phase4-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding-top: 16px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+@media (max-width: 1200px) {
+    .phase4-search-row { grid-template-columns: 1fr 1fr; }
+    .phase4-advanced-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .phase4-table-head { display: none; }
+    .phase4-conversation-row { grid-template-columns: 34px minmax(0, 1fr) auto; }
+    .phase4-conversation-row .conversation-cell-status,
+    .phase4-conversation-row .conversation-cell-agent,
+    .phase4-conversation-row .conversation-cell-contact { grid-column: 2 / -1; }
+}
+
+@media (max-width: 680px) {
+    .phase4-search-row,
+    .phase4-advanced-filters { grid-template-columns: 1fr; }
+    .phase4-check-filters { grid-column: 1; }
+    .phase4-conversation-row { grid-template-columns: 28px 1fr; }
+    .phase4-conversation-row .conversation-cell-action { grid-column: 2; }
+}
+.phase5-department-badge{font-size:10px;padding:4px 8px;border:1px solid currentColor;border-radius:999px;background:#fff}.phase5-queue-badge{font-size:10px;padding:4px 8px;border-radius:999px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74}

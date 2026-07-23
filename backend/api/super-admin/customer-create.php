@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/contact-requests.php';
 require_once __DIR__ . '/../../includes/hosted-support.php';
+require_once __DIR__ . '/../../includes/routing.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -417,6 +418,8 @@ try {
         ':site_id' => $siteId,
     ]);
 
+    $defaultDepartmentId = routing_ensure_default_department($pdo, $tenantId, $siteId, $adminUserId);
+
     if ($requestId !== null && $requestRecord) {
         $requestUpdateStmt = $pdo->prepare("
             UPDATE customer_requests
@@ -472,6 +475,7 @@ try {
             'access_mode' => $accessMode,
             'hosted_support_url' => $hostedUrl,
             'hosted_support_slug' => $hostedSlug,
+            'default_department_id' => $defaultDepartmentId,
         ],
         'hosted_support' => $hostedUrl ? [
             'url' => $hostedUrl,
@@ -495,9 +499,7 @@ try {
         $pdo->rollBack();
     }
 
-    json_response([
-        'success' => false,
-        'message' => 'Failed to create customer',
-        'error' => $e->getMessage()
-    ], 500);
+    $payload = ['success' => false, 'message' => 'Failed to create customer'];
+    if (!app_is_production()) $payload['error'] = $e->getMessage();
+    json_response($payload, 500);
 }

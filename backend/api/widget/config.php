@@ -54,6 +54,8 @@ try {
             sites.logo_url,
             sites.welcome_message,
             sites.ai_mode,
+            sites.department_selection_enabled,
+            sites.default_department_id,
             sites.is_active,
             tenants.status AS tenant_status
         FROM sites
@@ -95,6 +97,23 @@ try {
         $hostedPage['timezone'] ?? 'Asia/Tehran'
     );
 
+    $departmentsStmt = $pdo->prepare("
+        SELECT id, name, description, color, is_default
+        FROM departments
+        WHERE site_id = :site_id AND is_active = 1
+        ORDER BY is_default DESC, name ASC
+    " );
+    $departmentsStmt->execute([':site_id' => (int) $site['id']]);
+    $departments = array_map(static function (array $department): array {
+        return [
+            'id' => (int) $department['id'],
+            'name' => $department['name'],
+            'description' => $department['description'],
+            'color' => $department['color'],
+            'is_default' => (bool) $department['is_default'],
+        ];
+    }, $departmentsStmt->fetchAll());
+
     json_response([
         'success' => true,
         'site' => [
@@ -104,6 +123,9 @@ try {
             'logo_url' => $site['logo_url'],
             'welcome_message' => $site['welcome_message'] ?: 'سلام، چطور می‌تونیم کمکتون کنیم؟',
             'ai_mode' => $site['ai_mode'],
+            'department_selection_enabled' => (bool) $site['department_selection_enabled'],
+            'default_department_id' => $site['default_department_id'] !== null ? (int) $site['default_department_id'] : null,
+            'departments' => $departments,
             'support_online' => $supportStatus['support_online'],
             'support_status_text' => $supportStatus['status_text'],
             'is_within_business_hours' => $supportStatus['is_within_business_hours'],

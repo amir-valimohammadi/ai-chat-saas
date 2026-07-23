@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/plan-limits.php';
 require_once __DIR__ . '/../../includes/subscription.php';
+require_once __DIR__ . '/../../includes/routing.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -164,6 +165,8 @@ try {
         ]);
     }
 
+    $defaultDepartmentId = routing_ensure_default_department($pdo, $tenantId, $siteId, (int) $user['id']);
+
     $pdo->commit();
 
     json_response([
@@ -180,6 +183,7 @@ try {
             'welcome_message' => $welcomeMessage,
             'ai_mode' => $aiMode,
             'is_active' => true,
+            'default_department_id' => $defaultDepartmentId,
         ],
     ], 201);
 } catch (Throwable $e) {

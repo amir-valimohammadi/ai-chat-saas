@@ -78,6 +78,50 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
   return data;
 }
 
+export async function apiDownload(path: string, fallbackFilename = "download") {
+  const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+
+  if (response.status === 401) {
+    clearAuthStorage();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+    throw new Error("نشست شما منقضی شده است. دوباره وارد شوید.");
+  }
+
+  if (!response.ok) {
+    let message = "دانلود فایل ناموفق بود";
+    try {
+      const data = await response.json();
+      message = data?.message || message;
+    } catch {
+      // پاسخ غیر JSON برای خطای دانلود
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = match?.[1] || fallbackFilename;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function saveAuth(token: string, user: unknown) {
   if (!token || !user) {
     throw new Error("اطلاعات ورود ناقص است.");

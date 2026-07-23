@@ -164,10 +164,25 @@ try {
         VALUES (:user_id, :site_id)
     ");
 
+    $defaultDepartmentStmt = $pdo->prepare("
+        INSERT IGNORE INTO department_members (department_id, user_id, is_active, max_active_conversations, routing_weight)
+        SELECT departments.id, :user_id, 1, 5, 1
+        FROM departments
+        WHERE departments.site_id = :site_id
+          AND departments.tenant_id = :tenant_id
+          AND departments.is_default = 1
+          AND departments.is_active = 1
+    ");
+
     foreach ($siteIds as $siteId) {
         $accessStmt->execute([
             ':user_id' => $newUserId,
             ':site_id' => $siteId,
+        ]);
+        $defaultDepartmentStmt->execute([
+            ':user_id' => $newUserId,
+            ':site_id' => $siteId,
+            ':tenant_id' => $tenantId,
         ]);
     }
 

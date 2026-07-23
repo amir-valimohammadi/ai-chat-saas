@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/routing.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -29,15 +30,24 @@ try {
         ':id' => $user['id'],
     ]);
 
+    $queueResult = ['processed' => 0, 'assigned' => 0];
+    if (in_array($user['role'], ['customer_admin', 'agent'], true)) {
+        $queueResult = routing_process_queues_for_user(
+            $pdo,
+            (int) $user['id'],
+            (int) $user['tenant_id'],
+            1
+        );
+    }
+
     json_response([
         'success' => true,
         'message' => 'Presence updated',
-        'last_seen_at' => date('Y-m-d H:i:s')
+        'last_seen_at' => date('Y-m-d H:i:s'),
+        'queue_result' => $queueResult,
     ]);
 } catch (Exception $e) {
-    json_response([
-        'success' => false,
-        'message' => 'Failed to update presence',
-        'error' => $e->getMessage()
-    ], 500);
+    $payload = ['success' => false, 'message' => 'Failed to update presence'];
+    if (!app_is_production()) $payload['error'] = $e->getMessage();
+    json_response($payload, 500);
 }

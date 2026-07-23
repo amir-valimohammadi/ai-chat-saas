@@ -33,6 +33,7 @@ try {
         SELECT
             conversations.id,
             conversations.site_id,
+            conversations.department_id,
             sites.tenant_id AS site_tenant_id
         FROM conversations
         INNER JOIN sites ON sites.id = conversations.site_id
@@ -68,11 +69,23 @@ try {
             users.phone,
             users.role,
             users.last_seen_at,
-            users.availability_status
+            users.availability_status,
+            department_members.max_active_conversations,
+            department_members.routing_weight,
+            COUNT(DISTINCT active_conversations.id) AS active_conversation_count
         FROM users
         LEFT JOIN agent_site_access
             ON agent_site_access.user_id = users.id
             AND agent_site_access.site_id = :site_id
+        LEFT JOIN department_members
+            ON department_members.user_id = users.id
+            AND department_members.department_id = :department_id
+            AND department_members.is_active = 1
+        LEFT JOIN conversations AS active_conversations
+            ON active_conversations.assigned_agent_id = users.id
+            AND active_conversations.status IN ('new','open','in_progress','waiting_customer','follow_up','pending')
+            AND active_conversations.is_archived = 0
+            AND (:department_id_load IS NULL OR active_conversations.department_id = :department_id_load)
         WHERE users.tenant_id = :tenant_id
           AND users.is_active = 1
           AND users.role IN ('customer_admin', 'agent')
@@ -80,6 +93,9 @@ try {
                 users.role = 'customer_admin'
                 OR agent_site_access.site_id IS NOT NULL
           )
+          AND (users.role = 'customer_admin' OR :department_id_check IS NULL OR department_members.user_id IS NOT NULL)
+        GROUP BY users.id, users.name, users.email, users.phone, users.role, users.last_seen_at,
+                 users.availability_status, department_members.max_active_conversations, department_members.routing_weight
         ORDER BY
             CASE WHEN users.role = 'customer_admin' THEN 0 ELSE 1 END,
             users.name ASC
@@ -88,6 +104,9 @@ try {
     $stmt->execute([
         ':tenant_id' => $user['tenant_id'],
         ':site_id' => $siteId,
+        ':department_id' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
+        ':department_id_check' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
+        ':department_id_load' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
     ]);
 
     $agents = $stmt->fetchAll();
@@ -112,13 +131,14 @@ try {
                 'last_seen_at' => $agent['last_seen_at'],
                 'availability_status' => $agent['availability_status'] ?? 'online',
                 'is_online' => $isOnline,
+                'active_conversation_count' => (int) ($agent['active_conversation_count'] ?? 0),
+                'max_active_conversations' => $agent['max_active_conversations'] !== null ? (int) $agent['max_active_conversations'] : null,
+                'routing_weight' => $agent['routing_weight'] !== null ? (int) $agent['routing_weight'] : null,
             ];
         }, $agents)
     ]);
 } catch (Exception $e) {
-    json_response([
-        'success' => false,
-        'message' => 'Failed to load assignable agents',
-        'error' => $e->getMessage()
-    ], 500);
+    $payload = ['success' => false, 'message' => 'Failed to load assignable agents'];
+    if (!app_is_production()) $payload['error'] = $e->getMessage();
+    json_response($payload, 500);
 }

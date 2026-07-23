@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/routing.php';
 
 $user = require_auth($pdo);
 require_role($user, ['customer_admin', 'agent']);
@@ -70,15 +71,24 @@ try {
         ':id' => $user['id'],
     ]);
 
+    $queueResult = ['processed' => 0, 'assigned' => 0];
+    if ($status === 'online' && in_array($user['role'], ['customer_admin', 'agent'], true)) {
+        $queueResult = routing_process_queues_for_user(
+            $pdo,
+            (int) $user['id'],
+            (int) $user['tenant_id'],
+            3
+        );
+    }
+
     json_response([
         'success' => true,
         'message' => 'Presence status updated',
         'availability_status' => $status,
+        'queue_result' => $queueResult,
     ]);
 } catch (Exception $e) {
-    json_response([
-        'success' => false,
-        'message' => 'Failed to update presence status',
-        'error' => $e->getMessage()
-    ], 500);
+    $payload = ['success' => false, 'message' => 'Failed to update presence status'];
+    if (!app_is_production()) $payload['error'] = $e->getMessage();
+    json_response($payload, 500);
 }
