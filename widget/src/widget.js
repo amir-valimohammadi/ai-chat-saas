@@ -25,9 +25,11 @@
     browserId: `${STORAGE_PREFIX}_browser_id`,
     visitor: `${STORAGE_PREFIX}_visitor`,
     conversation: `${STORAGE_PREFIX}_conversation`,
+    sessionKey: `${STORAGE_PREFIX}_session_key`,
   };
 
   const POLLING_INTERVAL = 2500;
+  const PRESENCE_INTERVAL = 20000;
   const QUICK_EMOJIS = ["😀", "😂", "😍", "🙏", "👍", "❤️", "🎉", "🔥", "✅", "🤝"];
   const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
   const MAX_UPLOAD_SIZE = 3 * 1024 * 1024;
@@ -52,6 +54,7 @@
   let conversation = readStorageJson(STORAGE_KEYS.conversation);
   let lastMessageId = 0;
   let pollingTimer = null;
+  let presenceTimer = null;
   let isOpen = false;
   let isSending = false;
   let unreadAgentMessageCount = 0;
@@ -66,9 +69,12 @@
   let recordingChunks = [];
   let recordingTimer = null;
   let recordingSeconds = 0;
+  let pendingOperatorInvite = null;
+  let lastPresencePageUrl = window.location.href;
   const messageCache = new Map();
 
   const browserId = getOrCreateBrowserId();
+  const sessionKey = getOrCreateSessionKey();
 
   const host = document.createElement("div");
   host.id = "ai-chat-widget-root";
@@ -1338,6 +1344,38 @@
           max-width: 190px;
         }
       }
+      .ai-chat-operator-invite {
+        margin: 18px;
+        padding: 18px;
+        border: 1px solid var(--ai-chat-border);
+        border-radius: 18px;
+        background: linear-gradient(145deg, #fff, var(--ai-chat-surface-soft));
+        box-shadow: 0 16px 38px rgba(15,23,42,.09);
+      }
+
+      .ai-chat-operator-invite-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 12px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        color: var(--ai-chat-primary-dark);
+        background: var(--ai-chat-primary-soft);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .ai-chat-operator-invite h3 { margin: 0 0 8px; font-size: 17px; }
+      .ai-chat-operator-invite p { margin: 0; color: var(--ai-chat-text-soft); line-height: 1.9; white-space: pre-wrap; }
+      .ai-chat-operator-invite-meta { margin-top: 10px; color: var(--ai-chat-muted); font-size: 12px; }
+      .ai-chat-operator-invite-actions { display: flex; gap: 9px; margin-top: 16px; }
+      .ai-chat-secondary {
+        flex: 1; padding: 10px 14px; border: 1px solid var(--ai-chat-border); border-radius: 12px;
+        color: var(--ai-chat-text-soft); background: #fff; cursor: pointer; font-weight: 700;
+      }
+      .ai-chat-operator-invite .ai-chat-primary { flex: 1.4; }
+
     </style>
 
     <div class="ai-chat-root" data-root>
@@ -1587,16 +1625,25 @@
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) {
         stopPolling();
-      } else if (visitor && conversation) {
-        loadMessages().catch(function (error) {
-          console.warn("AI Chat Widget message refresh failed:", error);
-        });
-        startPolling();
+      } else {
+        sendPresenceHeartbeat("heartbeat").catch(function () {});
+        if (visitor && conversation) {
+          loadMessages().catch(function (error) {
+            console.warn("AI Chat Widget message refresh failed:", error);
+          });
+          startPolling();
+        }
       }
+    });
+
+    window.addEventListener("popstate", function () {
+      sendPresenceHeartbeat("page_view").catch(function () {});
     });
 
     window.addEventListener("beforeunload", function () {
       stopPolling();
+      stopPresenceTracking();
+      sendPresenceCloseBeacon();
       cleanupVoiceRecording();
     });
   }
@@ -1614,7 +1661,7 @@
 
   function schedulePreview() {
     previewShowTimer = window.setTimeout(function () {
-      if (!isOpen && !visitor) {
+      if (!isOpen && !conversation && !pendingOperatorInvite) {
         elements.preview.classList.add("show");
       }
     }, 1800);
@@ -1629,10 +1676,22 @@
       siteConfig = await fetchWidgetConfig();
       applySiteConfig();
 
+      const presence = await sendPresenceHeartbeat("heartbeat");
+      if (presence?.visitor) {
+        visitor = { ...(visitor || {}), ...presence.visitor };
+        writeStorageJson(STORAGE_KEYS.visitor, visitor);
+      }
+      if (presence?.invite && !conversation) {
+        pendingOperatorInvite = presence.invite;
+      }
+      startPresenceTracking();
+
       if (visitor && conversation) {
         renderChat();
         await loadMessages();
         startPolling();
+      } else if (pendingOperatorInvite) {
+        renderOperatorInvite();
       } else {
         renderStartForm();
       }
@@ -1710,6 +1769,10 @@
 
     unreadAgentMessageCount = 0;
     updateUnreadState();
+    sendPresenceHeartbeat("heartbeat").catch(function () {});
+    if (pendingOperatorInvite && !conversation) {
+      renderOperatorInvite();
+    }
     scrollToBottom();
     if (visitor && conversation) {
       loadMessages().catch(function (error) {
@@ -1733,7 +1796,65 @@
     elements.root.classList.remove("chat-open");
     elements.button.setAttribute("aria-label", "باز کردن چت");
     elements.button.setAttribute("aria-expanded", "false");
+    sendPresenceHeartbeat("heartbeat").catch(function () {});
     elements.button.focus({ preventScroll: true });
+  }
+
+  function renderOperatorInvite() {
+    if (!pendingOperatorInvite) {
+      renderStartForm();
+      return;
+    }
+    const operatorName = pendingOperatorInvite.operator?.name || "پشتیبان";
+    const departmentName = pendingOperatorInvite.department?.name || "پشتیبانی";
+    elements.body.innerHTML = `
+      <section class="ai-chat-operator-invite" role="status">
+        <div class="ai-chat-operator-invite-badge">پیام مستقیم از تیم پشتیبانی</div>
+        <h3>${escapeHtml(operatorName)} آماده راهنمایی شماست</h3>
+        <p>${escapeHtml(pendingOperatorInvite.message || "سلام، آیا می‌توانیم کمکتان کنیم؟")}</p>
+        <div class="ai-chat-operator-invite-meta">دپارتمان ${escapeHtml(departmentName)}</div>
+        <div class="ai-chat-operator-invite-actions">
+          <button class="ai-chat-primary" type="button" data-invite-accept>شروع گفتگو</button>
+          <button class="ai-chat-secondary" type="button" data-invite-dismiss>بعداً</button>
+        </div>
+      </section>
+    `;
+    setChatComposerActive(false);
+    shadow.querySelector("[data-invite-accept]")?.addEventListener("click", acceptOperatorInvite);
+    shadow.querySelector("[data-invite-dismiss]")?.addEventListener("click", dismissOperatorInvite);
+  }
+
+  async function acceptOperatorInvite() {
+    if (!pendingOperatorInvite || !visitor) return;
+    try {
+      const data = await fetchJson(`${apiBase}/widget/visitor-invite-response.php`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_key: siteKey, visitor_id: visitor.id, invite_id: pendingOperatorInvite.id, action: "accept" }),
+      });
+      conversation = data.conversation;
+      writeStorageJson(STORAGE_KEYS.conversation, conversation);
+      pendingOperatorInvite = null;
+      renderChat();
+      await loadMessages();
+      startPolling();
+    } catch (error) {
+      renderInlineError("این دعوت دیگر معتبر نیست. لطفاً گفتگوی جدیدی شروع کنید.");
+      pendingOperatorInvite = null;
+      renderStartForm();
+    }
+  }
+
+  async function dismissOperatorInvite() {
+    if (!pendingOperatorInvite || !visitor) return;
+    const inviteId = pendingOperatorInvite.id;
+    pendingOperatorInvite = null;
+    renderStartForm();
+    try {
+      await fetchJson(`${apiBase}/widget/visitor-invite-response.php`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site_key: siteKey, visitor_id: visitor.id, invite_id: inviteId, action: "dismiss" }),
+      });
+    } catch (_) {}
   }
 
   function renderStartForm() {
@@ -2735,6 +2856,55 @@
     }
   }
 
+  async function sendPresenceHeartbeat(event = "heartbeat") {
+    const pageChanged = lastPresencePageUrl !== window.location.href;
+    lastPresencePageUrl = window.location.href;
+    const data = await fetchJson(`${apiBase}/widget/visitor-heartbeat.php`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site_key: siteKey, browser_id: browserId, session_key: sessionKey,
+        page_url: window.location.href, page_title: document.title, referrer_url: document.referrer || null,
+        event: pageChanged ? "page_view" : event, widget_open: isOpen,
+      }),
+    });
+    if (data?.visitor) {
+      visitor = { ...(visitor || {}), ...data.visitor };
+      writeStorageJson(STORAGE_KEYS.visitor, visitor);
+    }
+    if (data?.invite && !conversation && (!pendingOperatorInvite || pendingOperatorInvite.id !== data.invite.id)) {
+      pendingOperatorInvite = data.invite;
+      unreadAgentMessageCount = Math.max(1, unreadAgentMessageCount);
+      elements.preview.textContent = `${data.invite.operator?.name || "پشتیبان"}: ${data.invite.message || "پیامی برای شما دارد"}`;
+      elements.preview.classList.add("show");
+      updateUnreadState();
+      playIncomingMessageSound();
+      if (isOpen) renderOperatorInvite();
+    }
+    return data;
+  }
+
+  function startPresenceTracking() {
+    stopPresenceTracking();
+    presenceTimer = window.setInterval(function () {
+      if (!document.hidden) sendPresenceHeartbeat("heartbeat").catch(function () {});
+    }, PRESENCE_INTERVAL);
+  }
+
+  function stopPresenceTracking() {
+    if (presenceTimer) { window.clearInterval(presenceTimer); presenceTimer = null; }
+  }
+
+  function sendPresenceCloseBeacon() {
+    try {
+      const payload = JSON.stringify({
+        site_key: siteKey, browser_id: browserId, session_key: sessionKey,
+        page_url: window.location.href, page_title: document.title, referrer_url: document.referrer || null,
+        event: "close", widget_open: false,
+      });
+      navigator.sendBeacon(`${apiBase}/widget/visitor-heartbeat.php`, new Blob([payload], { type: "application/json" }));
+    } catch (_) {}
+  }
+
   function startPolling() {
     stopPolling();
 
@@ -2780,11 +2950,10 @@
   }
 
   function resetConversation() {
-    localStorage.removeItem(STORAGE_KEYS.visitor);
     localStorage.removeItem(STORAGE_KEYS.conversation);
 
-    visitor = null;
     conversation = null;
+    pendingOperatorInvite = null;
     lastMessageId = 0;
     lastMessageSyncAt = "";
     unreadAgentMessageCount = 0;
@@ -2940,6 +3109,21 @@
       return id;
     } catch (error) {
       return `browser_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+  }
+
+  function getOrCreateSessionKey() {
+    try {
+      let key = sessionStorage.getItem(STORAGE_KEYS.sessionKey);
+      if (!key) {
+        key = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? `session_${crypto.randomUUID()}`
+          : `session_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        sessionStorage.setItem(STORAGE_KEYS.sessionKey, key);
+      }
+      return key;
+    } catch (_) {
+      return `session_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     }
   }
 

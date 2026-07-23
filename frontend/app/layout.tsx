@@ -13,6 +13,8 @@ import "../styles/conversations-list.css";
 import "../styles/widget-settings.css";
 import "../styles/team.css";
 import "../styles/departments.css";
+import "../styles/visitors.css";
+import "../styles/visitors.css";
 import "../styles/reports.css";
 import "../styles/super-admin-dashboard.css";
 import "../styles/super-admin-customers.css";

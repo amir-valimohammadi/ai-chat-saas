@@ -220,6 +220,12 @@ export default function AppShell({
                 description: "پیام‌های کاربران",
             },
             {
+                href: "/visitors",
+                label: "بازدیدکنندگان",
+                icon: "◉",
+                description: "حضور زنده و مسیر صفحات",
+            },
+            {
                 href: "/announcements",
                 label: "اعلان‌ها",
                 icon: "🔔",
