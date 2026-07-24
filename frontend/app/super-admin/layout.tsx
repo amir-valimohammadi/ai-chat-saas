@@ -18,6 +18,7 @@ import "../../styles/super-admin/global-search.css";
 import "../../styles/super-admin/test-center.css";
 import "../../styles/super-admin/test-run-detail.css";
 import "../../styles/super-admin/test-findings.css";
+import "../../styles/super-admin/browser-tests.css";
 
 export default function SuperAdminLayout({
     children,

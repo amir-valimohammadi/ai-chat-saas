@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
 
-type Profile = "quick" | "full" | "security" | "operational";
+type Profile = "quick" | "full" | "security" | "operational" | "browser";
 type TargetType = "system" | "tenant" | "site";
 type RunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -64,6 +64,9 @@ type OverviewResponse = {
         can_run_full: boolean;
         can_run_security: boolean;
         can_run_operational: boolean;
+        can_run_browser: boolean;
+        can_view_artifacts: boolean;
+        can_cancel_runs: boolean;
         can_export_findings: boolean;
         can_manage_findings: boolean;
     };
@@ -97,6 +100,12 @@ const profileMeta: Record<Profile, { title: string; description: string; icon: s
         icon: "🛡",
         permission: "can_run_security",
     },
+    browser: {
+        title: "تست مرورگری و ویجت",
+        description: "اجرای Playwright روی صفحات عمومی، پنل مدیر، پنل مشتری، موبایل و ویجت همراه Screenshot، Console، Network و Trace.",
+        icon: "🌐",
+        permission: "can_run_browser",
+    },
 };
 
 const categoryLabels: Record<string, string> = {
@@ -110,6 +119,13 @@ const categoryLabels: Record<string, string> = {
     visitors: "بازدیدکنندگان",
     crawl: "خزش",
     operations: "عملیات",
+    browser: "مرورگر",
+    public: "صفحات عمومی",
+    auth: "احراز هویت",
+    super_admin: "پنل سوپرادمین",
+    customer: "پنل مشتری",
+    responsive: "ریسپانسیو",
+    ai: "هوش مصنوعی",
 };
 
 export default function TestCenterPage() {
@@ -168,7 +184,7 @@ export default function TestCenterPage() {
     }, [targetType]);
 
     useEffect(() => {
-        if (profile === "operational") {
+        if (["operational", "browser"].includes(profile)) {
             setTargetType("system");
             setTargetId("");
         }
@@ -194,6 +210,8 @@ export default function TestCenterPage() {
                 ? "تست امنیتی ایمن اجرا شود؟ این عملیات داده واقعی را تغییر نمی‌دهد اما در Audit Log ثبت می‌شود."
                 : profile === "operational"
                     ? "تست عملیاتی با داده مصنوعی و Rollback اجرا شود؟ همه عملیات در Audit Log ثبت می‌شوند."
+                    : profile === "browser"
+                        ? "تست مرورگری Playwright اجرا شود؟ یک Tenant مصنوعی موقت ساخته و بعد از تست پاک می‌شود."
                 : `${profileMeta[profile].title} روی ${targetType === "system" ? "کل سامانه" : "هدف انتخاب‌شده"} اجرا شود؟`
         );
         if (!confirmed) return;

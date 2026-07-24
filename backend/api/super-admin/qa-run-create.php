@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../includes/qa-test-runner.php';
+require_once __DIR__ . '/../../includes/qa-browser.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['success'=>false,'message'=>'Method not allowed'],405);
 $user=require_auth($pdo); require_role($user,['super_admin']);
@@ -18,11 +19,12 @@ $targetType=trim((string)($input['target_type']??'system'));
 $targetId=isset($input['target_id'])?(int)$input['target_id']:null;
 $reason=trim((string)($input['reason']??''));
 
-if(!in_array($profile,['quick','full','security','operational'],true)) json_response(['success'=>false,'message'=>'نوع تست معتبر نیست.'],422);
+if(!in_array($profile,['quick','full','security','operational','browser'],true)) json_response(['success'=>false,'message'=>'نوع تست معتبر نیست.'],422);
 if(!in_array($targetType,['system','tenant','site'],true)) json_response(['success'=>false,'message'=>'هدف تست معتبر نیست.'],422);
 if($targetType!=='system'&&(!$targetId||$targetId<1)) json_response(['success'=>false,'message'=>'هدف تست را انتخاب کن.'],422);
-if($profile==='operational'&&$targetType!=='system') json_response(['success'=>false,'message'=>'تست عملیاتی در این نسخه فقط روی هسته کل سامانه اجرا می‌شود.'],422);
+if(in_array($profile,['operational','browser'],true)&&$targetType!=='system') json_response(['success'=>false,'message'=>'تست عملیاتی در این نسخه فقط روی هسته کل سامانه اجرا می‌شود.'],422);
 if($profile==='quick') require_admin_permission($user,'tests.run_safe');
+if($profile==='browser') require_admin_permission($user,'tests.run_browser');
 if($profile==='full') require_admin_permission($user,'tests.run_full');
 if($profile==='operational') {
     require_admin_permission($user,'tests.run_operational');
@@ -46,6 +48,11 @@ try {
     ]);
     $runId=(int)$pdo->lastInsertId();
     admin_audit_log($pdo,$user,'qa_test_run_started','qa_test_run',$runId,'اجرای تست سامانه آغاز شد.',null,['profile'=>$profile,'target_type'=>$targetType,'target_id'=>$targetId,'reason'=>$reason]);
+    if($profile==='browser') {
+        qa_browser_create_worker_token($pdo,$runId);
+        $spawn=qa_browser_spawn_worker($runId);
+        json_response(['success'=>true,'message'=>$spawn['started']?'تست مرورگری در صف اجرا قرار گرفت.':'تست مرورگری ثبت شد اما Worker خودکار آغاز نشد.','run_id'=>$runId,'run_key'=>$runKey,'queued'=>true,'worker'=>$spawn]);
+    }
     $run=qa_execute_run($pdo,$runId);
     admin_audit_log($pdo,$user,'qa_test_run_completed','qa_test_run',$runId,'اجرای تست سامانه تکمیل شد.',null,['score_percent'=>$run['score_percent']??null,'failed_count'=>$run['failed_count']??null,'warning_count'=>$run['warning_count']??null]);
     json_response(['success'=>true,'message'=>'تست با موفقیت اجرا شد.','run_id'=>$runId,'run_key'=>$runKey,'run'=>$run]);

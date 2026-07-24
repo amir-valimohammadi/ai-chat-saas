@@ -1,0 +1,13 @@
+{
+  "name": "ai-chat-saas-qa-browser-runner",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "install:browser": "playwright install chromium",
+    "run": "node run.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

@@ -966,12 +966,13 @@ if (!function_exists('qa_catalog_summary')) {
     {
         $scope=['target_type'=>'system','target_id'=>null,'target_label'=>'کل سامانه','tenant_id'=>null,'site_id'=>null];
         $catalog=qa_case_catalog($pdo,$scope);
-        $categories=[];$profiles=['quick'=>0,'full'=>0,'security'=>0,'operational'=>0];
+        $categories=[];$profiles=['quick'=>0,'full'=>0,'security'=>0,'operational'=>0,'browser'=>18];
         foreach($catalog as $case){
             $categories[$case['category']]=($categories[$case['category']]??0)+1;
             foreach($case['profiles'] as $profile)$profiles[$profile]=($profiles[$profile]??0)+1;
         }
+        $categories['browser']=18;
         ksort($categories);
-        return ['total'=>count($catalog),'categories'=>$categories,'profiles'=>$profiles];
+        return ['total'=>count($catalog)+18,'categories'=>$categories,'profiles'=>$profiles];
     }
 }

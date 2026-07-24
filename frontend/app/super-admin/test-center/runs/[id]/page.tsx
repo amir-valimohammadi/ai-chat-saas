@@ -7,18 +7,23 @@ import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
 
 type ItemStatus = "passed" | "warning" | "failed" | "skipped" | "error";
 type Run = {
-    id: number; profile: "quick" | "full" | "security" | "operational"; target_label: string | null; status: string;
+    id: number; profile: "quick" | "full" | "security" | "operational" | "browser"; target_label: string | null; status: string;
     total_count: number; passed_count: number; warning_count: number; failed_count: number; skipped_count: number;
-    score_percent: number | null; duration_ms: number | null; environment: string | null; reason: string | null;
+    score_percent: number | null; duration_ms: number | null; progress_percent: number; current_case_key: string | null; heartbeat_at: string | null; cancel_requested_at: string | null; error_message?: string | null; environment: string | null; reason: string | null;
     triggered_by_name: string | null; started_at: string | null; finished_at: string | null; created_at: string;
 };
+type Artifact = {
+    id: number; run_id: number; run_item_id: number | null; artifact_type: "screenshot" | "trace" | "console" | "network" | "video" | "html" | "json" | "log";
+    display_name: string; mime_type: string | null; size_bytes: number; metadata: unknown; created_at: string;
+};
+
 type Item = {
     id: number; case_key: string; category: string; title: string; description: string | null; status: ItemStatus;
     severity: "info" | "low" | "medium" | "high" | "critical"; duration_ms: number; message: string | null; root_cause: string | null; impact: string | null;
     expected_value: string | null; actual_value: string | null; remediation: string | null; details: unknown; evidence: unknown;
 };
 
-const categoryLabels: Record<string, string> = { runtime:"محیط اجرا",database:"دیتابیس",storage:"فضا و فایل",security:"امنیت",api:"API",widget:"ویجت",messaging:"پیام‌رسان",visitors:"بازدیدکنندگان",crawl:"خزش",operations:"عملیات" };
+const categoryLabels: Record<string, string> = { runtime:"محیط اجرا",database:"دیتابیس",storage:"فضا و فایل",security:"امنیت",api:"API",widget:"ویجت",messaging:"پیام‌رسان",visitors:"بازدیدکنندگان",crawl:"خزش",operations:"عملیات",browser:"مرورگر",public:"صفحات عمومی",auth:"احراز هویت",super_admin:"پنل سوپرادمین",customer:"پنل مشتری",responsive:"ریسپانسیو",ai:"هوش مصنوعی" };
 const statusLabels: Record<ItemStatus, string> = { passed:"موفق",warning:"هشدار",failed:"ناموفق",skipped:"اجرانشده",error:"خطای اجرا" };
 
 export default function TestRunDetailPage() {
@@ -27,20 +32,24 @@ export default function TestRunDetailPage() {
     const runId = Number(params.id);
     const [run, setRun] = useState<Run | null>(null);
     const [items, setItems] = useState<Item[]>([]);
+    const [artifacts, setArtifacts] = useState<Artifact[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [statusFilter, setStatusFilter] = useState<"all" | ItemStatus>("all");
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [search, setSearch] = useState("");
     const [rerunning, setRerunning] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+    const [startingWorker, setStartingWorker] = useState(false);
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (silent = false) => {
         try {
-            setLoading(true); setError("");
+            if (!silent) setLoading(true);
+            setError("");
             const response = await apiRequest(`/super-admin/qa-run-show.php?id=${runId}`);
-            setRun(response.run); setItems(response.items ?? []);
+            setRun(response.run); setItems(response.items ?? []); setArtifacts(response.artifacts ?? []);
         } catch (err) { setError(err instanceof Error ? err.message : "دریافت نتیجه تست ناموفق بود."); }
-        finally { setLoading(false); }
+        finally { if (!silent) setLoading(false); }
     }, [runId]);
 
     useEffect(() => {
@@ -50,6 +59,12 @@ export default function TestRunDetailPage() {
         if (!Number.isFinite(runId) || runId < 1) { router.push("/super-admin/test-center"); return; }
         load();
     }, [load, router, runId]);
+
+    useEffect(() => {
+        if (!run || !["queued", "running"].includes(run.status)) return;
+        const timer = window.setInterval(() => load(true), 2000);
+        return () => window.clearInterval(timer);
+    }, [load, run?.status]);
 
     const categories = useMemo(() => Array.from(new Set(items.map((item) => item.category))).sort(), [items]);
     const filtered = useMemo(() => {
@@ -61,6 +76,27 @@ export default function TestRunDetailPage() {
             return true;
         });
     }, [items, statusFilter, categoryFilter, search]);
+
+    async function startWorker() {
+        if (!run || run.profile !== "browser" || run.status !== "queued") return;
+        try {
+            setStartingWorker(true); setError("");
+            await apiRequest("/super-admin/qa-browser-run-start.php", { method: "POST", body: JSON.stringify({ run_id: run.id }) });
+            await load(true);
+        } catch (err) { setError(err instanceof Error ? err.message : "شروع Worker ناموفق بود."); }
+        finally { setStartingWorker(false); }
+    }
+
+    async function cancelRun() {
+        if (!run || !["queued", "running"].includes(run.status)) return;
+        if (!window.confirm("اجرای تست مرورگری متوقف شود؟")) return;
+        try {
+            setCancelling(true); setError("");
+            await apiRequest("/super-admin/qa-browser-run-cancel.php", { method: "POST", body: JSON.stringify({ run_id: run.id }) });
+            await load(true);
+        } catch (err) { setError(err instanceof Error ? err.message : "ثبت درخواست لغو ناموفق بود."); }
+        finally { setCancelling(false); }
+    }
 
     async function rerunFailed() {
         if (!run) return;
@@ -87,7 +123,7 @@ export default function TestRunDetailPage() {
                     <div className="qa-detail-export-actions">
                         <button className="qa-secondary-button" disabled={!run || (run.failed_count === 0 && run.warning_count === 0)} onClick={() => apiDownload(`/super-admin/qa-findings-export.php?scope=run&run_id=${runId}&format=csv`, `qa-run-${runId}-issues.csv`).catch((err) => setError(err instanceof Error ? err.message : "دانلود خروجی ناموفق بود."))}>خروجی ایرادات CSV</button>
                         <button className="qa-secondary-button" disabled={!run || (run.failed_count === 0 && run.warning_count === 0)} onClick={() => apiDownload(`/super-admin/qa-findings-export.php?scope=run&run_id=${runId}&format=json`, `qa-run-${runId}-issues.json`).catch((err) => setError(err instanceof Error ? err.message : "دانلود خروجی ناموفق بود."))}>خروجی JSON</button>
-                        <button className="qa-primary-button" disabled={rerunning || !run || (run.failed_count === 0 && run.warning_count === 0)} onClick={rerunFailed}>{rerunning ? "در حال اجرا…" : "اجرای مجدد خطاها و هشدارها"}</button>
+                        <button className="qa-primary-button" disabled={rerunning || !run || ["queued","running"].includes(run.status) || (run.failed_count === 0 && run.warning_count === 0)} onClick={rerunFailed}>{rerunning ? "در حال اجرا…" : "اجرای مجدد خطاها و هشدارها"}</button>{run?.profile === "browser" && run.status === "queued" && <button className="qa-secondary-button" disabled={startingWorker} onClick={startWorker}>{startingWorker ? "در حال شروع…" : "شروع مجدد Worker"}</button>}{run?.profile === "browser" && ["queued","running"].includes(run.status) && <button className="qa-danger-button" disabled={cancelling || Boolean(run.cancel_requested_at)} onClick={cancelRun}>{run.cancel_requested_at ? "درخواست لغو ثبت شد" : cancelling ? "در حال ثبت…" : "لغو تست مرورگری"}</button>}
                     </div>
                 </div>
                 {error && <div className="qa-alert qa-alert-error">{error}</div>}
@@ -97,6 +133,11 @@ export default function TestRunDetailPage() {
                             <div className={`qa-score-ring ${run.failed_count > 0 ? "is-danger" : run.warning_count > 0 ? "is-warning" : "is-success"}`}><strong>{run.score_percent ?? 0}%</strong><span>امتیاز سلامت</span></div>
                             <div><span className="qa-kicker">TEST RUN #{run.id}</span><h1>{profileLabel(run.profile)} — {run.target_label || "کل سامانه"}</h1><p>{run.reason || "اجرای تست ایمن و بدون تغییر داده‌های واقعی"}</p><div className="qa-run-meta"><span>اجراکننده: {run.triggered_by_name || "—"}</span><span>محیط: {run.environment || "—"}</span><span>مدت: {formatNumber(run.duration_ms ?? 0)} ms</span><span>{formatDate(run.created_at)}</span></div></div>
                         </section>
+                        {run.profile === "browser" && ["queued", "running"].includes(run.status) && <section className="qa-browser-progress-card">
+                            <div><strong>{run.status === "queued" ? "در صف اجرای Playwright" : "تست مرورگری در حال اجراست"}</strong><span>{run.current_case_key || "آماده‌سازی محیط مصنوعی و مرورگر"}</span></div>
+                            <div className="qa-browser-progress-track"><i style={{ width: `${Math.max(2, Number(run.progress_percent || 0))}%` }} /></div>
+                            <b>{Math.round(Number(run.progress_percent || 0))}%</b>
+                        </section>}
                         <section className="qa-summary-grid qa-detail-summary">
                             <article><span>کل تست‌ها</span><strong>{formatNumber(run.total_count)}</strong></article>
                             <article><span>موفق</span><strong className="qa-text-success">{formatNumber(run.passed_count)}</strong></article>
@@ -134,6 +175,10 @@ export default function TestRunDetailPage() {
                     ))}
                     {filtered.length === 0 && <div className="qa-empty-table">نتیجه‌ای با فیلتر فعلی پیدا نشد.</div>}
                 </section>
+                {artifacts.length > 0 && <section className="qa-card qa-artifacts-card">
+                    <div className="qa-section-heading"><div><span className="qa-kicker">BROWSER ARTIFACTS</span><h2>خروجی‌های مرورگر</h2><p>Screenshot، Trace، Console و Network برای تحلیل خطاها.</p></div><strong>{formatNumber(artifacts.length)} فایل</strong></div>
+                    <div className="qa-artifact-grid">{artifacts.map((artifact) => <article key={artifact.id}><span className={`qa-artifact-type is-${artifact.artifact_type}`}>{artifact.artifact_type}</span><div><strong>{artifact.display_name}</strong><small>{formatBytes(artifact.size_bytes)} · {formatDate(artifact.created_at)}</small></div><button className="qa-link-button" onClick={() => apiDownload(`/super-admin/qa-artifact-download.php?id=${artifact.id}`, artifact.display_name).catch((err) => setError(err instanceof Error ? err.message : "دانلود فایل ناموفق بود."))}>دانلود</button></article>)}</div>
+                </section>}
             </main>
         </AppShell>
     );
@@ -141,5 +186,6 @@ export default function TestRunDetailPage() {
 
 function formatNumber(value:number){return new Intl.NumberFormat("fa-IR").format(value)}
 function formatDate(value:string){try{return new Intl.DateTimeFormat("fa-IR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(value.replace(" ","T")))}catch{return value}}
-function profileLabel(profile:Run["profile"]){return profile==="quick"?"تست سریع":profile==="full"?"تست کامل":profile==="operational"?"تست عملیاتی":"تست امنیتی"}
+function profileLabel(profile:Run["profile"]){return profile==="quick"?"تست سریع":profile==="full"?"تست کامل":profile==="operational"?"تست عملیاتی":profile==="browser"?"تست مرورگری و ویجت":"تست امنیتی"}
 function statusIcon(status:ItemStatus){return ({passed:"✓",warning:"!",failed:"×",error:"⚠",skipped:"—"} as Record<ItemStatus,string>)[status]}
+function formatBytes(value:number){if(!value)return "۰ بایت";const units=["بایت","KB","MB","GB"];const index=Math.min(units.length-1,Math.floor(Math.log(value)/Math.log(1024)));return `${new Intl.NumberFormat("fa-IR",{maximumFractionDigits:1}).format(value/Math.pow(1024,index))} ${units[index]}`;}
