@@ -1,0 +1,430 @@
+
+
+/* Admin Phase 0: extracted from app/globals.css into customer-create.css. */
+.admin-hero,
+.admin-roadmap,
+.admin-mini-panel,
+.admin-action-card,
+.admin-side-card,
+.admin-form-card,
+.admin-clean-card,
+.admin-site-card,
+.admin-plan-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-hero {
+    position: relative;
+    overflow: hidden;
+    padding: 28px;
+    border-radius: 30px;
+    background:
+            radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 34%),
+            #ffffff;
+}
+
+.admin-hero-content {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+    gap: 24px;
+    align-items: center;
+}
+
+.admin-hero-title {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.45;
+    letter-spacing: -0.5px;
+    font-weight: 950;
+}
+
+.admin-hero-text,
+.admin-form-section-text,
+.admin-action-description,
+.admin-site-subtitle,
+.admin-plan-subtitle {
+    color: var(--muted);
+    line-height: 1.85;
+    font-size: 14px;
+}
+
+.admin-hero-actions,
+.admin-customers-toolbar,
+.admin-customers-filters,
+.admin-customer-top,
+.admin-customer-footer,
+.admin-site-top,
+.admin-plan-top {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.admin-customers-toolbar,
+.admin-customer-footer,
+.admin-site-top,
+.admin-plan-top {
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.admin-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 18px;
+}
+
+.admin-action-card,
+.admin-site-card,
+.admin-plan-card,
+.admin-customer-card {
+    padding: 20px;
+    border-radius: 26px;
+    transition: var(--transition);
+}
+
+.admin-action-card:hover,
+.admin-site-card:hover,
+.admin-plan-card:hover,
+.admin-customer-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: rgba(37, 99, 235, 0.22);
+}
+
+.admin-action-icon {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 16px;
+    border-radius: 18px;
+    color: var(--primary-dark);
+    background: var(--primary-soft);
+    font-weight: 950;
+}
+
+.admin-action-title,
+.admin-side-title,
+.admin-form-section-title,
+.admin-site-title,
+.admin-plan-title {
+    margin: 0;
+    font-size: 18px;
+}
+
+.admin-section-grid,
+.admin-customer-layout,
+.admin-form-layout {
+    display: grid;
+    gap: 18px;
+    align-items: start;
+}
+
+.admin-section-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    margin-top: 18px;
+}
+
+.admin-customer-layout {
+    grid-template-columns: minmax(0, 1fr) 310px;
+}
+
+.admin-form-layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.admin-customer-side,
+.admin-info-stack {
+    position: sticky;
+    top: 24px;
+    display: grid;
+    gap: 14px;
+}
+
+.admin-roadmap,
+.admin-mini-panel,
+.admin-side-card,
+.admin-form-card,
+.admin-clean-card {
+    padding: 22px;
+    border-radius: 26px;
+}
+
+.admin-roadmap-list,
+.admin-mini-list,
+.admin-side-list,
+.admin-site-grid,
+.admin-plan-grid,
+.admin-feature-list {
+    display: grid;
+    gap: 12px;
+}
+
+.admin-roadmap-item,
+.admin-mini-item,
+.admin-side-row,
+.admin-hint-item,
+.admin-small-tile,
+.admin-meta-tile {
+    padding: 12px;
+    border-radius: 17px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+}
+
+.admin-mini-item,
+.admin-side-row,
+.admin-feature-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+}
+
+.admin-form-section {
+    display: grid;
+    gap: 16px;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.admin-form-section:last-child {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.admin-two-col {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.admin-search-box {
+    min-width: 320px;
+    max-width: 460px;
+}
+
+.admin-customer-list,
+.admin-small-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.admin-small-grid,
+.admin-customer-meta {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.admin-customer-card {
+    display: grid;
+    gap: 16px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-customer-card.is-inactive {
+    opacity: 0.72;
+    background: #f8fafc;
+}
+
+.admin-customer-name {
+    margin: 0;
+    font-size: 18px;
+}
+
+.admin-customer-subtitle,
+.admin-meta-label,
+.admin-small-label {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.admin-meta-value,
+.admin-small-value {
+    margin-top: 4px;
+    font-weight: 850;
+    word-break: break-word;
+}
+
+.admin-status-tabs {
+    display: inline-flex;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 18px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+}
+
+.admin-status-tab {
+    border: none;
+    background: transparent;
+    padding: 8px 12px;
+    border-radius: 13px;
+    color: var(--muted);
+    font-weight: 850;
+}
+
+.admin-status-tab.active {
+    color: var(--primary);
+    background: #ffffff;
+    box-shadow: var(--shadow-xs);
+}
+
+.admin-empty-state {
+    padding: 46px 22px;
+    text-align: center;
+    border-radius: 24px;
+    background: var(--surface-soft);
+    border: 1px dashed var(--border);
+}
+
+.admin-plan-price {
+    margin: 16px 0 4px;
+    font-size: 32px;
+    font-weight: 950;
+    letter-spacing: -0.8px;
+}
+
+.admin-feature-row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.admin-feature-row:last-child {
+    border-bottom: none;
+}
+
+@media (max-width: 1120px) {.admin-customer-layout {
+        grid-template-columns: 1fr;
+    }
+
+.admin-customer-side {
+        position: static;
+    }}
+
+@media (max-width: 980px) {.admin-hero-content,
+.admin-section-grid,
+.admin-form-layout {
+        grid-template-columns: 1fr;
+    }
+
+.admin-info-stack {
+        position: static;
+    }}
+
+@media (max-width: 680px) {.admin-customers-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+.admin-two-col {
+        grid-template-columns: 1fr;
+    }
+
+.admin-search-box {
+        min-width: 100%;
+    }}
+
+/* Admin Phase 0: customer creation styles moved from hosted-support-settings.css. */
+.customer-access-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.customer-access-mode-grid button {
+    min-height: 160px;
+    border: 1px solid var(--border);
+    background: #fbfdff;
+    border-radius: 17px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 5px 10px;
+    text-align: right;
+    font: inherit;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.customer-access-mode-grid button i {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    grid-row: span 3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-style: normal;
+    color: white;
+}
+
+.customer-access-mode-grid button small {
+    color: #0f766e;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .08em;
+}
+
+.customer-access-mode-grid button strong { font-size: 14px; }
+
+.customer-access-mode-grid button span { color: var(--muted); font-size: 11px; line-height: 1.8; }
+
+.customer-access-mode-grid button.active {
+    border-color: #0f766e;
+    background: #f0fdfa;
+    box-shadow: 0 0 0 4px rgba(15,118,110,.07);
+}
+
+.customer-access-mode-grid button.active i { background: #0f766e; border-color: #0f766e; }
+
+.customer-hosted-create-fields {
+    margin-top: 16px;
+    border: 1px solid #cce7e1;
+    background: #f4fbf9;
+    border-radius: 17px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.customer-hosted-create-fields label:first-child { grid-column: 1 / -1; }
+
+.customer-create-submit { width: 100%; min-height: 48px; }
+
+.customer-create-result { margin-bottom: 18px; }
+
+.customer-create-result .admin-copy-box { margin-top: 10px; }
+
+@media (max-width: 850px) {.customer-access-mode-grid,
+.customer-hosted-create-fields { grid-template-columns: 1fr; }
+
+.customer-hosted-create-fields label:first-child { grid-column: auto; }}
+
+/* Admin Phase 0: source-request banner belongs to customer creation. */
+.customer-source-request-banner {margin-bottom:16px;padding:15px 17px;display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid #c9ddd7;border-radius:14px;background:#eef6f3}
+
+.customer-source-request-banner>div {display:grid;gap:4px}
+
+.customer-source-request-banner small {color:#74817d;font-size:9px}
+
+.customer-source-request-banner strong {font-size:13px}
+
+.customer-source-request-banner span {color:#64726e;font-size:10px}
+
+.customer-source-request-banner>a {color:#176f65;font-size:10px;font-weight:850;white-space:nowrap}
+
+@media (max-width:680px) {.customer-source-request-banner {align-items:flex-start;flex-direction:column}
+
+.customer-source-request-banner>a {white-space:normal}}

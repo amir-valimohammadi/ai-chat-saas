@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check:styles": "node scripts/check-css-architecture.mjs",
+    "cleanup:admin-css": "node scripts/cleanup-legacy-admin-css.mjs"
   },
   "dependencies": {
     "next": "latest",
