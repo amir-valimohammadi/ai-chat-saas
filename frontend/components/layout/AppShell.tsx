@@ -6,7 +6,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { apiRequest, getAuthUser, logout } from "@/lib/api";
+import MaintenanceOverlay from "@/components/system/MaintenanceOverlay";
+import {
+    apiRequest,
+    getAuthUser,
+    logout,
+    MAINTENANCE_MODE_EVENT,
+    type MaintenanceModeDetails,
+} from "@/lib/api";
 
 type AppShellProps = {
     children: ReactNode;
@@ -54,6 +61,8 @@ export default function AppShell({
 
     const [user, setUser] = useState<User | null>(null);
     const [newRequestCount, setNewRequestCount] = useState(0);
+    const [maintenance, setMaintenance] =
+        useState<MaintenanceModeDetails | null>(null);
 
     useEffect(() => {
         const authUser = getAuthUser();
@@ -65,6 +74,66 @@ export default function AppShell({
 
         setUser(authUser);
     }, [router]);
+
+    useEffect(() => {
+        if (!user || user.role === "super_admin") {
+            setMaintenance(null);
+            return;
+        }
+
+        let active = true;
+
+        function handleMaintenanceEvent(event: Event) {
+            const customEvent = event as CustomEvent<MaintenanceModeDetails>;
+            if (active && customEvent.detail?.enabled) {
+                setMaintenance(customEvent.detail);
+            }
+        }
+
+        async function loadMaintenanceStatus() {
+            try {
+                const data = await apiRequest(
+                    "/system/maintenance-status.php",
+                    { auth: false, cache: "no-store" }
+                );
+
+                if (!active) {
+                    return;
+                }
+
+                if (data?.maintenance?.enabled) {
+                    setMaintenance({
+                        enabled: true,
+                        message:
+                            data.maintenance.message ||
+                            "سامانه برای انجام عملیات نگهداری موقتاً در دسترس نیست.",
+                        until: data.maintenance.until || null,
+                    });
+                } else {
+                    setMaintenance(null);
+                }
+            } catch {
+                // خرابی endpoint وضعیت نباید پنل یا خروج کاربر را مختل کند.
+            }
+        }
+
+        window.addEventListener(
+            MAINTENANCE_MODE_EVENT,
+            handleMaintenanceEvent as EventListener
+        );
+
+        loadMaintenanceStatus();
+        const timer = window.setInterval(loadMaintenanceStatus, 20000);
+
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+            window.removeEventListener(
+                MAINTENANCE_MODE_EVENT,
+                handleMaintenanceEvent as EventListener
+            );
+        };
+    }, [user]);
 
     useEffect(() => {
         if (user?.role !== "super_admin") {
@@ -184,6 +253,12 @@ export default function AppShell({
                             label: "نظارت AI",
                             icon: "AI",
                             description: "مصرف و کیفیت پاسخ‌ها",
+                        },
+                        {
+                            href: "/super-admin/system-health",
+                            label: "سلامت سیستم",
+                            icon: "SYS",
+                            description: "سرویس‌ها، خطاها و Jobها",
                         },
                         {
                             href: "/super-admin/audit-logs",
@@ -479,6 +554,14 @@ export default function AppShell({
 
                 <div className="page-content-pro">{children}</div>
             </main>
+
+            {user.role !== "super_admin" && maintenance && (
+                <MaintenanceOverlay
+                    message={maintenance.message}
+                    until={maintenance.until}
+                    onLogout={handleLogout}
+                />
+            )}
         </div>
     );
 }

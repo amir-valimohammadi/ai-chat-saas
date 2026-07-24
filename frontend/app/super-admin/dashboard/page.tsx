@@ -225,6 +225,10 @@ function DashboardContent({ data }: { data: DashboardData }) {
                             بررسی سایت‌ها
                             <Icon name="arrow" />
                         </Link>
+                        <Link href="/super-admin/system-health">
+                            سلامت سیستم
+                            <Icon name="arrow" />
+                        </Link>
                     </div>
                 </div>
 
@@ -503,6 +507,12 @@ function DashboardContent({ data }: { data: DashboardData }) {
                         icon="bell"
                         title="اعلان‌ها"
                         description="ارسال پیام به مشتریان پلتفرم"
+                    />
+                    <QuickAction
+                        href="/super-admin/system-health"
+                        icon="activity"
+                        title="سلامت سیستم"
+                        description="سرویس‌ها، Jobها و خطاهای عملیاتی"
                     />
                 </div>
             </section>

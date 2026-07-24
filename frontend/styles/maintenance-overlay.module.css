@@ -1,0 +1,188 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483000;
+    display: grid;
+    place-items: center;
+    min-height: 100dvh;
+    padding: 24px;
+    overflow: hidden;
+    background:
+        linear-gradient(135deg, rgba(15, 23, 42, 0.66), rgba(30, 41, 59, 0.54)),
+        rgba(15, 23, 42, 0.36);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    isolation: isolate;
+}
+
+.ambientOne,
+.ambientTwo {
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+    filter: blur(6px);
+    opacity: 0.52;
+    z-index: -1;
+}
+
+.ambientOne {
+    width: min(50vw, 620px);
+    height: min(50vw, 620px);
+    top: -20%;
+    right: -12%;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.42), transparent 68%);
+}
+
+.ambientTwo {
+    width: min(46vw, 560px);
+    height: min(46vw, 560px);
+    bottom: -24%;
+    left: -10%;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.28), transparent 68%);
+}
+
+.card {
+    width: min(100%, 540px);
+    padding: 38px 36px 34px;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 30px;
+    text-align: center;
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow:
+        0 30px 80px rgba(15, 23, 42, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+}
+
+.iconWrap {
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 20px;
+    display: grid;
+    place-items: center;
+    border-radius: 24px;
+    background: linear-gradient(145deg, #f59e0b, #d97706);
+    box-shadow: 0 18px 34px rgba(217, 119, 6, 0.28);
+}
+
+.icon {
+    color: #ffffff;
+    font-size: 42px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.eyebrow {
+    width: fit-content;
+    margin: 0 auto 12px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    color: #92400e;
+    background: #fef3c7;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.title {
+    margin: 0;
+    color: #0f172a;
+    font-size: clamp(25px, 4vw, 34px);
+    font-weight: 900;
+    line-height: 1.35;
+}
+
+.message {
+    margin: 18px auto 0;
+    max-width: 430px;
+    color: #475569;
+    font-size: 15px;
+    line-height: 2;
+}
+
+.until {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-top: 24px;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    color: #64748b;
+    background: rgba(248, 250, 252, 0.86);
+    text-align: right;
+}
+
+.until span {
+    font-size: 13px;
+}
+
+.until strong {
+    color: #0f172a;
+    font-size: 13px;
+}
+
+.logoutButton {
+    width: 100%;
+    min-height: 50px;
+    margin-top: 26px;
+    border: 0;
+    border-radius: 15px;
+    color: #ffffff;
+    background: linear-gradient(135deg, #0f172a, #334155);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.2);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.logoutButton:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 32px rgba(15, 23, 42, 0.26);
+}
+
+.logoutButton:focus-visible {
+    outline: 3px solid rgba(59, 130, 246, 0.36);
+    outline-offset: 4px;
+}
+
+.logoutButton:active {
+    transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+    .overlay {
+        padding: 18px;
+    }
+
+    .card {
+        padding: 30px 22px 24px;
+        border-radius: 24px;
+    }
+
+    .iconWrap {
+        width: 66px;
+        height: 66px;
+        border-radius: 20px;
+    }
+
+    .icon {
+        font-size: 36px;
+    }
+
+    .until {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logoutButton {
+        transition: none;
+    }
+}

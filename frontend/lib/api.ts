@@ -9,6 +9,62 @@ type ApiOptions = RequestInit & {
   auth?: boolean;
 };
 
+export type MaintenanceModeDetails = {
+  enabled: true;
+  message: string;
+  until: string | null;
+};
+
+export const MAINTENANCE_MODE_EVENT = "ai-chat:maintenance-mode";
+
+export class MaintenanceModeError extends Error {
+  readonly code = "maintenance_mode";
+  readonly status = 503;
+  readonly details: MaintenanceModeDetails;
+
+  constructor(details: MaintenanceModeDetails) {
+    super(details.message);
+    this.name = "MaintenanceModeError";
+    this.details = details;
+  }
+}
+
+export function isMaintenanceModeError(error: unknown): error is MaintenanceModeError {
+  return (
+    error instanceof MaintenanceModeError ||
+    (typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "maintenance_mode")
+  );
+}
+
+function emitMaintenanceMode(details: MaintenanceModeDetails) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<MaintenanceModeDetails>(MAINTENANCE_MODE_EVENT, {
+      detail: details,
+    })
+  );
+}
+
+function maintenanceDetailsFromPayload(data: any): MaintenanceModeDetails {
+  return {
+    enabled: true,
+    message:
+      typeof data?.message === "string" && data.message.trim()
+        ? data.message.trim()
+        : "سامانه برای انجام عملیات نگهداری موقتاً در دسترس نیست.",
+    until:
+      typeof data?.maintenance_until === "string" && data.maintenance_until.trim()
+        ? data.maintenance_until
+        : null,
+  };
+}
+
 function clearAuthStorage() {
   if (typeof window === "undefined") {
     return;
@@ -67,6 +123,12 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
     throw new Error("پاسخ معتبری از سرور دریافت نشد.");
   }
 
+  if (response.status === 503 && data?.code === "maintenance_mode") {
+    const details = maintenanceDetailsFromPayload(data);
+    emitMaintenanceMode(details);
+    throw new MaintenanceModeError(details);
+  }
+
   if (!response.ok) {
     throw new Error(data?.message || "خطا در ارتباط با سرور");
   }
@@ -99,12 +161,20 @@ export async function apiDownload(path: string, fallbackFilename = "download") {
 
   if (!response.ok) {
     let message = "دانلود فایل ناموفق بود";
+    let data: any = null;
     try {
-      const data = await response.json();
+      data = await response.json();
       message = data?.message || message;
     } catch {
       // پاسخ غیر JSON برای خطای دانلود
     }
+
+    if (response.status === 503 && data?.code === "maintenance_mode") {
+      const details = maintenanceDetailsFromPayload(data);
+      emitMaintenanceMode(details);
+      throw new MaintenanceModeError(details);
+    }
+
     throw new Error(message);
   }
 

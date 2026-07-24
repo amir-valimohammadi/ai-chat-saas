@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiRequest, getAuthUser } from "@/lib/api";
+import { apiRequest, getAuthUser, isMaintenanceModeError } from "@/lib/api";
 
 type Announcement = {
     id: number;
@@ -68,6 +68,11 @@ export default function CustomerAnnouncementsWidget() {
             setAnnouncements(data.announcements || []);
             setUnreadCount(data.unread_count || 0);
         } catch (error: any) {
+            if (isMaintenanceModeError(error)) {
+                setError("");
+                return;
+            }
+
             console.error("Customer announcements error:", error);
             setError(error.message || "خطا در دریافت اعلان‌ها");
         } finally {
@@ -90,7 +95,9 @@ export default function CustomerAnnouncementsWidget() {
 
             setUnreadCount((count) => Math.max(count - 1, 0));
         } catch (error) {
-            console.error("Announcement read error:", error);
+            if (!isMaintenanceModeError(error)) {
+                console.error("Announcement read error:", error);
+            }
         }
     }
 
@@ -111,7 +118,9 @@ export default function CustomerAnnouncementsWidget() {
 
             setUnreadCount((count) => Math.max(count - 1, 0));
         } catch (error) {
-            console.error("Announcement dismiss error:", error);
+            if (!isMaintenanceModeError(error)) {
+                console.error("Announcement dismiss error:", error);
+            }
         }
     }
 

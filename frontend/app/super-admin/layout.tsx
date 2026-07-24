@@ -10,6 +10,7 @@ import "../../styles/super-admin/ai-monitoring.css";
 import "../../styles/super-admin/audit-logs.css";
 import "../../styles/super-admin/requests.css";
 import "../../styles/super-admin/announcements.css";
+import "../../styles/super-admin/system-health.css";
 
 export default function SuperAdminLayout({
     children,

@@ -61,6 +61,16 @@ if (!function_exists('json_response')) {
             header('Pragma: no-cache');
         }
 
+        global $pdo;
+        if (
+            $statusCode >= 500
+            && isset($pdo)
+            && $pdo instanceof PDO
+            && function_exists('operations_store_response_error')
+        ) {
+            operations_store_response_error($pdo, $data, $statusCode);
+        }
+
         echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }

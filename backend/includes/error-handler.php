@@ -27,6 +27,17 @@ if (!function_exists('app_log_error')) {
         ];
 
         error_log('[AI_CHAT_SAAS_ERROR] ' . json_encode($logData, JSON_UNESCAPED_UNICODE));
+
+        global $pdo;
+        if (isset($pdo) && $pdo instanceof PDO && function_exists('operations_store_error')) {
+            operations_store_error(
+                $pdo,
+                $exception,
+                $context,
+                'php',
+                ($context['status_code'] ?? 500) >= 500 ? 'critical' : 'error'
+            );
+        }
     }
 }
 
