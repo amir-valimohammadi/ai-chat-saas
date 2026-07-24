@@ -9,7 +9,6 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../includes/admin-management.php';
-require_once __DIR__ . '/../../includes/admin-impersonation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['success'=>false,'message'=>'Method not allowed'],405);
 $actor=require_auth($pdo); require_role($actor,['super_admin']);
@@ -24,10 +23,7 @@ try{
  $q->execute([':id'=>$id]); $old=$q->fetch(); if(!$old) throw new RuntimeException('مدیر پیدا نشد.');
  if(!$active && $old['role_code']==='owner' && admin_active_owner_count($pdo,$id)<1) throw new RuntimeException('آخرین مالک فعال را نمی‌توان غیرفعال کرد.');
  $pdo->prepare('UPDATE users SET is_active=:active,token_version=token_version+1,updated_at=NOW() WHERE id=:id')->execute([':active'=>$active,':id'=>$id]);
- if(!$active) {
-     auth_revoke_sessions($pdo,$id,(int)$actor['id'],'Admin account deactivated');
-     admin_impersonation_revoke_for_admin($pdo,$id,(int)$actor['id'],'Administrator account deactivated');
- }
+ if(!$active) auth_revoke_sessions($pdo,$id,(int)$actor['id'],'Admin account deactivated');
  admin_audit_log($pdo,$actor,'admin.status_changed','admin_user',$id,'وضعیت مدیر تغییر کرد',['is_active'=>(bool)$old['is_active']],['is_active'=>(bool)$active],['target_user_id'=>$id]);
  $pdo->commit(); json_response(['success'=>true,'message'=>$active?'مدیر فعال شد.':'مدیر غیرفعال شد.']);
 }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();json_response(['success'=>false,'message'=>$e->getMessage()],422);}

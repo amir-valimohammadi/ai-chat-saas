@@ -22,7 +22,7 @@ if (!function_exists('auth_user_agent')) {
 }
 
 if (!function_exists('auth_public_user')) {
-    function auth_public_user(PDO $pdo, array $user, array $context = []): array
+    function auth_public_user(PDO $pdo, array $user): array
     {
         $public = [
             'id' => (int) $user['id'],
@@ -34,18 +34,6 @@ if (!function_exists('auth_public_user')) {
             'must_change_password' => !empty($user['must_change_password']),
             'two_factor_enabled' => !empty($user['two_factor_enabled']),
         ];
-
-        if (!empty($context['impersonation_id'])) {
-            $public += [
-                'is_impersonating' => true,
-                'impersonation_id' => (int) $context['impersonation_id'],
-                'impersonator_user_id' => isset($context['impersonator_user_id'])
-                    ? (int) $context['impersonator_user_id']
-                    : null,
-                'impersonator_name' => $context['impersonator_name'] ?? null,
-                'impersonation_expires_at' => $context['impersonation_expires_at'] ?? null,
-            ];
-        }
 
         if ($user['role'] === 'super_admin') {
             $access = admin_load_access($pdo, (int) $user['id']);
@@ -63,19 +51,12 @@ if (!function_exists('auth_public_user')) {
 }
 
 if (!function_exists('auth_issue_session')) {
-    function auth_issue_session(PDO $pdo, array $user, array $context = []): array
+    function auth_issue_session(PDO $pdo, array $user): array
     {
         $now = time();
         $ttl = (int) app_config('jwt_expiration_seconds', 604800);
         if ($ttl <= 0) {
             $ttl = 604800;
-        }
-
-        if (!empty($context['expires_at'])) {
-            $contextExpiry = strtotime((string) $context['expires_at']);
-            if ($contextExpiry !== false) {
-                $ttl = max(60, min($ttl, $contextExpiry - $now));
-            }
         }
 
         $jti = bin2hex(random_bytes(24));
@@ -94,39 +75,21 @@ if (!function_exists('auth_issue_session')) {
             'exp' => $now + $ttl,
         ];
 
-        if (!empty($context['impersonation_id'])) {
-            $payload['impersonation_id'] = (int) $context['impersonation_id'];
-            $payload['impersonator_user_id'] = isset($context['impersonator_user_id'])
-                ? (int) $context['impersonator_user_id']
-                : null;
-        }
-
         $token = jwt_encode($payload);
-        $stmt = $pdo->prepare("\n            INSERT INTO auth_sessions(\n                user_id,jti_hash,ip_address,user_agent,created_at,last_seen_at,expires_at,\n                impersonation_id,parent_admin_user_id\n            ) VALUES(\n                :user_id,:jti_hash,:ip_address,:user_agent,NOW(),NOW(),:expires_at,\n                :impersonation_id,:parent_admin_user_id\n            )\n        ");
+        $stmt = $pdo->prepare("\n            INSERT INTO auth_sessions(\n                user_id,jti_hash,ip_address,user_agent,created_at,last_seen_at,expires_at\n            ) VALUES(\n                :user_id,:jti_hash,:ip_address,:user_agent,NOW(),NOW(),:expires_at\n            )\n        ");
         $stmt->execute([
             ':user_id' => (int) $user['id'],
             ':jti_hash' => hash('sha256', $jti),
             ':ip_address' => auth_client_ip(),
             ':user_agent' => auth_user_agent(),
             ':expires_at' => date('Y-m-d H:i:s', $now + $ttl),
-            ':impersonation_id' => !empty($context['impersonation_id'])
-                ? (int) $context['impersonation_id']
-                : null,
-            ':parent_admin_user_id' => !empty($context['impersonator_user_id'])
-                ? (int) $context['impersonator_user_id']
-                : null,
         ]);
 
         return [
             'token' => $token,
             'expires_at' => date(DATE_ATOM, $now + $ttl),
             'session_id' => (int) $pdo->lastInsertId(),
-            'user' => auth_public_user($pdo, $user, [
-                ...$context,
-                'impersonation_expires_at' => !empty($context['expires_at'])
-                    ? $context['expires_at']
-                    : null,
-            ]),
+            'user' => auth_public_user($pdo, $user),
         ];
     }
 }

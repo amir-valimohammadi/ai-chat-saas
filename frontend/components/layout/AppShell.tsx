@@ -300,6 +300,20 @@ export default function AppShell({
                             permission: "operations.view",
                         },
                         {
+                            href: "/super-admin/test-center",
+                            label: "مرکز جامع تست",
+                            icon: "QA",
+                            description: "تست سلامت، امنیت و یکپارچگی",
+                            permission: "tests.view",
+                        },
+                        {
+                            href: "/super-admin/test-center/findings",
+                            label: "ایرادات تست",
+                            icon: "!",
+                            description: "دلایل، اثر و راهکار رفع",
+                            permission: "tests.view",
+                        },
+                        {
                             href: "/super-admin/admins",
                             label: "مدیران و نقش‌ها",
                             icon: "ADM",

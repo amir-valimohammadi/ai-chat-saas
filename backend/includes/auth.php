@@ -101,27 +101,6 @@ if (!function_exists('require_auth')) {
             }
         }
 
-        $impersonationContext = null;
-        if (!empty($payload['impersonation_id'])) {
-            $impersonationStmt = $pdo->prepare("
-                SELECT ai.id,ai.admin_user_id,ai.target_user_id,ai.tenant_id,ai.status,ai.expires_at,
-                       admin.name AS admin_name
-                FROM admin_impersonations ai
-                INNER JOIN users admin ON admin.id=ai.admin_user_id AND admin.role='super_admin' AND admin.is_active=1
-                WHERE ai.id=:id AND ai.target_user_id=:target_user_id
-                  AND ai.status='active' AND ai.expires_at > NOW()
-                LIMIT 1
-            ");
-            $impersonationStmt->execute([
-                ':id' => (int) $payload['impersonation_id'],
-                ':target_user_id' => $userId,
-            ]);
-            $impersonationContext = $impersonationStmt->fetch();
-            if (!$impersonationContext) {
-                json_response(['success' => false, 'message' => 'نشست ورود موقت پایان یافته است.'], 401);
-            }
-        }
-
         $user = [
             'id' => (int) $dbUser['id'],
             'tenant_id' => $dbUser['tenant_id'] !== null ? (int) $dbUser['tenant_id'] : null,
@@ -136,16 +115,6 @@ if (!function_exists('require_auth')) {
             'ip_allowlist_enabled' => (bool) $dbUser['ip_allowlist_enabled'],
             'session_jti' => (string) $payload['jti'],
         ];
-
-        if ($impersonationContext) {
-            $user += [
-                'is_impersonating' => true,
-                'impersonation_id' => (int) $impersonationContext['id'],
-                'impersonator_user_id' => (int) $impersonationContext['admin_user_id'],
-                'impersonator_name' => $impersonationContext['admin_name'],
-                'impersonation_expires_at' => $impersonationContext['expires_at'],
-            ];
-        }
 
         if ($dbUser['role'] === 'super_admin') {
             $access = admin_load_access($pdo, (int) $dbUser['id']);

@@ -14,7 +14,7 @@ function admin_audit_sanitize($value)
     $sensitive = [
         'password', 'password_hash', 'new_password', 'current_password', 'token', 'access_token',
         'refresh_token', 'jwt', 'jwt_secret', 'secret', 'api_key',
-        'authorization', 'cookie', 'two_factor_secret', 'recovery_codes', 'challenge_token', 'ticket', 'impersonation_ticket',
+        'authorization', 'cookie', 'two_factor_secret', 'recovery_codes', 'challenge_token',
     ];
 
     $clean = [];
