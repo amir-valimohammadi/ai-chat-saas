@@ -7,7 +7,7 @@ import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
 
 type ItemStatus = "passed" | "warning" | "failed" | "skipped" | "error";
 type Run = {
-    id: number; profile: "quick" | "full" | "security" | "operational" | "browser"; target_label: string | null; status: string;
+    id: number; profile: "quick" | "full" | "security" | "security_deep" | "operational" | "browser"; target_label: string | null; status: string;
     total_count: number; passed_count: number; warning_count: number; failed_count: number; skipped_count: number;
     score_percent: number | null; duration_ms: number | null; progress_percent: number; current_case_key: string | null; heartbeat_at: string | null; cancel_requested_at: string | null; error_message?: string | null; environment: string | null; reason: string | null;
     triggered_by_name: string | null; started_at: string | null; finished_at: string | null; created_at: string;
@@ -21,6 +21,8 @@ type Item = {
     id: number; case_key: string; category: string; title: string; description: string | null; status: ItemStatus;
     severity: "info" | "low" | "medium" | "high" | "critical"; duration_ms: number; message: string | null; root_cause: string | null; impact: string | null;
     expected_value: string | null; actual_value: string | null; remediation: string | null; details: unknown; evidence: unknown;
+    risk_score: number | null; confidence: "low" | "medium" | "high" | "confirmed" | null; owasp_category: string | null; cwe_id: string | null;
+    affected_component: string | null; verification_mode: "static" | "runtime" | "database" | "configuration" | "hybrid" | null;
 };
 
 const categoryLabels: Record<string, string> = { runtime:"محیط اجرا",database:"دیتابیس",storage:"فضا و فایل",security:"امنیت",api:"API",widget:"ویجت",messaging:"پیام‌رسان",visitors:"بازدیدکنندگان",crawl:"خزش",operations:"عملیات",browser:"مرورگر",public:"صفحات عمومی",auth:"احراز هویت",super_admin:"پنل سوپرادمین",customer:"پنل مشتری",responsive:"ریسپانسیو",ai:"هوش مصنوعی" };
@@ -101,7 +103,7 @@ export default function TestRunDetailPage() {
     async function rerunFailed() {
         if (!run) return;
         let currentPassword: string | undefined;
-        if (["security", "operational"].includes(run.profile)) {
+        if (["security", "security_deep", "operational"].includes(run.profile)) {
             currentPassword = window.prompt("برای اجرای مجدد تست حساس، رمز فعلی مدیر را وارد کن:") || undefined;
             if (!currentPassword) return;
         }
@@ -163,6 +165,14 @@ export default function TestRunDetailPage() {
                                 <div className="qa-result-title"><div><span>{categoryLabels[item.category] ?? item.category}</span><h2>{item.title}</h2><code>{item.case_key}</code></div><small>{formatNumber(item.duration_ms)} ms</small></div>
                                 {item.description && <p className="qa-result-description">{item.description}</p>}
                                 {item.message && <div className="qa-result-message">{item.message}</div>}
+                                {(item.risk_score != null || item.owasp_category || item.cwe_id || item.affected_component || item.verification_mode) && <div className="qa-security-meta-row">
+                                    {item.risk_score != null && <span className={`qa-risk-badge ${item.risk_score >= 8 ? "is-critical" : item.risk_score >= 5 ? "is-high" : "is-medium"}`}>ریسک {item.risk_score}/10</span>}
+                                    {item.confidence && <span>اطمینان: {securityConfidenceLabel(item.confidence)}</span>}
+                                    {item.owasp_category && <span>{item.owasp_category}</span>}
+                                    {item.cwe_id && <span>{item.cwe_id}</span>}
+                                    {item.affected_component && <span>بخش: {item.affected_component}</span>}
+                                    {item.verification_mode && <span>روش: {securityModeLabel(item.verification_mode)}</span>}
+                                </div>}
                                 {(item.root_cause || item.impact) && <div className="qa-diagnosis-grid">
                                     <div><strong>دلیل احتمالی</strong><p>{item.root_cause || "برای این مورد دلیل اختصاصی ثبت نشده است."}</p></div>
                                     <div><strong>اثر و ریسک</strong><p>{item.impact || "اثر مستقیم ثبت نشده است."}</p></div>
@@ -186,6 +196,9 @@ export default function TestRunDetailPage() {
 
 function formatNumber(value:number){return new Intl.NumberFormat("fa-IR").format(value)}
 function formatDate(value:string){try{return new Intl.DateTimeFormat("fa-IR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(value.replace(" ","T")))}catch{return value}}
-function profileLabel(profile:Run["profile"]){return profile==="quick"?"تست سریع":profile==="full"?"تست کامل":profile==="operational"?"تست عملیاتی":profile==="browser"?"تست مرورگری و ویجت":"تست امنیتی"}
+function profileLabel(profile:Run["profile"]){return profile==="quick"?"تست سریع":profile==="full"?"تست کامل":profile==="security_deep"?"تست امنیت عمیق":profile==="operational"?"تست عملیاتی":profile==="browser"?"تست مرورگری و ویجت":"تست امنیتی"}
 function statusIcon(status:ItemStatus){return ({passed:"✓",warning:"!",failed:"×",error:"⚠",skipped:"—"} as Record<ItemStatus,string>)[status]}
 function formatBytes(value:number){if(!value)return "۰ بایت";const units=["بایت","KB","MB","GB"];const index=Math.min(units.length-1,Math.floor(Math.log(value)/Math.log(1024)));return `${new Intl.NumberFormat("fa-IR",{maximumFractionDigits:1}).format(value/Math.pow(1024,index))} ${units[index]}`;}
+
+function securityConfidenceLabel(value:NonNullable<Item["confidence"]>){return ({low:"کم",medium:"متوسط",high:"زیاد",confirmed:"قطعی"} as const)[value]}
+function securityModeLabel(value:NonNullable<Item["verification_mode"]>){return ({static:"اسکن کد",runtime:"اجرای واقعی",database:"دیتابیس",configuration:"تنظیمات",hybrid:"ترکیبی"} as const)[value]}

@@ -23,4 +23,4 @@ try{
     $summary=$pdo->query("SELECT status,severity,COUNT(*) total FROM qa_findings GROUP BY status,severity")->fetchAll();
     $categories=$pdo->query("SELECT category,COUNT(*) total FROM qa_findings GROUP BY category ORDER BY category")->fetchAll();
     json_response(['success'=>true,'findings'=>$rows,'summary'=>$summary,'categories'=>$categories,'pagination'=>['page'=>$page,'per_page'=>$perPage,'total'=>$total,'pages'=>(int)ceil($total/$perPage)],'permissions'=>['can_export'=>admin_has_permission($user,'tests.export_findings'),'can_manage'=>admin_has_permission($user,'tests.manage_findings')]]);
-}catch(Throwable $e){json_response(['success'=>false,'message'=>'دریافت ایرادات تست ناموفق بود.','error'=>$e->getMessage()],500);}
+}catch(Throwable $e){json_response(['success'=>false,'message'=>'دریافت ایرادات تست ناموفق بود.','request_id'=>defined('APP_REQUEST_ID')?APP_REQUEST_ID:null],500);}

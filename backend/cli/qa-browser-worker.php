@@ -39,6 +39,8 @@ try {
     $environment = array_merge($baseEnvironment, $_ENV, [
         'QA_BROWSER_API_URL' => qa_browser_api_url(),
         'QA_BROWSER_WORKER_TOKEN' => $token,
+        'QA_BROWSER_CHANNEL' => (string) app_env('QA_BROWSER_CHANNEL', 'auto'),
+        'QA_BROWSER_EXECUTABLE_PATH' => (string) app_env('QA_BROWSER_EXECUTABLE_PATH', ''),
     ]);
     $process = proc_open($command, $descriptors, $pipes, qa_browser_runner_root(), $environment);
     if (!is_resource($process)) {

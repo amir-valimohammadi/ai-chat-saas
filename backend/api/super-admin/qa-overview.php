@@ -52,6 +52,8 @@ try {
             'can_run_safe'=>admin_has_permission($user,'tests.run_safe'),
             'can_run_full'=>admin_has_permission($user,'tests.run_full'),
             'can_run_security'=>admin_has_permission($user,'tests.run_security'),
+            'can_run_security_deep'=>admin_has_permission($user,'tests.run_security_deep'),
+            'can_view_security_evidence'=>admin_has_permission($user,'tests.view_security_evidence'),
             'can_run_operational'=>admin_has_permission($user,'tests.run_operational'),
             'can_run_browser'=>admin_has_permission($user,'tests.run_browser'),
             'can_view_artifacts'=>admin_has_permission($user,'tests.view_artifacts'),
@@ -62,5 +64,5 @@ try {
         'generated_at'=>date('Y-m-d H:i:s'),
     ]);
 } catch(Throwable $e) {
-    json_response(['success'=>false,'message'=>'دریافت اطلاعات مرکز تست ناموفق بود.','error'=>$e->getMessage()],500);
+    json_response(['success'=>false,'message'=>'دریافت اطلاعات مرکز تست ناموفق بود.','request_id'=>defined('APP_REQUEST_ID')?APP_REQUEST_ID:null],500);
 }

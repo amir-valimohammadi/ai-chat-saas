@@ -12,6 +12,8 @@ function arg(name) {
 const runId = Number(arg("run-id"));
 const token = process.env.QA_BROWSER_WORKER_TOKEN || arg("token");
 const apiBase = (process.env.QA_BROWSER_API_URL || "http://localhost/ai-chat-saas/backend/api").replace(/\/$/, "");
+const configuredChannel = (process.env.QA_BROWSER_CHANNEL || "auto").trim().toLowerCase();
+const configuredExecutablePath = (process.env.QA_BROWSER_EXECUTABLE_PATH || "").trim();
 if (!runId || !token) throw new Error("run-id and token are required");
 
 async function post(endpoint, payload) {
@@ -191,8 +193,41 @@ function routeCase(key, title, context, route, expectedPath, category = "browser
   };
 }
 
+async function launchQaBrowser() {
+  const baseOptions = { headless: contextData.headless };
+
+  if (configuredExecutablePath) {
+    try {
+      return await chromium.launch({ ...baseOptions, executablePath: configuredExecutablePath });
+    } catch (error) {
+      throw new Error(`مرورگر تنظیم‌شده در QA_BROWSER_EXECUTABLE_PATH اجرا نشد: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const channels = configuredChannel === "auto"
+    ? ["chrome", "msedge", "bundled"]
+    : [configuredChannel];
+  const failures = [];
+
+  for (const channel of channels) {
+    try {
+      if (channel === "bundled" || channel === "chromium") {
+        return await chromium.launch(baseOptions);
+      }
+      return await chromium.launch({ ...baseOptions, channel });
+    } catch (error) {
+      failures.push(`${channel}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  throw new Error(
+    "هیچ مرورگر قابل استفاده‌ای پیدا نشد. Chrome یا Edge را نصب کن، یا QA_BROWSER_CHANNEL=chrome/msedge و در صورت نیاز QA_BROWSER_EXECUTABLE_PATH را تنظیم کن. جزئیات: "
+      + failures.join(" | ")
+  );
+}
+
 try {
-  browser = await chromium.launch({ headless: contextData.headless });
+  browser = await launchQaBrowser();
   const publicContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: "fa-IR" });
   const adminContext = await createAuthContext(contextData.admin);
   const customerContext = await createAuthContext(contextData.customer);

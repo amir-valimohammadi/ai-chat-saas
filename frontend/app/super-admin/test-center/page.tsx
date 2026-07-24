@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
 
-type Profile = "quick" | "full" | "security" | "operational" | "browser";
+type Profile = "quick" | "full" | "security" | "security_deep" | "operational" | "browser";
 type TargetType = "system" | "tenant" | "site";
 type RunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -63,6 +63,8 @@ type OverviewResponse = {
         can_run_safe: boolean;
         can_run_full: boolean;
         can_run_security: boolean;
+        can_run_security_deep: boolean;
+        can_view_security_evidence: boolean;
         can_run_operational: boolean;
         can_run_browser: boolean;
         can_view_artifacts: boolean;
@@ -99,6 +101,12 @@ const profileMeta: Record<Profile, { title: string; description: string; icon: s
         description: "کنترل Tenant Isolation، نقش‌ها، نشست‌ها، کلیدها، Upload، ورود موقت و Permissionها.",
         icon: "🛡",
         permission: "can_run_security",
+    },
+    security_deep: {
+        title: "تست امنیت عمیق",
+        description: "۴۲ بررسی دفاعی عمیق با Risk Score، OWASP/CWE، تست JWT و Session، جداسازی دو Tenant، Upload و Source Scan.",
+        icon: "🔒",
+        permission: "can_run_security_deep",
     },
     browser: {
         title: "تست مرورگری و ویجت",
@@ -184,7 +192,7 @@ export default function TestCenterPage() {
     }, [targetType]);
 
     useEffect(() => {
-        if (["operational", "browser"].includes(profile)) {
+        if (["operational", "browser", "security_deep"].includes(profile)) {
             setTargetType("system");
             setTargetId("");
         }
@@ -196,17 +204,19 @@ export default function TestCenterPage() {
             setError("مشتری یا سایت هدف را انتخاب کن.");
             return;
         }
-        if (["security", "operational"].includes(profile) && reason.trim().length < 5) {
+        if (["security", "security_deep", "operational"].includes(profile) && reason.trim().length < 5) {
             setError(`برای ${profileMeta[profile].title}، دلیل اجرا را وارد کن.`);
             return;
         }
-        if (["security", "operational"].includes(profile) && !password) {
+        if (["security", "security_deep", "operational"].includes(profile) && !password) {
             setError(`برای ${profileMeta[profile].title}، رمز فعلی مدیر لازم است.`);
             return;
         }
 
         const confirmed = window.confirm(
-            profile === "security"
+            profile === "security_deep"
+                ? "تست امنیت عمیق اجرا شود؟ تست‌ها دفاعی، کنترل‌شده و روی داده مصنوعی هستند و نتیجه با Risk Score و OWASP ثبت می‌شود."
+                : profile === "security"
                 ? "تست امنیتی ایمن اجرا شود؟ این عملیات داده واقعی را تغییر نمی‌دهد اما در Audit Log ثبت می‌شود."
                 : profile === "operational"
                     ? "تست عملیاتی با داده مصنوعی و Rollback اجرا شود؟ همه عملیات در Audit Log ثبت می‌شوند."
@@ -226,7 +236,7 @@ export default function TestCenterPage() {
                     target_type: targetType,
                     target_id: targetType === "system" ? null : Number(targetId),
                     reason: reason.trim() || null,
-                    current_password: ["security", "operational"].includes(profile) ? password : undefined,
+                    current_password: ["security", "security_deep", "operational"].includes(profile) ? password : undefined,
                 }),
             });
             router.push(`/super-admin/test-center/runs/${response.run_id}`);
@@ -255,9 +265,12 @@ export default function TestCenterPage() {
                         <h1>تست سلامت، امنیت و یکپارچگی سامانه</h1>
                         <p>تست‌های ایمن را روی کل پلتفرم، یک مشتری یا یک سایت اجرا کن و نتیجه هر مورد را همراه با راهکار رفع خطا ببین.</p>
                     </div>
-                    <button className="qa-secondary-button" disabled={refreshing} onClick={() => load(true)}>
-                        {refreshing ? "در حال بروزرسانی…" : "بروزرسانی"}
-                    </button>
+                    <div className="qa-hero-actions">
+                        {data?.permissions.can_view_security_evidence && <button className="qa-secondary-button" onClick={() => router.push("/super-admin/test-center/security")}>داشبورد امنیت عمیق</button>}
+                        <button className="qa-secondary-button" disabled={refreshing} onClick={() => load(true)}>
+                            {refreshing ? "در حال بروزرسانی…" : "بروزرسانی"}
+                        </button>
+                    </div>
                 </header>
 
                 {error && <div className="qa-alert qa-alert-error">{error}</div>}

@@ -12,7 +12,8 @@ type Finding = {
     status:FindingStatus; test_status:"warning"|"failed"|"error"; severity:Severity; message:string|null; root_cause:string|null;
     impact:string|null; expected_value:string|null; actual_value:string|null; remediation:string|null; evidence:unknown;
     first_seen_at:string; last_seen_at:string; occurrence_count:number; last_run_id:number; resolved_by_name:string|null;
-    resolved_at:string|null; resolution_note:string|null;
+    resolved_at:string|null; resolution_note:string|null; risk_score:number|null; confidence:"low"|"medium"|"high"|"confirmed"|null;
+    owasp_category:string|null; cwe_id:string|null; affected_component:string|null; verification_mode:"static"|"runtime"|"database"|"configuration"|"hybrid"|null;
 };
 type Response = {
     success:true; findings:Finding[]; summary:Array<{status:FindingStatus;severity:Severity;total:number}>;
@@ -105,6 +106,14 @@ export default function QaFindingsPage(){
             {!loading&&findings.map(finding=><article id={`qa-finding-${finding.id}`} key={finding.id} className={`qa-finding-card is-${finding.severity} ${focusId===finding.id?"is-focused":""}`}>
                 <div className="qa-finding-card-head"><div><div className="qa-finding-badges"><span className={`qa-finding-severity is-${finding.severity}`}>{severityLabels[finding.severity]}</span><span className={`qa-finding-status is-${finding.status}`}>{statusLabels[finding.status]}</span><span>{categoryLabels[finding.category]??finding.category}</span></div><h2>{finding.title}</h2><code>{finding.case_key}</code></div><div className="qa-finding-occurrence"><strong>{formatNumber(finding.occurrence_count)}</strong><span>بار مشاهده</span></div></div>
                 <div className="qa-finding-meta"><span>هدف: {finding.target_label||"کل سامانه"}</span><span>آخرین Run: #{finding.last_run_id}</span><span>آخرین مشاهده: {formatDate(finding.last_seen_at)}</span></div>
+                {(finding.risk_score!=null||finding.owasp_category||finding.cwe_id||finding.affected_component||finding.verification_mode)&&<div className="qa-security-meta-row qa-finding-security-meta">
+                    {finding.risk_score!=null&&<span className={`qa-risk-badge ${finding.risk_score>=8?"is-critical":finding.risk_score>=5?"is-high":"is-medium"}`}>ریسک {finding.risk_score}/10</span>}
+                    {finding.confidence&&<span>اطمینان: {confidenceLabel(finding.confidence)}</span>}
+                    {finding.owasp_category&&<span>{finding.owasp_category}</span>}
+                    {finding.cwe_id&&<span>{finding.cwe_id}</span>}
+                    {finding.affected_component&&<span>بخش: {finding.affected_component}</span>}
+                    {finding.verification_mode&&<span>روش: {modeLabel(finding.verification_mode)}</span>}
+                </div>}
                 <div className="qa-finding-problem"><strong>شرح مشکل</strong><p>{finding.message||"شرح ثبت نشده است."}</p></div>
                 <div className="qa-diagnosis-grid"><div><strong>دلیل احتمالی</strong><p>{finding.root_cause||"دلیل اختصاصی ثبت نشده است."}</p></div><div><strong>اثر و ریسک</strong><p>{finding.impact||"اثر اختصاصی ثبت نشده است."}</p></div></div>
                 {(finding.expected_value||finding.actual_value)&&<div className="qa-value-grid"><div><span>مقدار مورد انتظار</span><pre>{finding.expected_value||"—"}</pre></div><div><span>مقدار فعلی</span><pre>{finding.actual_value||"—"}</pre></div></div>}
@@ -122,3 +131,6 @@ export default function QaFindingsPage(){
 
 function formatNumber(value:number){return new Intl.NumberFormat("fa-IR").format(value)}
 function formatDate(value:string){try{return new Intl.DateTimeFormat("fa-IR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(value.replace(" ","T")))}catch{return value}}
+
+function confidenceLabel(value:NonNullable<Finding["confidence"]>){return ({low:"کم",medium:"متوسط",high:"زیاد",confirmed:"قطعی"} as const)[value]}
+function modeLabel(value:NonNullable<Finding["verification_mode"]>){return ({static:"اسکن کد",runtime:"اجرای واقعی",database:"دیتابیس",configuration:"تنظیمات",hybrid:"ترکیبی"} as const)[value]}

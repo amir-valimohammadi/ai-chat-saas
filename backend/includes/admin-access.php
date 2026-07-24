@@ -82,6 +82,15 @@ if (!function_exists('admin_permission_for_script')) {
             'contact-request-update.php' => 'requests.manage',
             'contact-request-note-create.php' => 'requests.manage',
             'customer-show.php' => 'customers.view',
+            'customer-360.php' => 'customers.view',
+            'global-search.php' => 'customers.view',
+            'customer-profile-update.php' => 'customers.support',
+            'customer-note-save.php' => 'customers.support',
+            'customer-note-delete.php' => 'customers.support',
+            'customer-tags-update.php' => 'customers.support',
+            'customer-onboarding-update.php' => 'customers.support',
+            'customer-export.php' => 'customers.export',
+            'customer-impersonation-start.php' => 'customers.impersonate',
             'tenants-list.php' => 'customers.view',
             'tenants-options.php' => 'customers.view',
             'customer-create.php' => 'customers.manage',
@@ -124,6 +133,12 @@ if (!function_exists('admin_permission_for_script')) {
             'security-session-revoke.php' => 'security.manage',
             'security-event-resolve.php' => 'security.manage',
             'security-ip-allowlist.php' => 'security.manage',
+            'qa-overview.php' => 'tests.view',
+            'qa-security-overview.php' => 'tests.view_security_evidence',
+            'qa-runs-list.php' => 'tests.view',
+            'qa-run-show.php' => 'tests.view',
+            'qa-run-create.php' => 'tests.view',
+            'qa-run-rerun-failed.php' => 'tests.view',
         ];
 
         return $map[$script] ?? null;

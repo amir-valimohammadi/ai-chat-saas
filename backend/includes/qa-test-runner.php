@@ -8,6 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/system-settings.php';
 require_once __DIR__ . '/routing.php';
+require_once __DIR__ . '/qa-security-suite.php';
 
 if (!function_exists('qa_table_exists')) {
     function qa_table_exists(PDO $pdo, string $table): bool
@@ -847,6 +848,10 @@ if (!function_exists('qa_case_catalog')) {
             return (int)$stmt->fetchColumn()===0?qa_result('passed','Audit Log آزمایشی ثبت و Rollback شد.','info',0,0):qa_result('failed','Audit آزمایشی باقی مانده است.','high',1,0,'Transaction Audit Log را بررسی کن.');
         });
 
+        foreach (qa_security_case_catalog($pdo, $scope) as $securityKey => $securityCase) {
+            $cases[$securityKey] = $securityCase;
+        }
+
         return $cases;
     }
 }
@@ -859,7 +864,7 @@ if (!function_exists('qa_insert_item')) {
         $details=$result['details'] ?? [];
         $evidence=$result['evidence'] ?? [];
         if($evidence===[] && $details!==[]) $evidence=$details;
-        $stmt = $pdo->prepare("INSERT INTO qa_test_run_items (run_id,case_key,category,title,description,status,severity,duration_ms,message,root_cause,impact,expected_value,actual_value,remediation,details_json,evidence_json) VALUES (:run_id,:case_key,:category,:title,:description,:status,:severity,:duration_ms,:message,:root_cause,:impact,:expected,:actual,:remediation,:details,:evidence)");
+        $stmt = $pdo->prepare("INSERT INTO qa_test_run_items (run_id,case_key,category,title,description,status,severity,duration_ms,message,root_cause,impact,expected_value,actual_value,remediation,details_json,evidence_json,risk_score,confidence,owasp_category,cwe_id,affected_component,verification_mode) VALUES (:run_id,:case_key,:category,:title,:description,:status,:severity,:duration_ms,:message,:root_cause,:impact,:expected,:actual,:remediation,:details,:evidence,:risk_score,:confidence,:owasp_category,:cwe_id,:affected_component,:verification_mode)");
         $stmt->execute([
             ':run_id'=>$runId,
             ':case_key'=>$case['key'],
@@ -877,6 +882,12 @@ if (!function_exists('qa_insert_item')) {
             ':remediation'=>$result['remediation'],
             ':details'=>$details ? json_encode($details,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) : null,
             ':evidence'=>$evidence ? json_encode($evidence,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) : null,
+            ':risk_score'=>isset($result['risk_score']) ? (float)$result['risk_score'] : null,
+            ':confidence'=>$result['confidence'] ?? null,
+            ':owasp_category'=>$result['owasp_category'] ?? null,
+            ':cwe_id'=>$result['cwe_id'] ?? null,
+            ':affected_component'=>$result['affected_component'] ?? null,
+            ':verification_mode'=>$result['verification_mode'] ?? null,
         ]);
     }
 }
@@ -900,8 +911,8 @@ if (!function_exists('qa_sync_findings_for_run')) {
             $fingerprint=hash('sha256',$targetRef.'|'.$item['case_key']);
             if(in_array($item['status'],['warning','failed','error'],true)){
                 $evidence=$item['evidence_json'] ?: $item['details_json'];
-                $stmt=$pdo->prepare("INSERT INTO qa_findings (fingerprint,case_key,category,title,target_type,target_id,target_ref,target_label,status,test_status,severity,message,root_cause,impact,expected_value,actual_value,remediation,evidence_json,first_seen_at,last_seen_at,occurrence_count,last_run_id) VALUES (:fingerprint,:case_key,:category,:title,:target_type,:target_id,:target_ref,:target_label,'open',:test_status,:severity,:message,:root_cause,:impact,:expected,:actual,:remediation,:evidence,NOW(),NOW(),1,:run_id) ON DUPLICATE KEY UPDATE category=VALUES(category),title=VALUES(title),target_label=VALUES(target_label),status=IF(status='ignored','ignored','open'),test_status=VALUES(test_status),severity=VALUES(severity),message=VALUES(message),root_cause=VALUES(root_cause),impact=VALUES(impact),expected_value=VALUES(expected_value),actual_value=VALUES(actual_value),remediation=VALUES(remediation),evidence_json=VALUES(evidence_json),last_seen_at=NOW(),occurrence_count=occurrence_count+1,last_run_id=VALUES(last_run_id),resolved_by=IF(status='ignored',resolved_by,NULL),resolved_at=IF(status='ignored',resolved_at,NULL),resolution_note=IF(status='ignored',resolution_note,NULL)");
-                $stmt->execute([':fingerprint'=>$fingerprint,':case_key'=>$item['case_key'],':category'=>$item['category'],':title'=>$item['title'],':target_type'=>$run['target_type'],':target_id'=>$run['target_id'],':target_ref'=>$targetRef,':target_label'=>$run['target_label'],':test_status'=>$item['status'],':severity'=>$item['severity'],':message'=>$item['message'],':root_cause'=>$item['root_cause'],':impact'=>$item['impact'],':expected'=>$item['expected_value'],':actual'=>$item['actual_value'],':remediation'=>$item['remediation'],':evidence'=>$evidence,':run_id'=>$runId]);
+                $stmt=$pdo->prepare("INSERT INTO qa_findings (fingerprint,case_key,category,title,target_type,target_id,target_ref,target_label,status,test_status,severity,message,root_cause,impact,expected_value,actual_value,remediation,evidence_json,risk_score,confidence,owasp_category,cwe_id,affected_component,verification_mode,first_seen_at,last_seen_at,occurrence_count,last_run_id) VALUES (:fingerprint,:case_key,:category,:title,:target_type,:target_id,:target_ref,:target_label,'open',:test_status,:severity,:message,:root_cause,:impact,:expected,:actual,:remediation,:evidence,:risk_score,:confidence,:owasp_category,:cwe_id,:affected_component,:verification_mode,NOW(),NOW(),1,:run_id) ON DUPLICATE KEY UPDATE category=VALUES(category),title=VALUES(title),target_label=VALUES(target_label),status=IF(status='ignored','ignored','open'),test_status=VALUES(test_status),severity=VALUES(severity),message=VALUES(message),root_cause=VALUES(root_cause),impact=VALUES(impact),expected_value=VALUES(expected_value),actual_value=VALUES(actual_value),remediation=VALUES(remediation),evidence_json=VALUES(evidence_json),risk_score=VALUES(risk_score),confidence=VALUES(confidence),owasp_category=VALUES(owasp_category),cwe_id=VALUES(cwe_id),affected_component=VALUES(affected_component),verification_mode=VALUES(verification_mode),last_seen_at=NOW(),occurrence_count=occurrence_count+1,last_run_id=VALUES(last_run_id),resolved_by=IF(status='ignored',resolved_by,NULL),resolved_at=IF(status='ignored',resolved_at,NULL),resolution_note=IF(status='ignored',resolution_note,NULL)");
+                $stmt->execute([':fingerprint'=>$fingerprint,':case_key'=>$item['case_key'],':category'=>$item['category'],':title'=>$item['title'],':target_type'=>$run['target_type'],':target_id'=>$run['target_id'],':target_ref'=>$targetRef,':target_label'=>$run['target_label'],':test_status'=>$item['status'],':severity'=>$item['severity'],':message'=>$item['message'],':root_cause'=>$item['root_cause'],':impact'=>$item['impact'],':expected'=>$item['expected_value'],':actual'=>$item['actual_value'],':remediation'=>$item['remediation'],':evidence'=>$evidence,':risk_score'=>$item['risk_score']!==null?(float)$item['risk_score']:null,':confidence'=>$item['confidence'],':owasp_category'=>$item['owasp_category'],':cwe_id'=>$item['cwe_id'],':affected_component'=>$item['affected_component'],':verification_mode'=>$item['verification_mode'],':run_id'=>$runId]);
             } elseif($item['status']==='passed') {
                 $stmt=$pdo->prepare("UPDATE qa_findings SET status='resolved',resolved_at=NOW(),resolution_note='این مورد در اجرای تست جدید موفق شد.',last_run_id=:run_id WHERE fingerprint=:fingerprint AND status='open'");
                 $stmt->execute([':run_id'=>$runId,':fingerprint'=>$fingerprint]);
@@ -966,7 +977,7 @@ if (!function_exists('qa_catalog_summary')) {
     {
         $scope=['target_type'=>'system','target_id'=>null,'target_label'=>'کل سامانه','tenant_id'=>null,'site_id'=>null];
         $catalog=qa_case_catalog($pdo,$scope);
-        $categories=[];$profiles=['quick'=>0,'full'=>0,'security'=>0,'operational'=>0,'browser'=>18];
+        $categories=[];$profiles=['quick'=>0,'full'=>0,'security'=>0,'security_deep'=>0,'operational'=>0,'browser'=>18];
         foreach($catalog as $case){
             $categories[$case['category']]=($categories[$case['category']]??0)+1;
             foreach($case['profiles'] as $profile)$profiles[$profile]=($profiles[$profile]??0)+1;

@@ -19,16 +19,21 @@ $targetType=trim((string)($input['target_type']??'system'));
 $targetId=isset($input['target_id'])?(int)$input['target_id']:null;
 $reason=trim((string)($input['reason']??''));
 
-if(!in_array($profile,['quick','full','security','operational','browser'],true)) json_response(['success'=>false,'message'=>'نوع تست معتبر نیست.'],422);
+if(!in_array($profile,['quick','full','security','security_deep','operational','browser'],true)) json_response(['success'=>false,'message'=>'نوع تست معتبر نیست.'],422);
 if(!in_array($targetType,['system','tenant','site'],true)) json_response(['success'=>false,'message'=>'هدف تست معتبر نیست.'],422);
 if($targetType!=='system'&&(!$targetId||$targetId<1)) json_response(['success'=>false,'message'=>'هدف تست را انتخاب کن.'],422);
-if(in_array($profile,['operational','browser'],true)&&$targetType!=='system') json_response(['success'=>false,'message'=>'تست عملیاتی در این نسخه فقط روی هسته کل سامانه اجرا می‌شود.'],422);
+if(in_array($profile,['operational','browser','security_deep'],true)&&$targetType!=='system') json_response(['success'=>false,'message'=>'این پروفایل در نسخه فعلی فقط روی هسته کل سامانه اجرا می‌شود.'],422);
 if($profile==='quick') require_admin_permission($user,'tests.run_safe');
 if($profile==='browser') require_admin_permission($user,'tests.run_browser');
 if($profile==='full') require_admin_permission($user,'tests.run_full');
 if($profile==='operational') {
     require_admin_permission($user,'tests.run_operational');
     if((function_exists('mb_strlen')?mb_strlen($reason,'UTF-8'):strlen($reason))<5) json_response(['success'=>false,'message'=>'برای تست عملیاتی دلیل اجرا را وارد کن.'],422);
+    require_sensitive_confirmation($pdo,$user,$input);
+}
+if($profile==='security_deep') {
+    require_admin_permission($user,'tests.run_security_deep');
+    if((function_exists('mb_strlen')?mb_strlen($reason,'UTF-8'):strlen($reason))<5) json_response(['success'=>false,'message'=>'برای تست امنیت عمیق دلیل اجرا را وارد کن.'],422);
     require_sensitive_confirmation($pdo,$user,$input);
 }
 if($profile==='security') {
@@ -57,5 +62,5 @@ try {
     admin_audit_log($pdo,$user,'qa_test_run_completed','qa_test_run',$runId,'اجرای تست سامانه تکمیل شد.',null,['score_percent'=>$run['score_percent']??null,'failed_count'=>$run['failed_count']??null,'warning_count'=>$run['warning_count']??null]);
     json_response(['success'=>true,'message'=>'تست با موفقیت اجرا شد.','run_id'=>$runId,'run_key'=>$runKey,'run'=>$run]);
 } catch(Throwable $e) {
-    json_response(['success'=>false,'message'=>'اجرای تست ناموفق بود.','error'=>$e->getMessage()],500);
+    json_response(['success'=>false,'message'=>'اجرای تست ناموفق بود.','request_id'=>defined('APP_REQUEST_ID')?APP_REQUEST_ID:null],500);
 }

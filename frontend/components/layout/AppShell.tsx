@@ -314,6 +314,13 @@ export default function AppShell({
                             permission: "tests.view",
                         },
                         {
+                            href: "/super-admin/test-center/security",
+                            label: "امنیت عمیق",
+                            icon: "🔒",
+                            description: "Risk، OWASP و جداسازی Tenant",
+                            permission: "tests.view_security_evidence",
+                        },
+                        {
                             href: "/super-admin/admins",
                             label: "مدیران و نقش‌ها",
                             icon: "ADM",

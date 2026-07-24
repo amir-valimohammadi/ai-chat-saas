@@ -20,4 +20,4 @@ try{
     $pdo->prepare($sql)->execute($params);
     admin_audit_log($pdo,$user,'qa_finding_'.$action,'qa_finding',$id,'وضعیت ایراد مرکز تست تغییر کرد.',['status'=>$before['status']],['status'=>$status,'note'=>$note]);
     json_response(['success'=>true,'message'=>'وضعیت ایراد بروزرسانی شد.','status'=>$status]);
-}catch(Throwable $e){json_response(['success'=>false,'message'=>'بروزرسانی ایراد ناموفق بود.','error'=>$e->getMessage()],500);}
+}catch(Throwable $e){json_response(['success'=>false,'message'=>'بروزرسانی ایراد ناموفق بود.','request_id'=>defined('APP_REQUEST_ID')?APP_REQUEST_ID:null],500);}
