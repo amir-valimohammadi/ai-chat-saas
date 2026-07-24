@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/auth-session.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -115,7 +116,10 @@ try {
         UPDATE users
         SET
             password_hash = :password_hash,
-            token_version = token_version + 1
+            token_version = token_version + 1,
+            must_change_password = 0,
+            failed_login_attempts = 0,
+            locked_until = NULL
         WHERE id = :id
         LIMIT 1
     ");
@@ -124,6 +128,8 @@ try {
         ':password_hash' => $newPasswordHash,
         ':id' => $user['id'],
     ]);
+
+    auth_revoke_sessions($pdo, (int) $user['id'], (int) $user['id'], 'Password changed');
 
     clear_rate_limit(
         $pdo,

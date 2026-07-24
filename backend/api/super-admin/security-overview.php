@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+require_once __DIR__.'/../../includes/cors.php';
+require_once __DIR__.'/../../includes/response.php';
+require_once __DIR__.'/../../config/database.php';
+require_once __DIR__.'/../../includes/auth.php';
+require_once __DIR__.'/../../includes/auth-session.php';
+if($_SERVER['REQUEST_METHOD']!=='GET')json_response(['success'=>false,'message'=>'Method not allowed'],405);
+$actor=require_auth($pdo);require_role($actor,['super_admin']);
+$requested=max(0,(int)($_GET['user_id']??0));$userId=$requested>0?$requested:(int)$actor['id'];
+$targetStmt=$pdo->prepare("SELECT u.id,u.name,u.email,u.is_active,u.two_factor_enabled,u.two_factor_confirmed_at,u.ip_allowlist_enabled,u.locked_until,u.last_login_at,u.last_login_ip,r.code AS admin_role_code,r.name AS admin_role_name FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=:id AND u.role='super_admin' LIMIT 1");$targetStmt->execute([':id'=>$userId]);$target=$targetStmt->fetch();if(!$target)json_response(['success'=>false,'message'=>'مدیر پیدا نشد.'],404);
+$admins=$pdo->query("SELECT u.id,u.name,u.email,r.name AS admin_role_name FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.role='super_admin' ORDER BY u.is_active DESC,u.name")->fetchAll();
+$sessionsStmt=$pdo->prepare("SELECT id,ip_address,user_agent,created_at,last_seen_at,expires_at,revoked_at,revocation_reason,CASE WHEN jti_hash=:current_jti THEN 1 ELSE 0 END AS is_current FROM auth_sessions WHERE user_id=:user_id ORDER BY created_at DESC LIMIT 100");$sessionsStmt->execute([':current_jti'=>$userId===(int)$actor['id']?hash('sha256',(string)$actor['session_jti']):str_repeat('0',64),':user_id'=>$userId]);$sessions=$sessionsStmt->fetchAll();
+$attemptsStmt=$pdo->prepare("SELECT id,email,success,failure_reason,ip_address,user_agent,created_at FROM admin_login_attempts WHERE user_id=:user_id ORDER BY id DESC LIMIT 100");$attemptsStmt->execute([':user_id'=>$userId]);$attempts=$attemptsStmt->fetchAll();
+$eventsStmt=$pdo->prepare("SELECT id,event_type,severity,title,details_json,ip_address,user_agent,resolved_at,resolved_by,created_at FROM admin_security_events WHERE user_id=:user_id OR user_id IS NULL ORDER BY (resolved_at IS NULL) DESC,id DESC LIMIT 100");$eventsStmt->execute([':user_id'=>$userId]);$events=$eventsStmt->fetchAll();foreach($events as &$event){$event['details']=$event['details_json']?json_decode($event['details_json'],true):null;unset($event['details_json']);}unset($event);
+$allowStmt=$pdo->prepare('SELECT id,label,ip_cidr,is_active,created_at,updated_at FROM admin_ip_allowlist WHERE user_id=:user_id ORDER BY is_active DESC,id DESC');$allowStmt->execute([':user_id'=>$userId]);$allowlist=$allowStmt->fetchAll();
+$recoveryStmt=$pdo->prepare('SELECT COUNT(*) FROM admin_two_factor_recovery_codes WHERE user_id=:user_id AND used_at IS NULL');$recoveryStmt->execute([':user_id'=>$userId]);
+$summaryStmt=$pdo->prepare("SELECT (SELECT COUNT(*) FROM auth_sessions WHERE user_id=:u1 AND revoked_at IS NULL AND expires_at>NOW()) active_sessions,(SELECT COUNT(*) FROM admin_login_attempts WHERE user_id=:u2 AND success=0 AND created_at>=DATE_SUB(NOW(),INTERVAL 24 HOUR)) failed_24h,(SELECT COUNT(*) FROM admin_security_events WHERE (user_id=:u3 OR user_id IS NULL) AND resolved_at IS NULL) open_events,(SELECT COUNT(*) FROM admin_security_events WHERE (user_id=:u4 OR user_id IS NULL) AND resolved_at IS NULL AND severity='critical') critical_events");$summaryStmt->execute([':u1'=>$userId,':u2'=>$userId,':u3'=>$userId,':u4'=>$userId]);$summary=$summaryStmt->fetch();
+json_response(['success'=>true,'target_admin'=>$target,'admins'=>$admins,'summary'=>$summary,'sessions'=>$sessions,'login_attempts'=>$attempts,'events'=>$events,'allowlist'=>$allowlist,'two_factor'=>['enabled'=>(bool)$target['two_factor_enabled'],'confirmed_at'=>$target['two_factor_confirmed_at'],'unused_recovery_codes'=>(int)$recoveryStmt->fetchColumn()],'current_ip'=>auth_client_ip(),'can_manage'=>admin_has_permission($actor,'security.manage'),'is_self'=>$userId===(int)$actor['id']]);

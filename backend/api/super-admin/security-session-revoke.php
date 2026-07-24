@@ -1,0 +1,6 @@
+<?php
+
+declare(strict_types=1);
+require_once __DIR__.'/../../includes/cors.php';require_once __DIR__.'/../../includes/response.php';require_once __DIR__.'/../../includes/helpers.php';require_once __DIR__.'/../../config/database.php';require_once __DIR__.'/../../includes/auth.php';require_once __DIR__.'/../../includes/auth-session.php';require_once __DIR__.'/../../includes/admin-audit.php';require_once __DIR__.'/../../includes/admin-access.php';
+if($_SERVER['REQUEST_METHOD']!=='POST')json_response(['success'=>false,'message'=>'Method not allowed'],405);$actor=require_auth($pdo);require_role($actor,['super_admin']);$in=get_json_input();require_sensitive_confirmation($pdo,$actor,$in);$userId=(int)($in['user_id']??0);$sessionId=isset($in['session_id'])?(int)$in['session_id']:null;if($userId<=0)json_response(['success'=>false,'message'=>'شناسه مدیر نامعتبر است.'],422);
+$count=auth_revoke_sessions($pdo,$userId,(int)$actor['id'],'Revoked by platform administrator',$sessionId&&$sessionId>0?$sessionId:null);admin_audit_log($pdo,$actor,'security.session_revoked','auth_session',$sessionId&&$sessionId>0?$sessionId:null,'نشست مدیر لغو شد',null,['target_user_id'=>$userId,'revoked_count'=>$count],['target_user_id'=>$userId]);json_response(['success'=>true,'message'=>$count>0?'نشست لغو شد.':'نشست فعالی پیدا نشد.','revoked_count'=>$count]);

@@ -138,6 +138,11 @@ export default function SecurityPage() {
                         <div className="security-lock-icon">🔐</div>
                     </div>
 
+                    {user?.must_change_password && (
+                        <div className="error">
+                            مدیر سیستم تغییر رمز عبور را برای این حساب اجباری کرده است. برای ادامه کار، رمز جدید ثبت کنید.
+                        </div>
+                    )}
                     {message && <div className="success">{message}</div>}
                     {error && <div className="error">{error}</div>}
 

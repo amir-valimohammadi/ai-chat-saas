@@ -20,6 +20,9 @@ const forbiddenInGlobals = [
   /\.request-(?:stats|stat|filter|list|table|detail|person|purpose|status|priority|date|open|pagination|event|info|note|timeline|manage|meta|website|description|contact|method|whatsapp)[a-z0-9_-]*/i,
   /\.platform-[a-z0-9_-]+/i,
   /\.ops-[a-z0-9_-]+/i,
+  /\.admin-access-[a-z0-9_-]+/i,
+  /\.admin-role-[a-z0-9_-]+/i,
+  /\.security-center-[a-z0-9_-]+/i,
 ];
 
 for (const pattern of forbiddenInGlobals) {
@@ -55,6 +58,8 @@ if (!fs.existsSync(adminStylesDir)) {
     "requests.css",
     "announcements.css",
     "system-health.css",
+    "admins.css",
+    "security-center.css",
   ];
   for (const file of required) {
     if (!fs.existsSync(path.join(adminStylesDir, file))) {

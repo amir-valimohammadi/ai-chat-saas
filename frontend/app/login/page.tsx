@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest, saveAuth } from "@/lib/api";
+import styles from "@/styles/login-two-factor.module.css";
 
 function EyeIcon({ visible }: { visible: boolean }) {
     return (
@@ -20,6 +21,8 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [challengeToken, setChallengeToken] = useState("");
+    const [twoFactorCode, setTwoFactorCode] = useState("");
 
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -27,13 +30,32 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const data = await apiRequest("/auth/login.php", {
-                method: "POST",
-                auth: false,
-                body: JSON.stringify({ email: email.trim(), password }),
-            });
+            const data = challengeToken
+                ? await apiRequest("/auth/verify-2fa.php", {
+                    method: "POST",
+                    auth: false,
+                    body: JSON.stringify({
+                        challenge_token: challengeToken,
+                        code: twoFactorCode.trim(),
+                    }),
+                })
+                : await apiRequest("/auth/login.php", {
+                    method: "POST",
+                    auth: false,
+                    body: JSON.stringify({ email: email.trim(), password }),
+                });
+
+            if (data.requires_2fa) {
+                setChallengeToken(data.challenge_token);
+                setTwoFactorCode("");
+                return;
+            }
 
             saveAuth(data.token, data.user);
+            if (data.user.must_change_password) {
+                router.push("/security?required=1");
+                return;
+            }
             router.push(data.user.role === "super_admin" ? "/super-admin/dashboard" : "/dashboard");
         } catch (err) {
             setError(err instanceof Error ? err.message : "ورود ناموفق بود. اطلاعات را دوباره بررسی کنید.");
@@ -108,6 +130,17 @@ export default function LoginPage() {
                         )}
 
                         <form onSubmit={handleSubmit} className="login-v2-form">
+                            {challengeToken ? (
+                                <div className={styles.challengeBox}>
+                                    <div className={styles.challengeIcon}>2FA</div>
+                                    <div>
+                                        <strong>تأیید ورود دومرحله‌ای</strong>
+                                        <p>کد ۶ رقمی Authenticator یا یکی از کدهای بازیابی را وارد کنید.</p>
+                                    </div>
+                                </div>
+                            ) : null}
+
+                            {!challengeToken ? <>
                             <label>
                                 <span>ایمیل</span>
                                 <div className="login-v2-input-wrap">
@@ -146,9 +179,32 @@ export default function LoginPage() {
                                 <label className="login-v2-checkbox"><input type="checkbox"/><span/> مرا به خاطر بسپار</label>
                                 <small>بازیابی رمز توسط مدیر سیستم</small>
                             </div>
+                            </> : (
+                                <label>
+                                    <span>کد امنیتی</span>
+                                    <div className="login-v2-input-wrap">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3 5 6v5c0 4.7 2.8 8.2 7 10 4.2-1.8 7-5.3 7-10V6l-7-3Z"/><path d="m9.5 12 1.6 1.6 3.4-3.5"/></svg>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            autoComplete="one-time-code"
+                                            value={twoFactorCode}
+                                            onChange={(event) => setTwoFactorCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
+                                            placeholder="123456"
+                                            required
+                                            autoFocus
+                                            dir="ltr"
+                                            className={styles.codeInput}
+                                        />
+                                    </div>
+                                    <button type="button" className={styles.backButton} onClick={() => { setChallengeToken(""); setTwoFactorCode(""); setError(""); }}>
+                                        بازگشت و ورود با حساب دیگر
+                                    </button>
+                                </label>
+                            )}
 
                             <button className="login-v2-submit" type="submit" disabled={loading}>
-                                {loading ? <><i className="login-v2-spinner"/> در حال بررسی اطلاعات...</> : <>ورود به فضای کاری <span>←</span></>}
+                                {loading ? <><i className="login-v2-spinner"/> در حال بررسی اطلاعات...</> : challengeToken ? <>تأیید و ورود <span>←</span></> : <>ورود به فضای کاری <span>←</span></>}
                             </button>
                         </form>
 

@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/auth-session.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -113,6 +114,8 @@ try {
             ':is_active_for_status' => $isActive ? 1 : 0,
             ':user_id' => $userId,
         ]);
+
+        auth_revoke_sessions($pdo, (int) $userId, (int) $user['id'], 'User status changed by platform administrator');
 
         admin_audit_log(
             $pdo,

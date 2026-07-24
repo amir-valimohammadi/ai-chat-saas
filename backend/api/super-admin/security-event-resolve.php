@@ -1,0 +1,5 @@
+<?php
+
+declare(strict_types=1);
+require_once __DIR__.'/../../includes/cors.php';require_once __DIR__.'/../../includes/response.php';require_once __DIR__.'/../../includes/helpers.php';require_once __DIR__.'/../../config/database.php';require_once __DIR__.'/../../includes/auth.php';require_once __DIR__.'/../../includes/admin-audit.php';
+if($_SERVER['REQUEST_METHOD']!=='POST')json_response(['success'=>false,'message'=>'Method not allowed'],405);$actor=require_auth($pdo);require_role($actor,['super_admin']);$in=get_json_input();$id=(int)($in['id']??0);$resolved=!empty($in['resolved']);if($id<=0)json_response(['success'=>false,'message'=>'شناسه رویداد نامعتبر است.'],422);$stmt=$pdo->prepare('UPDATE admin_security_events SET resolved_at=:resolved_at,resolved_by=:resolved_by WHERE id=:id');$stmt->execute([':resolved_at'=>$resolved?date('Y-m-d H:i:s'):null,':resolved_by'=>$resolved?(int)$actor['id']:null,':id'=>$id]);admin_audit_log($pdo,$actor,'security.event_resolution_changed','security_event',$id,'وضعیت رویداد امنیتی تغییر کرد',null,['resolved'=>$resolved]);json_response(['success'=>true,'message'=>'وضعیت رویداد ثبت شد.']);

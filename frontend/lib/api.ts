@@ -231,6 +231,22 @@ export function logout() {
   clearAuthStorage();
 }
 
+
+export function updateAuthUser(user: unknown) {
+  if (typeof window === "undefined" || !user) {
+    return;
+  }
+  localStorage.setItem("auth_user", JSON.stringify(user));
+}
+
+export async function logoutCurrentDevice() {
+  try {
+    await apiRequest("/auth/logout-current.php", { method: "POST" });
+  } finally {
+    logout();
+  }
+}
+
 export async function changePassword(payload: {
   current_password: string;
   new_password: string;

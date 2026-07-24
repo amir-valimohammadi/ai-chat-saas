@@ -11,6 +11,7 @@ import {
     apiRequest,
     getAuthUser,
     logout,
+    logoutCurrentDevice,
     MAINTENANCE_MODE_EVENT,
     type MaintenanceModeDetails,
 } from "@/lib/api";
@@ -26,9 +27,14 @@ type AppShellProps = {
 type UserRole = "super_admin" | "customer_admin" | "agent";
 
 type User = {
+    id?: number;
     name: string;
     email: string;
     role: UserRole;
+    permissions?: string[];
+    admin_role_name?: string | null;
+    is_platform_owner?: boolean;
+    must_change_password?: boolean;
 };
 
 type NavLink = {
@@ -36,6 +42,7 @@ type NavLink = {
     label: string;
     icon: string;
     description?: string;
+    permission?: string;
 };
 
 type NavGroup = {
@@ -73,7 +80,11 @@ export default function AppShell({
         }
 
         setUser(authUser);
-    }, [router]);
+
+        if (authUser.must_change_password && pathname !== "/security") {
+            router.replace("/security?required=1");
+        }
+    }, [pathname, router]);
 
     useEffect(() => {
         if (!user || user.role === "super_admin") {
@@ -192,6 +203,12 @@ export default function AppShell({
             return [];
         }
 
+        const can = (permission?: string) => {
+            if (!permission) return true;
+            const permissions = user.permissions ?? [];
+            return Boolean(user.is_platform_owner) || permissions.includes("*") || permissions.includes(permission);
+        };
+
         const accountLinks: NavLink[] = [
             {
                 href: "/security",
@@ -211,68 +228,93 @@ export default function AppShell({
                             label: "داشبورد",
                             icon: "⌂",
                             description: "نمای کلی سیستم",
+                            permission: "dashboard.view",
                         },
                         {
                             href: "/super-admin/contact-requests",
                             label: "درخواست‌ها",
                             icon: "✉",
                             description: "مشاوره، خرید و راه‌اندازی",
+                            permission: "requests.view",
                         },
                         {
                             href: "/super-admin/customers",
                             label: "مشتری‌ها",
                             icon: "👥",
                             description: "حساب‌های مشتریان",
+                            permission: "customers.view",
                         },
                         {
                             href: "/super-admin/customers/create",
                             label: "ایجاد مشتری",
                             icon: "+",
                             description: "ساخت حساب جدید",
+                            permission: "customers.manage",
                         },
                         {
                             href: "/super-admin/sites",
                             label: "سایت‌ها",
                             icon: "◎",
                             description: "سایت‌های ثبت‌شده",
+                            permission: "sites.view",
                         },
                         {
                             href: "/super-admin/plans",
                             label: "پلن‌ها",
                             icon: "◆",
                             description: "مدیریت پلن‌ها",
+                            permission: "plans.view",
                         },
                         {
                             href: "/super-admin/subscriptions",
                             label: "اشتراک‌ها",
                             icon: "◷",
                             description: "انقضا، تمدید و پرداخت‌ها",
+                            permission: "billing.view",
                         },
                         {
                             href: "/super-admin/ai-monitoring",
                             label: "نظارت AI",
                             icon: "AI",
                             description: "مصرف و کیفیت پاسخ‌ها",
+                            permission: "ai.view",
                         },
                         {
                             href: "/super-admin/system-health",
                             label: "سلامت سیستم",
                             icon: "SYS",
                             description: "سرویس‌ها، خطاها و Jobها",
+                            permission: "operations.view",
+                        },
+                        {
+                            href: "/super-admin/admins",
+                            label: "مدیران و نقش‌ها",
+                            icon: "ADM",
+                            description: "حساب‌ها، نقش‌ها و مجوزها",
+                            permission: "admins.view",
+                        },
+                        {
+                            href: "/super-admin/security-center",
+                            label: "مرکز امنیت",
+                            icon: "SEC",
+                            description: "نشست‌ها، ورودها و 2FA",
+                            permission: "security.view",
                         },
                         {
                             href: "/super-admin/audit-logs",
                             label: "گزارش فعالیت‌ها",
                             icon: "LOG",
                             description: "تغییرات حساس مدیران",
+                            permission: "audit.view",
                         },
                         {
                             href: "/super-admin/announcements",
                             label: "اعلان‌ها",
                             icon: "🔔",
                             description: "ارسال پیام به مشتریان",
+                            permission: "announcements.view",
                         },
-                    ],
+                    ].filter((link) => can(link.permission)),
                 },
                 {
                     title: "حساب کاربری",
@@ -398,8 +440,12 @@ export default function AppShell({
         ];
     }, [user]);
 
-    function handleLogout() {
-        logout();
+    async function handleLogout() {
+        try {
+            await logoutCurrentDevice();
+        } catch {
+            logout();
+        }
         router.push("/login");
     }
 
@@ -450,7 +496,7 @@ export default function AppShell({
                 <div className="sidebar-role-card">
                     <span className="role-dot" />
                     <div>
-                        <strong>{roleLabels[user.role]}</strong>
+                        <strong>{user.role === "super_admin" && user.admin_role_name ? user.admin_role_name : roleLabels[user.role]}</strong>
                         <p>
                             {user.role === "super_admin"
                                 ? "مدیریت کل سیستم"
