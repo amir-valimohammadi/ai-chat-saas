@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/contact-requests.php';
 require_once __DIR__ . '/../../includes/hosted-support.php';
 require_once __DIR__ . '/../../includes/routing.php';
+require_once __DIR__ . '/../../includes/customer-360.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -394,6 +395,9 @@ try {
     ]);
 
     $adminUserId = (int) $pdo->lastInsertId();
+
+    customer360_ensure_onboarding($pdo, $tenantId);
+    customer360_sync_detectable_onboarding($pdo, $tenantId);
 
     $subscriptionStmt = $pdo->prepare("\n        INSERT INTO tenant_subscriptions (\n            tenant_id, plan_id, status, billing_cycle, starts_at, ends_at,\n            auto_renew, price, currency, created_by\n        ) VALUES (\n            :tenant_id, :plan_id, 'active', 'manual', NOW(),\n            DATE_ADD(NOW(), INTERVAL 1 YEAR), 0, :price, 'IRR', :created_by\n        )\n    ");
     $subscriptionStmt->execute([

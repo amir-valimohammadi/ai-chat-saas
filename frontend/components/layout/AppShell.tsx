@@ -7,11 +7,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import MaintenanceOverlay from "@/components/system/MaintenanceOverlay";
+import ImpersonationBanner from "@/components/auth/ImpersonationBanner";
 import {
     apiRequest,
     getAuthUser,
     logout,
     logoutCurrentDevice,
+    clearImpersonationAuth,
     MAINTENANCE_MODE_EVENT,
     type MaintenanceModeDetails,
 } from "@/lib/api";
@@ -35,6 +37,10 @@ type User = {
     admin_role_name?: string | null;
     is_platform_owner?: boolean;
     must_change_password?: boolean;
+    is_impersonating?: boolean;
+    impersonation_id?: number;
+    impersonator_name?: string | null;
+    impersonation_expires_at?: string | null;
 };
 
 type NavLink = {
@@ -245,6 +251,13 @@ export default function AppShell({
                             permission: "customers.view",
                         },
                         {
+                            href: "/super-admin/search",
+                            label: "جست‌وجوی سراسری",
+                            icon: "⌕",
+                            description: "مشتری، سایت، کاربر و گفتگو",
+                            permission: "customers.view",
+                        },
+                        {
                             href: "/super-admin/customers/create",
                             label: "ایجاد مشتری",
                             icon: "+",
@@ -441,6 +454,17 @@ export default function AppShell({
     }, [user]);
 
     async function handleLogout() {
+        if (user?.is_impersonating) {
+            try {
+                await apiRequest("/auth/impersonation-stop.php", { method: "POST" });
+            } catch {
+                // نشست موقت در سمت کاربر نیز پاک می‌شود تا تب قفل نماند.
+            }
+            clearImpersonationAuth();
+            window.location.href = "/impersonate?ended=1";
+            return;
+        }
+
         try {
             await logoutCurrentDevice();
         } catch {
@@ -478,7 +502,13 @@ export default function AppShell({
     }
 
     return (
-        <div className="app-shell app-shell-pro">
+        <div className={`app-shell app-shell-pro ${user.is_impersonating ? "has-impersonation" : ""}`}>
+            {user.is_impersonating && (
+                <ImpersonationBanner
+                    impersonatorName={user.impersonator_name}
+                    expiresAt={user.impersonation_expires_at}
+                />
+            )}
             <aside className="sidebar sidebar-pro">
                 <div className="sidebar-brand sidebar-brand-pro">
                     <div className="sidebar-logo">AI</div>

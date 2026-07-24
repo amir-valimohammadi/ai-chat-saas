@@ -17,4 +17,11 @@ $stmt->execute([
     ':user_id' => (int) $user['id'],
     ':jti_hash' => hash('sha256', (string) $user['session_jti']),
 ]);
+if (!empty($user['is_impersonating']) && !empty($user['impersonation_id'])) {
+    $endStmt = $pdo->prepare("UPDATE admin_impersonations SET status='ended',ended_at=NOW(),ended_by=:admin WHERE id=:id AND status='active'");
+    $endStmt->execute([
+        ':admin' => (int) ($user['impersonator_user_id'] ?? 0),
+        ':id' => (int) $user['impersonation_id'],
+    ]);
+}
 json_response(['success' => true, 'message' => 'از حساب خارج شدید.']);

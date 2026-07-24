@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../includes/admin-management.php';
 require_once __DIR__ . '/../../includes/security-events.php';
+require_once __DIR__ . '/../../includes/admin-impersonation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['success' => false, 'message' => 'Method not allowed'], 405);
@@ -92,6 +93,7 @@ try {
         ]);
         if ($securityChanged) {
             auth_revoke_sessions($pdo, $id, (int) $actor['id'], 'Admin email, role or password policy changed');
+            admin_impersonation_revoke_for_admin($pdo, $id, (int) $actor['id'], 'Administrator security settings changed');
         }
         admin_audit_log($pdo, $actor, 'admin.updated', 'admin_user', $id, 'اطلاعات یا نقش مدیر تغییر کرد', $old, [
             'name' => $name,'email' => $email,'phone' => $phone,'admin_role_id' => $roleId,'must_change_password' => (bool) $mustChange,

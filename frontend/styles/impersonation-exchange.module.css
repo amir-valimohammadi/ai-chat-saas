@@ -1,0 +1,7 @@
+.page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top, #ede9fe, #f8fafc 55%); direction: rtl; }
+.card { width: min(460px, 100%); padding: 34px; text-align: center; border: 1px solid rgba(148,163,184,.25); border-radius: 24px; background: rgba(255,255,255,.88); box-shadow: 0 28px 70px rgba(30,41,59,.15); backdrop-filter: blur(16px); }
+.logo { width: 58px; height: 58px; margin: 0 auto 18px; display: grid; place-items: center; border-radius: 18px; color: #fff; font-weight: 800; background: linear-gradient(135deg,#7c3aed,#2563eb); }
+.card h1 { margin: 0 0 10px; font-size: 24px; color: #0f172a; }
+.card p { margin: 0; color: #475569; line-height: 1.8; }
+.card p.error { color: #b91c1c; }
+.card button { margin-top: 20px; padding: 10px 18px; border: 0; border-radius: 12px; background: #1e293b; color: #fff; font: inherit; cursor: pointer; }

@@ -15,10 +15,11 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
+import Customer360Panel from "@/components/super-admin/Customer360Panel";
 
 type TenantStatus = "active" | "inactive" | "suspended";
 type AiMode = "off" | "assistant" | "semi_auto";
-type DetailTab = "overview" | "sites" | "users" | "activity";
+type DetailTab = "overview" | "customer360" | "sites" | "users" | "activity";
 
 type Tenant = {
     id: number;
@@ -223,6 +224,14 @@ const roleLabels: Record<UserItem["role"], string> = {
     agent: "پشتیبان",
 };
 
+function readRequestedDetailTab(): DetailTab {
+    if (typeof window === "undefined") return "overview";
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return ["overview", "customer360", "sites", "users", "activity"].includes(requested || "")
+        ? (requested as DetailTab)
+        : "overview";
+}
+
 const numberFormatter = new Intl.NumberFormat("fa-IR");
 const currencyFormatter = new Intl.NumberFormat("fa-IR", {
     maximumFractionDigits: 0,
@@ -241,6 +250,10 @@ export default function SuperAdminCustomerDetailPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+
+    useEffect(() => {
+        setActiveTab(readRequestedDetailTab());
+    }, []);
 
     const [selectedStatus, setSelectedStatus] = useState<TenantStatus>("active");
     const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -637,13 +650,17 @@ export default function SuperAdminCustomerDetailPage() {
                             activityCount={data.recent_conversations.length}
                         />
 
-                        <div className="sa-customer-detail-layout">
+                        <div className={`sa-customer-detail-layout ${activeTab === "customer360" ? "is-customer360" : ""}`}>
                             <main className="sa-customer-detail-main">
                                 {activeTab === "overview" && (
                                     <OverviewTab
                                         data={data}
                                         onGoToTab={setActiveTab}
                                     />
+                                )}
+
+                                {activeTab === "customer360" && (
+                                    <Customer360Panel tenantId={tenantId} />
                                 )}
 
                                 {activeTab === "sites" && (
@@ -677,20 +694,22 @@ export default function SuperAdminCustomerDetailPage() {
                                 )}
                             </main>
 
-                            <aside className="sa-customer-detail-sidebar">
-                                <ManagementCard
-                                    data={data}
-                                    selectedStatus={selectedStatus}
-                                    selectedPlanId={selectedPlanId}
-                                    savingAction={savingCustomerAction}
-                                    onStatusChange={setSelectedStatus}
-                                    onPlanChange={setSelectedPlanId}
-                                    onSaveStatus={updateCustomerStatus}
-                                    onSavePlan={updateCustomerPlan}
-                                />
+                            {activeTab !== "customer360" && (
+                                <aside className="sa-customer-detail-sidebar">
+                                    <ManagementCard
+                                        data={data}
+                                        selectedStatus={selectedStatus}
+                                        selectedPlanId={selectedPlanId}
+                                        savingAction={savingCustomerAction}
+                                        onStatusChange={setSelectedStatus}
+                                        onPlanChange={setSelectedPlanId}
+                                        onSaveStatus={updateCustomerStatus}
+                                        onSavePlan={updateCustomerPlan}
+                                    />
 
-                                <AccountInfoCard tenant={data.tenant} />
-                            </aside>
+                                    <AccountInfoCard tenant={data.tenant} />
+                                </aside>
+                            )}
                         </div>
                     </>
                 )}
@@ -812,6 +831,7 @@ function DetailTabs({
         count?: number;
     }> = [
         { id: "overview", label: "نمای کلی", icon: "building" },
+        { id: "customer360", label: "پرونده ۳۶۰", icon: "settings" },
         { id: "sites", label: "سایت‌ها", icon: "site", count: sitesCount },
         { id: "users", label: "کاربران", icon: "users", count: usersCount },
         {

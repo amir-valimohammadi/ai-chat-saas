@@ -65,8 +65,19 @@ function maintenanceDetailsFromPayload(data: any): MaintenanceModeDetails {
   };
 }
 
+function hasImpersonationSession() {
+  return typeof window !== "undefined" && Boolean(sessionStorage.getItem("impersonation_auth_token"));
+}
+
 function clearAuthStorage() {
   if (typeof window === "undefined") {
+    return;
+  }
+
+  if (hasImpersonationSession()) {
+    sessionStorage.removeItem("impersonation_auth_token");
+    sessionStorage.removeItem("impersonation_auth_user");
+    sessionStorage.removeItem("impersonation_active");
     return;
   }
 
@@ -75,8 +86,7 @@ function clearAuthStorage() {
 }
 
 export async function apiRequest(path: string, options: ApiOptions = {}) {
-  const token =
-      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const token = getAuthToken();
 
   const isFormData =
       typeof FormData !== "undefined" && options.body instanceof FormData;
@@ -107,13 +117,15 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
   }
 
   if (response.status === 401) {
+    const wasImpersonating = hasImpersonationSession();
     clearAuthStorage();
 
-    if (
-        typeof window !== "undefined" &&
-        window.location.pathname !== "/login"
-    ) {
-      window.location.href = "/login";
+    if (typeof window !== "undefined") {
+      if (wasImpersonating) {
+        window.location.href = "/impersonate?ended=1";
+      } else if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
 
     throw new Error(data?.message || "نشست شما منقضی شده است. دوباره وارد شوید.");
@@ -141,8 +153,7 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
 }
 
 export async function apiDownload(path: string, fallbackFilename = "download") {
-  const token =
-      typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const token = getAuthToken();
 
   const headers = new Headers();
   if (token) {
@@ -152,9 +163,10 @@ export async function apiDownload(path: string, fallbackFilename = "download") {
   const response = await fetch(`${API_BASE_URL}${path}`, { headers });
 
   if (response.status === 401) {
+    const wasImpersonating = hasImpersonationSession();
     clearAuthStorage();
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.href = wasImpersonating ? "/impersonate?ended=1" : "/login";
     }
     throw new Error("نشست شما منقضی شده است. دوباره وارد شوید.");
   }
@@ -206,7 +218,7 @@ export function getAuthToken() {
     return null;
   }
 
-  return localStorage.getItem("auth_token");
+  return sessionStorage.getItem("impersonation_auth_token") || localStorage.getItem("auth_token");
 }
 
 export function getAuthUser() {
@@ -214,7 +226,7 @@ export function getAuthUser() {
     return null;
   }
 
-  const value = localStorage.getItem("auth_user");
+  const value = sessionStorage.getItem("impersonation_auth_user") || localStorage.getItem("auth_user");
 
   if (!value) {
     return null;
@@ -236,7 +248,31 @@ export function updateAuthUser(user: unknown) {
   if (typeof window === "undefined" || !user) {
     return;
   }
-  localStorage.setItem("auth_user", JSON.stringify(user));
+  if (hasImpersonationSession()) {
+    sessionStorage.setItem("impersonation_auth_user", JSON.stringify(user));
+  } else {
+    localStorage.setItem("auth_user", JSON.stringify(user));
+  }
+}
+
+export function saveImpersonationAuth(token: string, user: unknown) {
+  if (typeof window === "undefined" || !token || !user) {
+    throw new Error("اطلاعات ورود موقت ناقص است.");
+  }
+  sessionStorage.setItem("impersonation_auth_token", token);
+  sessionStorage.setItem("impersonation_auth_user", JSON.stringify(user));
+  sessionStorage.setItem("impersonation_active", "1");
+}
+
+export function clearImpersonationAuth() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem("impersonation_auth_token");
+  sessionStorage.removeItem("impersonation_auth_user");
+  sessionStorage.removeItem("impersonation_active");
+}
+
+export function isImpersonationSession() {
+  return hasImpersonationSession();
 }
 
 export async function logoutCurrentDevice() {

@@ -13,6 +13,8 @@ import "../../styles/super-admin/announcements.css";
 import "../../styles/super-admin/system-health.css";
 import "../../styles/super-admin/admins.css";
 import "../../styles/super-admin/security-center.css";
+import "../../styles/super-admin/customer-360.css";
+import "../../styles/super-admin/global-search.css";
 
 export default function SuperAdminLayout({
     children,
