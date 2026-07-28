@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
@@ -302,97 +302,458 @@ export default function ConversationsPage() {
         files: conversations.reduce((sum, item) => sum + item.attachment_count, 0),
     }), [conversations, pagination.total]);
 
+    const activeFilterCount = useMemo(() => {
+        return Object.entries(filters).reduce((count, [key, value]) => {
+            if (key === "archived") return count + (value === "0" ? 0 : 1);
+            if (typeof value === "boolean") return count + (value ? 1 : 0);
+            return count + (value ? 1 : 0);
+        }, 0);
+    }, [filters]);
+
     const allSelected = conversations.length > 0 && conversations.every((item) => selectedIds.includes(item.id));
 
     return (
         <AppShell
             title="گفتگوها"
-            kicker="Advanced Inbox"
-            description="جست‌وجو، فیلتر، اولویت‌بندی، آرشیو و مدیریت گروهی مکالمات"
-            actions={<div className="conversations-header-actions">
-                <button className="btn secondary" onClick={() => notifications.toggleSound()}>{notifications.preferences.sound_enabled ? "🔔 صدا روشن" : "🔕 صدا خاموش"}</button>
-                <div className={`presence-control ${availabilityStatus}`}><span className="presence-dot" /><select className="presence-select" value={availabilityStatus} onChange={(event) => updatePresence(event.target.value as "online" | "offline")} disabled={presenceLoading}><option value="online">Online</option><option value="offline">Offline</option></select></div>
-                <button className="btn secondary" onClick={exportCsv}>خروجی CSV</button>
-                <button className="btn secondary" onClick={() => loadConversations(true)} disabled={refreshing}>{refreshing ? "در حال بروزرسانی..." : "بروزرسانی"}</button>
-            </div>}
+            kicker="صندوق پشتیبانی"
+            description="پیام‌های مشتریان را سریع پیدا، اولویت‌بندی و مدیریت کنید."
+            actions={
+                <div className="conversations-header-actions">
+                    <button
+                        className="btn secondary conversations-action-btn"
+                        onClick={() => notifications.toggleSound()}
+                        type="button"
+                    >
+                        <ConversationIcon name={notifications.preferences.sound_enabled ? "bell" : "bellOff"} />
+                        <span>{notifications.preferences.sound_enabled ? "صدای اعلان روشن" : "صدای اعلان خاموش"}</span>
+                    </button>
+
+                    <label className={`presence-control ${availabilityStatus}`}>
+                        <span className="presence-dot" />
+                        <span className="presence-label">وضعیت من</span>
+                        <select
+                            className="presence-select"
+                            value={availabilityStatus}
+                            onChange={(event) => updatePresence(event.target.value as "online" | "offline")}
+                            disabled={presenceLoading}
+                            aria-label="وضعیت حضور"
+                        >
+                            <option value="online">آنلاین</option>
+                            <option value="offline">آفلاین</option>
+                        </select>
+                    </label>
+
+                    <button className="btn secondary conversations-icon-action" onClick={exportCsv} type="button">
+                        <ConversationIcon name="download" />
+                        <span>خروجی</span>
+                    </button>
+
+                    <button
+                        className="btn secondary conversations-icon-action"
+                        onClick={() => loadConversations(true)}
+                        disabled={refreshing}
+                        type="button"
+                    >
+                        <ConversationIcon name="refresh" className={refreshing ? "is-spinning" : ""} />
+                        <span>{refreshing ? "در حال بروزرسانی" : "بروزرسانی"}</span>
+                    </button>
+                </div>
+            }
         >
             <div className="conversations-page-shell">
-                <section className="conversations-command-card">
-                    <div><span className="conversations-eyebrow">Search & Operations</span><h2>هر گفتگو را در چند ثانیه پیدا کن</h2><p>جست‌وجو در متن پیام‌ها، فایل‌ها و مشخصات مخاطب روی سرور انجام می‌شود و به ۱۰۰ گفتگوی آخر محدود نیست.</p></div>
-                    <div className="conversations-command-status"><span>نتیجه فیلتر</span><strong>{pagination.total}</strong><small>صفحه {pagination.page} از {pagination.pages}</small></div>
-                </section>
-
-                <section className="conversations-kpi-strip">
-                    <InboxKpi label="کل نتایج" value={stats.total} />
-                    <InboxKpi label="خوانده‌نشده این صفحه" value={stats.unread} tone={stats.unread ? "danger" : "default"} />
-                    <InboxKpi label="فوری" value={stats.urgent} tone={stats.urgent ? "danger" : "default"} />
-                    <InboxKpi label="بدون مسئول" value={stats.unassigned} tone={stats.unassigned ? "warning" : "default"} />
-                    <InboxKpi label="سنجاق‌شده" value={stats.pinned} tone="primary" />
-                    <InboxKpi label="فایل‌ها" value={stats.files} />
-                </section>
-
-                {notice && <div className="success">{notice}</div>}
-                {error && <div className="error">{error}</div>}
-
-                <section className="conversations-inbox-card">
-                    <div className="phase4-search-row">
-                        <div className="conversations-search-wrap"><span>جست‌وجوی سراسری</span><input className="input" value={filters.q} onChange={(event) => changeFilter("q", event.target.value)} placeholder="متن پیام، نام فایل، نام، ایمیل، تلفن، سایت یا شناسه..." /></div>
-                        <select className="input" value={filters.status} onChange={(event) => changeFilter("status", event.target.value as StatusFilter)}>{statusFilters.map((item) => <option key={item.value || "all"} value={item.value}>{item.label}</option>)}</select>
-                        <select className="input" value={filters.archived} onChange={(event) => changeFilter("archived", event.target.value as Filters["archived"])}><option value="0">Inbox فعال</option><option value="1">آرشیو</option><option value="all">فعال و آرشیو</option></select>
-                        <button className="btn secondary" type="button" onClick={() => setShowAdvanced((value) => !value)}>{showAdvanced ? "بستن فیلترها" : "فیلتر پیشرفته"}</button>
-                        <button className="btn secondary" type="button" onClick={() => { setFilters(initialFilters); setPage(1); }}>پاک‌کردن</button>
+                <section className="conversations-overview-card">
+                    <div className="conversations-overview-copy">
+                        <span className="conversations-eyebrow">
+                            <ConversationIcon name="inbox" />
+                            مرکز مدیریت پیام‌ها
+                        </span>
+                        <h2>گفتگوهای مهم را از دست ندهید</h2>
+                        <p>
+                            پیام‌های جدید، گفتگوهای فوری و مکالمات بدون مسئول را از یک نمای واحد مدیریت کنید.
+                        </p>
+                        <div className="conversations-overview-meta">
+                            <span><ConversationIcon name="search" /> جست‌وجو در متن، فایل و اطلاعات مشتری</span>
+                            <span><ConversationIcon name="filter" /> فیلترهای دقیق و عملیات گروهی</span>
+                        </div>
                     </div>
 
-                    {showAdvanced && <div className="phase4-advanced-filters">
-                        <label><span>اولویت</span><select className="input" value={filters.priority} onChange={(event) => changeFilter("priority", event.target.value as Priority)}><option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="normal">عادی</option><option value="low">کم</option></select></label>
-                        <label><span>پشتیبان</span><select className="input" value={filters.assigned_agent_id} onChange={(event) => changeFilter("assigned_agent_id", event.target.value)}><option value="">همه</option>{options.agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
-                        <label><span>دپارتمان</span><select className="input" value={filters.department_id} onChange={(event) => changeFilter("department_id", event.target.value)}><option value="">همه</option>{options.departments.filter((department) => !filters.site_id || department.site_id === Number(filters.site_id)).map((department) => <option key={department.id} value={department.id}>{department.name} · {department.site_name}</option>)}</select></label>
-                        <label><span>سایت</span><select className="input" value={filters.site_id} onChange={(event) => changeFilter("site_id", event.target.value)}><option value="">همه</option>{options.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
-                        <label><span>از تاریخ</span><input className="input" type="date" value={filters.date_from} onChange={(event) => changeFilter("date_from", event.target.value)} /></label>
-                        <label><span>تا تاریخ</span><input className="input" type="date" value={filters.date_to} onChange={(event) => changeFilter("date_to", event.target.value)} /></label>
-                        <div className="phase4-check-filters">
-                            <FilterCheck label="خوانده‌نشده" checked={filters.unread} onChange={(value) => changeFilter("unread", value)} />
-                            <FilterCheck label="بدون مسئول" checked={filters.unassigned} onChange={(value) => changeFilter("unassigned", value)} />
-                            <FilterCheck label="سنجاق‌شده" checked={filters.pinned} onChange={(value) => changeFilter("pinned", value)} />
-                            <FilterCheck label="در صف انتظار" checked={filters.queued} onChange={(value) => changeFilter("queued", value)} />
-                            <FilterCheck label="دارای فایل" checked={filters.has_file} onChange={(value) => changeFilter("has_file", value)} />
-                            <FilterCheck label="دارای صوت" checked={filters.has_voice} onChange={(value) => changeFilter("has_voice", value)} />
-                            <FilterCheck label="یادداشت داخلی" checked={filters.has_internal_note} onChange={(value) => changeFilter("has_internal_note", value)} />
-                            <FilterCheck label="منشن من" checked={filters.has_mention} onChange={(value) => changeFilter("has_mention", value)} />
+                    <div className="conversations-overview-result">
+                        <span>نتیجه فعلی</span>
+                        <strong>{pagination.total}</strong>
+                        <small>صفحه {pagination.page} از {pagination.pages}</small>
+                        {activeFilterCount > 0 && <b>{activeFilterCount} فیلتر فعال</b>}
+                    </div>
+                </section>
+
+                <section className="conversations-kpi-strip" aria-label="آمار صندوق گفتگو">
+                    <InboxKpi icon="messages" label="کل گفتگوها" value={stats.total} />
+                    <InboxKpi icon="unread" label="پیام خوانده‌نشده" value={stats.unread} tone={stats.unread ? "danger" : "default"} />
+                    <InboxKpi icon="urgent" label="اولویت فوری" value={stats.urgent} tone={stats.urgent ? "danger" : "default"} />
+                    <InboxKpi icon="userMinus" label="بدون مسئول" value={stats.unassigned} tone={stats.unassigned ? "warning" : "default"} />
+                    <InboxKpi icon="pin" label="سنجاق‌شده" value={stats.pinned} tone="primary" />
+                    <InboxKpi icon="paperclip" label="فایل‌های پیوست" value={stats.files} />
+                </section>
+
+                {notice && <div className="success conversations-notice">{notice}</div>}
+                {error && <div className="error conversations-notice">{error}</div>}
+
+                <section className="conversations-inbox-card">
+                    <div className="conversations-filter-header">
+                        <div>
+                            <span className="conversations-section-kicker">فیلتر و جست‌وجو</span>
+                            <h3>صندوق گفتگوها</h3>
                         </div>
-                    </div>}
+                        <div className="conversations-filter-summary">
+                            <span>{pagination.total} نتیجه</span>
+                            {activeFilterCount > 0 && <b>{activeFilterCount} فیلتر فعال</b>}
+                        </div>
+                    </div>
 
-                    {selectedIds.length > 0 && <div className="phase4-bulk-bar">
-                        <strong>{selectedIds.length} گفتگو انتخاب شده</strong>
-                        <button className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction(filters.archived === "1" ? "unarchive" : "archive")}>{filters.archived === "1" ? "بازگردانی" : "آرشیو"}</button>
-                        <button className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction("pin")}>سنجاق</button>
-                        <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("priority", event.target.value); event.currentTarget.value = ""; }}><option value="">تغییر اولویت...</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="normal">عادی</option><option value="low">کم</option></select>
-                        <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("assign", event.target.value); event.currentTarget.value = ""; }}><option value="">اختصاص به...</option><option value="0">بدون مسئول</option>{options.agents.filter((agent) => agent.is_active).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select>
-                        <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("department", event.target.value); event.currentTarget.value = ""; }}><option value="">انتقال دپارتمان...</option>{options.departments.map((department) => <option key={department.id} value={department.id}>{department.name} · {department.site_name}</option>)}</select>
-                        <button className="btn secondary" onClick={() => setSelectedIds([])}>لغو انتخاب</button>
-                    </div>}
+                    <div className="phase4-search-row">
+                        <label className="conversations-search-wrap">
+                            <span>جست‌وجوی سراسری</span>
+                            <div className="conversations-search-field">
+                                <ConversationIcon name="search" />
+                                <input
+                                    className="input"
+                                    value={filters.q}
+                                    onChange={(event) => changeFilter("q", event.target.value)}
+                                    placeholder="نام، پیام، فایل، ایمیل، تلفن یا شناسه گفتگو"
+                                />
+                                {filters.q && (
+                                    <button type="button" onClick={() => changeFilter("q", "")} aria-label="پاک‌کردن جست‌وجو">
+                                        <ConversationIcon name="close" />
+                                    </button>
+                                )}
+                            </div>
+                        </label>
 
-                    {loading ? <div className="conversations-skeleton-list">{[1,2,3,4].map((item) => <div key={item} className="conversations-skeleton-row" />)}</div> : conversations.length === 0 ? <div className="conversations-empty-state"><div>🔎</div><h3>گفتگویی پیدا نشد</h3><p className="muted">فیلترها یا عبارت جست‌وجو را تغییر بده.</p></div> : <div className="conversations-table">
-                        <div className="conversations-table-head phase4-table-head"><span><input type="checkbox" checked={allSelected} onChange={(event) => setSelectedIds(event.target.checked ? conversations.map((item) => item.id) : [])} /></span><span>کاربر و پیام</span><span>وضعیت</span><span>مسئول</span><span>اطلاعات</span><span>عملیات</span></div>
-                        {conversations.map((conversation) => <article key={conversation.id} className={["conversations-row","phase4-conversation-row",conversation.has_unread ? "unread" : "",conversation.is_pinned ? "pinned" : "",`priority-${conversation.priority}`].filter(Boolean).join(" ")} onClick={() => router.push(`/conversations/${conversation.id}`)}>
-                            <div className="phase4-select-cell" onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(conversation.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, conversation.id] : current.filter((id) => id !== conversation.id))} /></div>
-                            <div className="conversation-cell-main"><div className="conversation-title-row"><strong>{conversation.visitor.name || "کاربر بدون نام"}</strong><span>#{conversation.id}</span><PriorityBadge priority={conversation.priority} />{conversation.department && <b className="phase5-department-badge" style={{ borderColor: conversation.department.color, color: conversation.department.color }}>{conversation.department.name}</b>}{conversation.queue_status === "waiting" && <b className="phase5-queue-badge">صف #{conversation.queue_position || "-"}</b>}{conversation.is_pinned && <b className="phase4-pin-badge">📌</b>}{conversation.has_unread && <b>{conversation.unread_count} جدید</b>}</div><p>{truncateText(conversation.last_message || "بدون پیام", 115)}</p><small>{conversation.last_message_at || "ثبت نشده"}</small></div>
-                            <div className="conversation-cell-status"><StatusBadge status={conversation.status} /></div>
-                            <div className="conversation-cell-agent">{conversation.assigned_agent ? <><strong>{conversation.assigned_agent.name}</strong><span>{conversation.assigned_agent.email}</span></> : <span className="conversation-unassigned">بدون مسئول</span>}</div>
-                            <div className="conversation-cell-contact"><strong>{conversation.site.name}</strong><span>{conversation.visitor.phone || conversation.visitor.email || "بدون تماس"}</span><small>{conversation.message_count} پیام · {conversation.attachment_count} فایل {conversation.has_voice ? "· صوت" : ""} {conversation.has_internal_note ? "· یادداشت" : ""}</small></div>
-                            <div className="conversation-cell-action phase4-row-actions" onClick={(event) => event.stopPropagation()}><button className="phase4-icon-btn" title={conversation.is_pinned ? "برداشتن سنجاق" : "سنجاق"} onClick={() => updateManagement(conversation.id, { is_pinned: !conversation.is_pinned })}>{conversation.is_pinned ? "📍" : "📌"}</button><button className="phase4-icon-btn" title={conversation.is_archived ? "بازگردانی" : "آرشیو"} onClick={() => updateManagement(conversation.id, { is_archived: !conversation.is_archived })}>{conversation.is_archived ? "↩️" : "🗄️"}</button><button className="btn secondary" onClick={() => router.push(`/conversations/${conversation.id}`)}>باز کردن</button></div>
-                        </article>)}
-                    </div>}
+                        <label className="conversations-compact-filter">
+                            <span>وضعیت</span>
+                            <select className="input" value={filters.status} onChange={(event) => changeFilter("status", event.target.value as StatusFilter)}>
+                                {statusFilters.map((item) => <option key={item.value || "all"} value={item.value}>{item.label}</option>)}
+                            </select>
+                        </label>
 
-                    {pagination.pages > 1 && <div className="phase4-pagination"><button className="btn secondary" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>قبلی</button><span>صفحه {pagination.page} از {pagination.pages} · {pagination.total} نتیجه</span><button className="btn secondary" disabled={page >= pagination.pages} onClick={() => setPage((value) => Math.min(pagination.pages, value + 1))}>بعدی</button></div>}
+                        <label className="conversations-compact-filter">
+                            <span>نمایش</span>
+                            <select className="input" value={filters.archived} onChange={(event) => changeFilter("archived", event.target.value as Filters["archived"])}>
+                                <option value="0">گفتگوهای فعال</option>
+                                <option value="1">آرشیوشده‌ها</option>
+                                <option value="all">همه گفتگوها</option>
+                            </select>
+                        </label>
+
+                        <button
+                            className={`btn secondary conversations-filter-toggle ${showAdvanced ? "active" : ""}`}
+                            type="button"
+                            onClick={() => setShowAdvanced((value) => !value)}
+                        >
+                            <ConversationIcon name="filter" />
+                            <span>{showAdvanced ? "بستن فیلترها" : "فیلترهای بیشتر"}</span>
+                            {activeFilterCount > 0 && <b>{activeFilterCount}</b>}
+                        </button>
+
+                        <button
+                            className="btn secondary conversations-clear-btn"
+                            type="button"
+                            onClick={() => { setFilters(initialFilters); setPage(1); }}
+                            disabled={activeFilterCount === 0}
+                        >
+                            <ConversationIcon name="eraser" />
+                            پاک‌کردن
+                        </button>
+                    </div>
+
+                    {showAdvanced && (
+                        <div className="phase4-advanced-filters">
+                            <label><span>اولویت</span><select className="input" value={filters.priority} onChange={(event) => changeFilter("priority", event.target.value as Priority)}><option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="normal">عادی</option><option value="low">کم</option></select></label>
+                            <label><span>پشتیبان</span><select className="input" value={filters.assigned_agent_id} onChange={(event) => changeFilter("assigned_agent_id", event.target.value)}><option value="">همه</option>{options.agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
+                            <label><span>دپارتمان</span><select className="input" value={filters.department_id} onChange={(event) => changeFilter("department_id", event.target.value)}><option value="">همه</option>{options.departments.filter((department) => !filters.site_id || department.site_id === Number(filters.site_id)).map((department) => <option key={department.id} value={department.id}>{department.name} · {department.site_name}</option>)}</select></label>
+                            <label><span>سایت</span><select className="input" value={filters.site_id} onChange={(event) => changeFilter("site_id", event.target.value)}><option value="">همه</option>{options.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+                            <label><span>از تاریخ</span><input className="input" type="date" value={filters.date_from} onChange={(event) => changeFilter("date_from", event.target.value)} /></label>
+                            <label><span>تا تاریخ</span><input className="input" type="date" value={filters.date_to} onChange={(event) => changeFilter("date_to", event.target.value)} /></label>
+                            <div className="phase4-check-filters">
+                                <FilterCheck label="خوانده‌نشده" checked={filters.unread} onChange={(value) => changeFilter("unread", value)} />
+                                <FilterCheck label="بدون مسئول" checked={filters.unassigned} onChange={(value) => changeFilter("unassigned", value)} />
+                                <FilterCheck label="سنجاق‌شده" checked={filters.pinned} onChange={(value) => changeFilter("pinned", value)} />
+                                <FilterCheck label="در صف انتظار" checked={filters.queued} onChange={(value) => changeFilter("queued", value)} />
+                                <FilterCheck label="دارای فایل" checked={filters.has_file} onChange={(value) => changeFilter("has_file", value)} />
+                                <FilterCheck label="دارای صوت" checked={filters.has_voice} onChange={(value) => changeFilter("has_voice", value)} />
+                                <FilterCheck label="یادداشت داخلی" checked={filters.has_internal_note} onChange={(value) => changeFilter("has_internal_note", value)} />
+                                <FilterCheck label="منشن من" checked={filters.has_mention} onChange={(value) => changeFilter("has_mention", value)} />
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedIds.length > 0 && (
+                        <div className="phase4-bulk-bar">
+                            <div className="phase4-bulk-title">
+                                <ConversationIcon name="checkSquare" />
+                                <strong>{selectedIds.length} گفتگو انتخاب شده</strong>
+                            </div>
+                            <button className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction(filters.archived === "1" ? "unarchive" : "archive")}>
+                                <ConversationIcon name="archive" />
+                                {filters.archived === "1" ? "بازگردانی" : "آرشیو"}
+                            </button>
+                            <button className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction("pin")}>
+                                <ConversationIcon name="pin" />
+                                سنجاق
+                            </button>
+                            <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("priority", event.target.value); event.currentTarget.value = ""; }}><option value="">تغییر اولویت...</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="normal">عادی</option><option value="low">کم</option></select>
+                            <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("assign", event.target.value); event.currentTarget.value = ""; }}><option value="">اختصاص به...</option><option value="0">بدون مسئول</option>{options.agents.filter((agent) => agent.is_active).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select>
+                            <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("department", event.target.value); event.currentTarget.value = ""; }}><option value="">انتقال دپارتمان...</option>{options.departments.map((department) => <option key={department.id} value={department.id}>{department.name} · {department.site_name}</option>)}</select>
+                            <button className="btn secondary phase4-bulk-cancel" onClick={() => setSelectedIds([])}>
+                                <ConversationIcon name="close" />
+                                لغو انتخاب
+                            </button>
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="conversations-skeleton-list">
+                            {[1, 2, 3, 4].map((item) => <div key={item} className="conversations-skeleton-row" />)}
+                        </div>
+                    ) : conversations.length === 0 ? (
+                        <div className="conversations-empty-state">
+                            <div className="conversations-empty-icon"><ConversationIcon name="search" /></div>
+                            <h3>گفتگویی پیدا نشد</h3>
+                            <p className="muted">عبارت جست‌وجو یا فیلترهای انتخاب‌شده را تغییر دهید.</p>
+                            {activeFilterCount > 0 && (
+                                <button className="btn secondary" type="button" onClick={() => { setFilters(initialFilters); setPage(1); }}>
+                                    پاک‌کردن همه فیلترها
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="conversations-table">
+                            <div className="conversations-table-head phase4-table-head">
+                                <span><input type="checkbox" checked={allSelected} onChange={(event) => setSelectedIds(event.target.checked ? conversations.map((item) => item.id) : [])} aria-label="انتخاب همه گفتگوها" /></span>
+                                <span>مخاطب و آخرین پیام</span>
+                                <span>وضعیت</span>
+                                <span>مسئول</span>
+                                <span>جزئیات</span>
+                                <span>عملیات</span>
+                            </div>
+
+                            {conversations.map((conversation) => {
+                                const visitorName = conversation.visitor.name || "کاربر بدون نام";
+                                return (
+                                    <article
+                                        key={conversation.id}
+                                        className={[
+                                            "conversations-row",
+                                            "phase4-conversation-row",
+                                            conversation.has_unread ? "unread" : "",
+                                            conversation.has_unread_mention ? "mentioned" : "",
+                                            conversation.is_pinned ? "pinned" : "",
+                                            `priority-${conversation.priority}`,
+                                        ].filter(Boolean).join(" ")}
+                                        onClick={() => router.push(`/conversations/${conversation.id}`)}
+                                    >
+                                        <div className="phase4-select-cell" onClick={(event) => event.stopPropagation()}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.includes(conversation.id)}
+                                                onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, conversation.id] : current.filter((id) => id !== conversation.id))}
+                                                aria-label={`انتخاب گفتگوی ${visitorName}`}
+                                            />
+                                        </div>
+
+                                        <div className="conversation-cell-main">
+                                            <div className="conversation-avatar-wrap">
+                                                <div className="conversation-list-avatar">{getInitials(visitorName)}</div>
+                                                <span className={conversation.visitor.is_online ? "conversation-presence online" : "conversation-presence"} />
+                                            </div>
+                                            <div className="conversation-main-content">
+                                                <div className="conversation-title-row">
+                                                    <strong>{visitorName}</strong>
+                                                    <span className="conversation-id">#{conversation.id}</span>
+                                                    {conversation.is_pinned && <b className="phase4-pin-badge"><ConversationIcon name="pin" /></b>}
+                                                    {conversation.has_unread && <b className="conversation-unread-badge">{conversation.unread_count} جدید</b>}
+                                                    {conversation.has_unread_mention && <b className="mention-badge">منشن شما</b>}
+                                                </div>
+                                                <p>{truncateText(conversation.last_message || "هنوز پیامی ثبت نشده است.", 130)}</p>
+                                                <div className="conversation-message-meta">
+                                                    <span><ConversationIcon name="clock" /> {formatDateTime(conversation.last_message_at)}</span>
+                                                    <PriorityBadge priority={conversation.priority} />
+                                                    {conversation.department && (
+                                                        <b className="phase5-department-badge" style={{ borderColor: conversation.department.color, color: conversation.department.color }}>
+                                                            {conversation.department.name}
+                                                        </b>
+                                                    )}
+                                                    {conversation.queue_status === "waiting" && <b className="phase5-queue-badge">صف {conversation.queue_position || "-"}</b>}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="conversation-cell-status">
+                                            <StatusBadge status={conversation.status} />
+                                        </div>
+
+                                        <div className="conversation-cell-agent">
+                                            {conversation.assigned_agent ? (
+                                                <>
+                                                    <strong>{conversation.assigned_agent.name}</strong>
+                                                    <span>{conversation.assigned_agent.email}</span>
+                                                </>
+                                            ) : (
+                                                <span className="conversation-unassigned"><ConversationIcon name="userMinus" /> بدون مسئول</span>
+                                            )}
+                                        </div>
+
+                                        <div className="conversation-cell-contact">
+                                            <strong>{conversation.site.name}</strong>
+                                            <span>{conversation.visitor.phone || conversation.visitor.email || "اطلاعات تماس ثبت نشده"}</span>
+                                            <small>
+                                                <span><ConversationIcon name="messages" /> {conversation.message_count}</span>
+                                                <span><ConversationIcon name="paperclip" /> {conversation.attachment_count}</span>
+                                                {conversation.has_voice && <span>صوت</span>}
+                                                {conversation.has_internal_note && <span>یادداشت</span>}
+                                            </small>
+                                        </div>
+
+                                        <div className="conversation-cell-action phase4-row-actions" onClick={(event) => event.stopPropagation()}>
+                                            <button
+                                                className={`phase4-icon-btn ${conversation.is_pinned ? "active" : ""}`}
+                                                title={conversation.is_pinned ? "برداشتن سنجاق" : "سنجاق‌کردن"}
+                                                aria-label={conversation.is_pinned ? "برداشتن سنجاق" : "سنجاق‌کردن"}
+                                                onClick={() => updateManagement(conversation.id, { is_pinned: !conversation.is_pinned })}
+                                            >
+                                                <ConversationIcon name="pin" />
+                                            </button>
+                                            <button
+                                                className="phase4-icon-btn"
+                                                title={conversation.is_archived ? "بازگردانی" : "آرشیو"}
+                                                aria-label={conversation.is_archived ? "بازگردانی" : "آرشیو"}
+                                                onClick={() => updateManagement(conversation.id, { is_archived: !conversation.is_archived })}
+                                            >
+                                                <ConversationIcon name={conversation.is_archived ? "restore" : "archive"} />
+                                            </button>
+                                            <button className="conversation-open-btn" onClick={() => router.push(`/conversations/${conversation.id}`)}>
+                                                بازکردن
+                                                <ConversationIcon name="arrowLeft" />
+                                            </button>
+                                        </div>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {pagination.pages > 1 && (
+                        <div className="phase4-pagination">
+                            <button className="btn secondary" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                                <ConversationIcon name="arrowRight" />
+                                قبلی
+                            </button>
+                            <span>صفحه {pagination.page} از {pagination.pages} · {pagination.total} نتیجه</span>
+                            <button className="btn secondary" disabled={page >= pagination.pages} onClick={() => setPage((value) => Math.min(pagination.pages, value + 1))}>
+                                بعدی
+                                <ConversationIcon name="arrowLeft" />
+                            </button>
+                        </div>
+                    )}
                 </section>
             </div>
         </AppShell>
     );
 }
 
-function InboxKpi({ label, value, tone = "default" }: { label: string; value: string | number; tone?: "default" | "primary" | "success" | "warning" | "danger" }) { return <article className={`conversations-kpi tone-${tone}`}><strong>{value}</strong><span>{label}</span></article>; }
-function StatusBadge({ status }: { status: string }) { return <span className={`conversation-status-badge status-${status}`}>{statusLabels[status] || status}</span>; }
-function PriorityBadge({ priority }: { priority: string }) { return <span className={`phase4-priority-badge priority-${priority}`}>{priorityLabels[priority] || priority}</span>; }
-function FilterCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="phase4-filter-check"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>; }
-function truncateText(text: string, maxLength: number) { return text.length <= maxLength ? text : `${text.slice(0, maxLength).trim()}...`; }
+type ConversationIconName =
+    | "archive"
+    | "arrowLeft"
+    | "arrowRight"
+    | "bell"
+    | "bellOff"
+    | "checkSquare"
+    | "clock"
+    | "close"
+    | "download"
+    | "eraser"
+    | "filter"
+    | "inbox"
+    | "messages"
+    | "paperclip"
+    | "pin"
+    | "refresh"
+    | "restore"
+    | "search"
+    | "unread"
+    | "urgent"
+    | "userMinus";
+
+function ConversationIcon({ name, className = "" }: { name: ConversationIconName; className?: string }) {
+    const paths: Record<ConversationIconName, ReactNode> = {
+        archive: <><path d="M4 7h16"/><path d="M5 7l1 13h12l1-13"/><path d="M9 11h6"/><path d="M4 4h16v3H4z"/></>,
+        arrowLeft: <><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></>,
+        arrowRight: <><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></>,
+        bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
+        bellOff: <><path d="m2 2 20 20"/><path d="M6.3 6.3A6 6 0 0 0 6 8c0 7-3 7-3 9h14"/><path d="M18 13.7V8a6 6 0 0 0-8.5-5.5"/><path d="M10 21h4"/></>,
+        checkSquare: <><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></>,
+        clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
+        close: <><path d="m6 6 12 12"/><path d="m18 6-12 12"/></>,
+        download: <><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></>,
+        eraser: <><path d="m7 21-4-4L15 5l4 4L7 21Z"/><path d="m11 9 4 4"/><path d="M7 21h12"/></>,
+        filter: <><path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/></>,
+        inbox: <><path d="M4 4h16v16H4z"/><path d="M4 14h4l2 3h4l2-3h4"/></>,
+        messages: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8"/><path d="M8 13h5"/></>,
+        paperclip: <path d="m20 11.5-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/>,
+        pin: <><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3z"/><path d="M12 15v6"/></>,
+        refresh: <><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9"/><path d="M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></>,
+        restore: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></>,
+        search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+        unread: <><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/><circle cx="18" cy="6" r="3"/></>,
+        urgent: <><path d="M12 3 2.5 20h19z"/><path d="M12 9v4"/><path d="M12 17h.01"/></>,
+        userMinus: <><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M17 11h5"/></>,
+    };
+
+    return (
+        <svg className={`conversation-ui-icon ${className}`.trim()} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {paths[name]}
+        </svg>
+    );
+}
+
+function InboxKpi({ icon, label, value, tone = "default" }: { icon: ConversationIconName; label: string; value: string | number; tone?: "default" | "primary" | "success" | "warning" | "danger" }) {
+    return (
+        <article className={`conversations-kpi tone-${tone}`}>
+            <span className="conversations-kpi-icon"><ConversationIcon name={icon} /></span>
+            <div><strong>{value}</strong><span>{label}</span></div>
+        </article>
+    );
+}
+
+function StatusBadge({ status }: { status: string }) {
+    return <span className={`conversation-status-badge status-${status}`}>{statusLabels[status] || status}</span>;
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+    return <span className={`phase4-priority-badge priority-${priority}`}>{priorityLabels[priority] || priority}</span>;
+}
+
+function FilterCheck({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+    return (
+        <label className={`phase4-filter-check ${checked ? "active" : ""}`}>
+            <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+            <span>{label}</span>
+        </label>
+    );
+}
+
+function getInitials(name: string) {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "؟";
+    return parts.slice(0, 2).map((part) => part.charAt(0)).join("");
+}
+
+function formatDateTime(value: string | null) {
+    if (!value) return "زمان ثبت نشده";
+    const date = new Date(value.includes("T") ? value : value.replace(" ", "T"));
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("fa-IR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function truncateText(text: string, maxLength: number) {
+    return text.length <= maxLength ? text : `${text.slice(0, maxLength).trim()}...`;
+}
