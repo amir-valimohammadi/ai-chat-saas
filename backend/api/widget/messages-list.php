@@ -161,9 +161,9 @@ try {
           AND messages.message_type <> 'internal_note'
           AND (
               messages.id > :after_id
-              OR (:changed_after_edited IS NOT NULL AND messages.edited_at >= :changed_after_edited)
-              OR (:changed_after_deleted IS NOT NULL AND messages.deleted_at >= :changed_after_deleted)
-              OR (:changed_after_interaction IS NOT NULL AND messages.interaction_updated_at >= :changed_after_interaction)
+              OR messages.edited_at >= :changed_after_edited
+              OR messages.deleted_at >= :changed_after_deleted
+              OR messages.interaction_updated_at >= :changed_after_interaction
           )
         ORDER BY messages.id ASC
         LIMIT 100

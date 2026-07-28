@@ -1,5 +1,32 @@
 Options -Indexes
 
-<FilesMatch "\.(php|php3|php4|php5|phtml)$">
-  Require all denied
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .cgi .pl .py .rb .sh .bash .bat .cmd .com .exe .js .mjs .html .htm .shtml .svg .xml .xhtml
+RemoveType .php .php3 .php4 .php5 .php7 .php8 .phtml .phar .cgi .pl .py .rb .sh .bash .bat .cmd .com .exe .js .mjs .html .htm .shtml .svg .xml .xhtml
+
+<FilesMatch "\.(php|php3|php4|php5|php7|php8|phtml|phar|cgi|pl|py|rb|sh|bash|bat|cmd|com|exe|dll|so|js|mjs|html|htm|shtml|svg|xml|xhtml|ini|conf)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
+
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

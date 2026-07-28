@@ -60,7 +60,7 @@ try {
         SET
             availability_status = :availability_status,
             last_seen_at = CASE
-                WHEN :availability_status = 'online' THEN NOW()
+                WHEN :availability_status_online = 'online' THEN NOW()
                 ELSE last_seen_at
             END
         WHERE id = :id
@@ -68,6 +68,7 @@ try {
 
     $stmt->execute([
         ':availability_status' => $status,
+        ':availability_status_online' => $status,
         ':id' => $user['id'],
     ]);
 

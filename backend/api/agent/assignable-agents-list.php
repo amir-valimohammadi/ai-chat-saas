@@ -85,7 +85,7 @@ try {
             ON active_conversations.assigned_agent_id = users.id
             AND active_conversations.status IN ('new','open','in_progress','waiting_customer','follow_up','pending')
             AND active_conversations.is_archived = 0
-            AND (:department_id_load IS NULL OR active_conversations.department_id = :department_id_load)
+            AND (:department_id_load_check IS NULL OR active_conversations.department_id = :department_id_load_value)
         WHERE users.tenant_id = :tenant_id
           AND users.is_active = 1
           AND users.role IN ('customer_admin', 'agent')
@@ -106,7 +106,8 @@ try {
         ':site_id' => $siteId,
         ':department_id' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
         ':department_id_check' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
-        ':department_id_load' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
+        ':department_id_load_check' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
+        ':department_id_load_value' => $conversation['department_id'] !== null ? (int) $conversation['department_id'] : null,
     ]);
 
     $agents = $stmt->fetchAll();

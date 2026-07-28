@@ -9,15 +9,7 @@ require_once __DIR__ . '/security-headers.php';
 if (!function_exists('sanitize_json_response_for_production')) {
     function sanitize_json_response_for_production(array $data, int $statusCode): array
     {
-        if (!function_exists('app_is_production')) {
-            return $data;
-        }
-
-        if (!app_is_production()) {
-            return $data;
-        }
-
-        if ($statusCode < 500) {
+        if (!function_exists('app_is_production') || !app_is_production()) {
             return $data;
         }
 
@@ -33,19 +25,41 @@ if (!function_exists('sanitize_json_response_for_production')) {
             'pdo_error',
         ];
 
-        foreach ($sensitiveKeys as $key) {
-            if (array_key_exists($key, $data)) {
-                unset($data[$key]);
+        $sanitize = static function (mixed $value) use (&$sanitize, $sensitiveKeys): mixed {
+            if (!is_array($value)) {
+                return $value;
+            }
+
+            $clean = [];
+            foreach ($value as $key => $item) {
+                if (is_string($key) && in_array(strtolower($key), $sensitiveKeys, true)) {
+                    continue;
+                }
+                $clean[$key] = $sanitize($item);
+            }
+
+            return $clean;
+        };
+
+        $data = $sanitize($data);
+
+        if ($statusCode >= 400 && isset($data['message']) && is_string($data['message'])) {
+            $technicalPattern = '/SQLSTATE|PDOException|Invalid parameter number|Integrity constraint|Stack trace|Fatal error|Uncaught|\\xampp\\|\/[A-Za-z0-9_.-]+\.php(?:[:\s]|$)/i';
+            if (preg_match($technicalPattern, $data['message'])) {
+                $data['message'] = $statusCode >= 500
+                    ? 'Internal server error'
+                    : 'The request could not be processed.';
             }
         }
 
-        if (empty($data['message'])) {
+        if ($statusCode >= 500 && empty($data['message'])) {
             $data['message'] = 'Internal server error';
         }
 
         return $data;
     }
 }
+
 
 if (!function_exists('json_response')) {
     function json_response(array $data, int $statusCode = 200): void

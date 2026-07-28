@@ -6,6 +6,8 @@
 require_once __DIR__ . '/../../includes/widget-cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/error-handler.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response([
@@ -27,7 +29,7 @@ if ($siteKey === '' || $visitorId <= 0 || $conversationId <= 0) {
 
 try {
     $conversationStmt = $pdo->prepare("
-        SELECT conversations.id
+        SELECT conversations.id, sites.domain AS site_domain
         FROM conversations
         INNER JOIN sites ON sites.id = conversations.site_id
         INNER JOIN tenants ON tenants.id = sites.tenant_id
@@ -45,12 +47,25 @@ try {
         ':site_key' => $siteKey,
     ]);
 
-    if (!$conversationStmt->fetch()) {
+    $conversation = $conversationStmt->fetch();
+
+    if (!$conversation) {
         json_response([
             'success' => false,
             'message' => 'Conversation not found'
         ], 404);
     }
+
+    validate_widget_origin_or_fail($conversation['site_domain'] ?? null);
+
+    enforce_rate_limit(
+        $pdo,
+        'widget_typing_status',
+        rate_limit_identifier($siteKey . '|' . $visitorId . '|' . $conversationId),
+        120,
+        60,
+        'Too many typing-status requests. Please try again shortly.'
+    );
 
     $typingStmt = $pdo->prepare("
         SELECT
@@ -85,10 +100,16 @@ try {
                 : '',
         ],
     ]);
-} catch (Exception $e) {
+} catch (Throwable $e) {
+    app_log_error($e, [
+        'component' => 'widget_typing_status',
+        'conversation_id' => $conversationId,
+        'visitor_id' => $visitorId,
+        'status_code' => 500,
+    ]);
+
     json_response([
         'success' => false,
-        'message' => 'Failed to load typing status',
-        'error' => $e->getMessage()
+        'message' => 'Failed to load typing status'
     ], 500);
 }

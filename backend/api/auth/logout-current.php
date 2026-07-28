@@ -12,9 +12,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 }
 $user = require_auth($pdo);
-$stmt = $pdo->prepare("\n    UPDATE auth_sessions SET revoked_at=NOW(),revoked_by=:user_id,revocation_reason='User logout'\n    WHERE user_id=:user_id AND jti_hash=:jti_hash AND revoked_at IS NULL\n");
+$stmt = $pdo->prepare("\n    UPDATE auth_sessions SET revoked_at=NOW(),revoked_by=:revoked_by,revocation_reason='User logout'\n    WHERE user_id=:session_user_id AND jti_hash=:jti_hash AND revoked_at IS NULL\n");
 $stmt->execute([
-    ':user_id' => (int) $user['id'],
+    ':revoked_by' => (int) $user['id'],
+    ':session_user_id' => (int) $user['id'],
     ':jti_hash' => hash('sha256', (string) $user['session_jti']),
 ]);
 json_response(['success' => true, 'message' => 'از حساب خارج شدید.']);

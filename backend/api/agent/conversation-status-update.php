@@ -87,7 +87,7 @@ try {
         UPDATE conversations
         SET
             status = :status,
-            closed_at = CASE WHEN :status = 'closed' THEN NOW() ELSE NULL END,
+            closed_at = CASE WHEN :status_closed = 'closed' THEN NOW() ELSE NULL END,
             queue_status = CASE WHEN :status_queue = 'closed' THEN 'none' ELSE queue_status END,
             queue_position = CASE WHEN :status_position = 'closed' THEN NULL ELSE queue_position END,
             queued_at = CASE WHEN :status_queued = 'closed' THEN NULL ELSE queued_at END
@@ -96,6 +96,7 @@ try {
 
     $stmt->execute([
         ':status' => $status,
+        ':status_closed' => $status,
         ':status_queue' => $status,
         ':status_position' => $status,
         ':status_queued' => $status,

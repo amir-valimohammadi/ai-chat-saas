@@ -829,8 +829,6 @@ export default function ConversationShowPage() {
             setSendingFile(true);
             setError("");
 
-            const token = localStorage.getItem("auth_token");
-
             const formData = new FormData();
             formData.append("conversation_id", String(conversationId));
             formData.append("reply_to_message_id", String(replyingTo?.id || 0));
@@ -841,23 +839,10 @@ export default function ConversationShowPage() {
             );
             formData.append("file", selectedFile);
 
-            const apiBase =
-                process.env.NEXT_PUBLIC_API_BASE_URL ||
-                "http://localhost/ai-chat-saas/backend/api";
-
-            const response = await fetch(`${apiBase}/agent/attachment-send.php`, {
+            await apiRequest("/agent/attachment-send.php", {
                 method: "POST",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
                 body: formData,
             });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.message || "ارسال فایل ناموفق بود");
-            }
 
             stopAgentTyping();
             await updateTypingStatus(false);

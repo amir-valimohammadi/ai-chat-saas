@@ -69,12 +69,59 @@ if (!function_exists('enforce_rate_limit')) {
         $now = time();
         $windowStart = date('Y-m-d H:i:s', $now);
         $expiresAt = date('Y-m-d H:i:s', $now + $windowSeconds);
-
         $identifierHash = hash('sha256', $identifier);
         $rateKey = rate_limit_key($action, $identifier);
 
-        // پاکسازی سبک رکوردهای منقضی‌شده؛ برای جلوگیری از رشد بی‌نهایت جدول.
-        // هر بار همه‌چیز را پاک نمی‌کنیم، ولی این کار ساده و کافی برای MVP است.
+        // Atomic upsert prevents concurrent first requests from racing on the unique rate_key.
+        $upsertStmt = $pdo->prepare("
+            INSERT INTO api_rate_limits (
+                rate_key, action, identifier_hash, hits, window_start, expires_at
+            ) VALUES (
+                :rate_key, :action, :identifier_hash, 1, :window_start, :expires_at
+            )
+            ON DUPLICATE KEY UPDATE
+                action = VALUES(action),
+                identifier_hash = VALUES(identifier_hash),
+                hits = IF(expires_at <= NOW(), 1, hits + 1),
+                window_start = IF(expires_at <= NOW(), VALUES(window_start), window_start),
+                expires_at = IF(expires_at <= NOW(), VALUES(expires_at), expires_at)
+        ");
+        $upsertStmt->execute([
+            ':rate_key' => $rateKey,
+            ':action' => $action,
+            ':identifier_hash' => $identifierHash,
+            ':window_start' => $windowStart,
+            ':expires_at' => $expiresAt,
+        ]);
+
+        $stateStmt = $pdo->prepare("
+            SELECT hits, expires_at
+            FROM api_rate_limits
+            WHERE rate_key = :rate_key
+            LIMIT 1
+        ");
+        $stateStmt->execute([':rate_key' => $rateKey]);
+        $state = $stateStmt->fetch();
+
+        if (!$state) {
+            return;
+        }
+
+        $hits = (int) $state['hits'];
+        $recordExpiresAt = strtotime((string) $state['expires_at']) ?: ($now + $windowSeconds);
+
+        if ($hits > $maxAttempts) {
+            $retryAfter = max($recordExpiresAt - $now, 1);
+            if (!headers_sent()) {
+                header('Retry-After: ' . $retryAfter);
+            }
+            json_response([
+                'success' => false,
+                'message' => $message,
+                'retry_after_seconds' => $retryAfter,
+            ], 429);
+        }
+
         if (random_int(1, 100) <= 5) {
             $cleanupStmt = $pdo->prepare("
                 DELETE FROM api_rate_limits
@@ -83,96 +130,6 @@ if (!function_exists('enforce_rate_limit')) {
             ");
             $cleanupStmt->execute();
         }
-
-        $stmt = $pdo->prepare("
-            SELECT id, hits, window_start, expires_at
-            FROM api_rate_limits
-            WHERE rate_key = :rate_key
-            LIMIT 1
-        ");
-
-        $stmt->execute([
-            ':rate_key' => $rateKey,
-        ]);
-
-        $record = $stmt->fetch();
-
-        if (!$record) {
-            $insertStmt = $pdo->prepare("
-                INSERT INTO api_rate_limits (
-                    rate_key,
-                    action,
-                    identifier_hash,
-                    hits,
-                    window_start,
-                    expires_at
-                ) VALUES (
-                    :rate_key,
-                    :action,
-                    :identifier_hash,
-                    1,
-                    :window_start,
-                    :expires_at
-                )
-            ");
-
-            $insertStmt->execute([
-                ':rate_key' => $rateKey,
-                ':action' => $action,
-                ':identifier_hash' => $identifierHash,
-                ':window_start' => $windowStart,
-                ':expires_at' => $expiresAt,
-            ]);
-
-            return;
-        }
-
-        $recordExpiresAt = strtotime($record['expires_at']);
-
-        if ($recordExpiresAt === false || $recordExpiresAt <= $now) {
-            $resetStmt = $pdo->prepare("
-                UPDATE api_rate_limits
-                SET
-                    hits = 1,
-                    window_start = :window_start,
-                    expires_at = :expires_at
-                WHERE id = :id
-            ");
-
-            $resetStmt->execute([
-                ':id' => $record['id'],
-                ':window_start' => $windowStart,
-                ':expires_at' => $expiresAt,
-            ]);
-
-            return;
-        }
-
-        $hits = (int) $record['hits'];
-
-        if ($hits >= $maxAttempts) {
-            $retryAfter = max($recordExpiresAt - $now, 1);
-
-            if (!headers_sent()) {
-                header('Retry-After: ' . $retryAfter);
-            }
-
-            json_response([
-                'success' => false,
-                'message' => $message,
-                'retry_after_seconds' => $retryAfter,
-            ], 429);
-        }
-
-        $updateStmt = $pdo->prepare("
-            UPDATE api_rate_limits
-            SET hits = hits + 1
-            WHERE id = :id
-        ");
-
-        $updateStmt->execute([
-            ':id' => $record['id'],
-        ]);
     }
 }
 

@@ -27,12 +27,13 @@ function routing_department(PDO $pdo, int $departmentId, int $tenantId, ?int $si
 {
     $conditions = [
         'departments.id = :department_id',
-        'departments.tenant_id = :tenant_id',
-        'sites.tenant_id = :tenant_id',
+        'departments.tenant_id = :department_tenant_id',
+        'sites.tenant_id = :site_tenant_id',
     ];
     $params = [
         ':department_id' => $departmentId,
-        ':tenant_id' => $tenantId,
+        ':department_tenant_id' => $tenantId,
+        ':site_tenant_id' => $tenantId,
     ];
 
     if ($siteId !== null) {

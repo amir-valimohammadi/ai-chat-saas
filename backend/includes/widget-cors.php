@@ -183,7 +183,7 @@ if (!function_exists('validate_widget_origin_or_fail')) {
             }
 
             // در production فقط اگر خودت عمداً فعال کرده باشی.
-            if ((string) app_env('WIDGET_ALLOW_EMPTY_ORIGIN', 'false') === 'true') {
+            if (app_env('WIDGET_ALLOW_EMPTY_ORIGIN', false) === true) {
                 send_widget_cors_headers(null);
                 return;
             }

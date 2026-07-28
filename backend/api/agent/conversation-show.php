@@ -30,7 +30,7 @@ if ($conversationId <= 0) {
 try {
     $stmt = $pdo->prepare("\n        SELECT\n            conversations.id, conversations.site_id, conversations.visitor_id,\n            conversations.assigned_agent_id, conversations.department_id, conversations.status,
             conversations.queue_status, conversations.queue_position, conversations.queued_at,
-            conversations.assigned_at, conversations.assignment_method,\n            conversations.priority, conversations.is_pinned, conversations.pinned_at,\n            conversations.is_archived, conversations.archived_at,\n            conversations.source_page_url, conversations.source_page_title,\n            conversations.ai_summary, conversations.ai_category,\n            conversations.last_message_at, conversations.created_at, conversations.closed_at,\n            sites.name AS site_name, sites.domain AS site_domain, sites.tenant_id AS site_tenant_id,\n            visitors.name AS visitor_name, visitors.email AS visitor_email,\n            visitors.phone AS visitor_phone, visitors.browser_id AS visitor_browser_id,\n            visitors.ip_address AS visitor_ip_address, visitors.user_agent AS visitor_user_agent,\n            visitors.last_seen_at AS visitor_last_seen_at,\n            assigned_agent.name AS assigned_agent_name, assigned_agent.email AS assigned_agent_email\n        FROM conversations\n        INNER JOIN sites ON sites.id = conversations.site_id\n        INNER JOIN visitors ON visitors.id = conversations.visitor_id\n        LEFT JOIN users AS assigned_agent\n            ON assigned_agent.id = conversations.assigned_agent_id\n            AND assigned_agent.tenant_id = sites.tenant_id\n        WHERE conversations.id = :conversation_id\n        LIMIT 1\n    ");
+            conversations.assigned_at, conversations.assignment_method,\n            conversations.priority, conversations.is_pinned, conversations.pinned_at,\n            conversations.is_archived, conversations.archived_at,\n            conversations.source_page_url, conversations.source_page_title,\n            conversations.ai_summary, conversations.ai_category,\n            conversations.last_message_at, conversations.created_at, conversations.closed_at,\n            sites.name AS site_name, sites.domain AS site_domain, sites.tenant_id AS site_tenant_id,\n            departments.name AS department_name, departments.color AS department_color,\n            departments.routing_strategy AS routing_strategy, departments.queue_message AS queue_message,\n            visitors.name AS visitor_name, visitors.email AS visitor_email,\n            visitors.phone AS visitor_phone, visitors.browser_id AS visitor_browser_id,\n            visitors.ip_address AS visitor_ip_address, visitors.user_agent AS visitor_user_agent,\n            visitors.last_seen_at AS visitor_last_seen_at,\n            assigned_agent.name AS assigned_agent_name, assigned_agent.email AS assigned_agent_email\n        FROM conversations\n        INNER JOIN sites ON sites.id = conversations.site_id\n        INNER JOIN visitors ON visitors.id = conversations.visitor_id\n        LEFT JOIN departments\n            ON departments.id = conversations.department_id\n            AND departments.site_id = conversations.site_id\n            AND departments.tenant_id = sites.tenant_id\n        LEFT JOIN users AS assigned_agent\n            ON assigned_agent.id = conversations.assigned_agent_id\n            AND assigned_agent.tenant_id = sites.tenant_id\n        WHERE conversations.id = :conversation_id\n        LIMIT 1\n    ");
     $stmt->execute([':conversation_id' => $conversationId]);
     $conversation = $stmt->fetch();
 
@@ -126,9 +126,9 @@ try {
         $canModify = message_can_be_modified_by($message, 'agent', (int) $user['id']);
         $mentionedUsers = $isDeleted ? [] : ($mentionsByMessageId[$messageId] ?? []);
         $mentionedMe = count(array_filter(
-            $mentionedUsers,
-            static fn ($mentionedUser) => (int) $mentionedUser['id'] === (int) $user['id']
-        )) > 0;
+                $mentionedUsers,
+                static fn ($mentionedUser) => (int) $mentionedUser['id'] === (int) $user['id']
+            )) > 0;
 
         return [
             'id' => $messageId,
@@ -197,16 +197,16 @@ try {
             'archived_at' => $conversation['archived_at'],
             'department' => $conversation['department_id'] !== null ? [
                 'id' => (int) $conversation['department_id'],
-                'name' => $conversation['department_name'],
-                'color' => $conversation['department_color'],
-                'routing_strategy' => $conversation['routing_strategy'],
+                'name' => $conversation['department_name'] ?? null,
+                'color' => $conversation['department_color'] ?? '#2563eb',
+                'routing_strategy' => $conversation['routing_strategy'] ?? 'manual',
             ] : null,
             'queue_status' => $conversation['queue_status'],
             'queue_position' => $conversation['queue_position'] !== null ? (int) $conversation['queue_position'] : null,
             'queued_at' => $conversation['queued_at'],
             'assigned_at' => $conversation['assigned_at'],
             'assignment_method' => $conversation['assignment_method'],
-            'queue_message' => $conversation['queue_message'],
+            'queue_message' => $conversation['queue_message'] ?? null,
             'assigned_agent' => $conversation['assigned_agent_id'] !== null ? [
                 'id' => (int) $conversation['assigned_agent_id'],
                 'name' => $conversation['assigned_agent_name'],

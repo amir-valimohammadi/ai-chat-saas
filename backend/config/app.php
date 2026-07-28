@@ -135,6 +135,62 @@ if (!function_exists('app_config')) {
     }
 }
 
+if (!function_exists('app_validate_production_security')) {
+    function app_validate_production_security(): void
+    {
+        if (!app_is_production()) {
+            return;
+        }
+
+        $problems = [];
+        $jwtSecret = trim((string) app_config('jwt_secret', ''));
+        $encryptionKey = trim((string) app_env('APP_ENCRYPTION_KEY', ''));
+
+        if (app_debug_enabled()) {
+            $problems[] = 'APP_DEBUG must be false';
+        }
+
+        if (strlen($jwtSecret) < 32 || str_contains(strtolower($jwtSecret), 'change_this')) {
+            $problems[] = 'JWT_SECRET must be a random value with at least 32 characters';
+        }
+
+        if (strlen($encryptionKey) < 32 || str_contains(strtolower($encryptionKey), 'change_this')) {
+            $problems[] = 'APP_ENCRYPTION_KEY must be a separate random value with at least 32 characters';
+        } elseif (hash_equals($jwtSecret, $encryptionKey)) {
+            $problems[] = 'APP_ENCRYPTION_KEY must be different from JWT_SECRET';
+        }
+
+        if (app_env('WIDGET_ALLOW_EMPTY_ORIGIN', false) === true) {
+            $problems[] = 'WIDGET_ALLOW_EMPTY_ORIGIN must be false';
+        }
+
+        if (!$problems) {
+            return;
+        }
+
+        error_log('[AI_CHAT_SAAS_SECURITY] Unsafe production configuration: ' . implode('; ', $problems));
+
+        if (PHP_SAPI === 'cli') {
+            throw new RuntimeException('Unsafe production configuration. Check the server error log.');
+        }
+
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store');
+            header('X-Content-Type-Options: nosniff');
+        }
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Server security configuration is incomplete.'
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+}
+
+app_validate_production_security();
+
 date_default_timezone_set((string) app_config('timezone', 'Asia/Tehran'));
 
 return $appConfig;
