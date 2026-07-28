@@ -27,6 +27,8 @@ if (!function_exists('send_common_security_headers')) {
             return;
         }
 
+        header_remove('X-Powered-By');
+
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
         header('Referrer-Policy: no-referrer');

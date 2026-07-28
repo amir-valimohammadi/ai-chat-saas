@@ -135,6 +135,26 @@ if (!function_exists('app_config')) {
     }
 }
 
+if (!defined('APP_REQUEST_ID')) {
+    $incomingRequestId = trim((string) ($_SERVER['HTTP_X_REQUEST_ID'] ?? ''));
+    if ($incomingRequestId !== '' && preg_match('/^[A-Za-z0-9._:-]{8,100}$/', $incomingRequestId)) {
+        define('APP_REQUEST_ID', $incomingRequestId);
+    } else {
+        try {
+            define('APP_REQUEST_ID', bin2hex(random_bytes(16)));
+        } catch (Throwable) {
+            define('APP_REQUEST_ID', str_replace('.', '', uniqid('req_', true)));
+        }
+    }
+}
+
+if (!function_exists('app_request_id')) {
+    function app_request_id(): string
+    {
+        return (string) APP_REQUEST_ID;
+    }
+}
+
 if (!function_exists('app_validate_production_security')) {
     function app_validate_production_security(): void
     {
@@ -181,10 +201,12 @@ if (!function_exists('app_validate_production_security')) {
             header('X-Content-Type-Options: nosniff');
         }
 
+        header('X-Request-ID: ' . app_request_id());
         echo json_encode([
             'success' => false,
-            'message' => 'Server security configuration is incomplete.'
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            'message' => 'Server security configuration is incomplete.',
+            'request_id' => app_request_id(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         exit;
     }
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/../../includes/cors.php';
-require_once __DIR__ . '/../../includes/response.php';
+require_once __DIR__ . '/../../includes/response.php';require_once __DIR__ . '/../../includes/csv.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 $user=require_auth($pdo);require_role($user,['super_admin']);require_admin_permission($user,'tests.export_findings');
@@ -25,13 +25,13 @@ try{
     },$rows);
     if($format==='json'){
         header('Content-Type: application/json; charset=utf-8');header('Content-Disposition: attachment; filename="'.$filename.'.json"');
-        echo json_encode(['generated_at'=>date('c'),'scope'=>$scope,'security_only'=>$securityOnly,'run_id'=>$runId?:null,'total'=>count($normalized),'findings'=>$normalized],JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;
+        echo json_encode(['generated_at'=>date('c'),'scope'=>$scope,'security_only'=>$securityOnly,'run_id'=>$runId?:null,'total'=>count($normalized),'findings'=>$normalized],JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_INVALID_UTF8_SUBSTITUTE|JSON_THROW_ON_ERROR);exit;
     }
     header('Content-Type: text/csv; charset=UTF-8');header('Content-Disposition: attachment; filename="'.$filename.'.csv"');echo "\xEF\xBB\xBF";
     $out=fopen('php://output','wb');
-    fputcsv($out,['شناسه','کلید تست','دسته','عنوان','هدف','وضعیت ثبت','نتیجه تست','شدت','امتیاز ریسک','اطمینان','OWASP','CWE','بخش متاثر','روش بررسی','شرح مشکل','دلیل احتمالی','اثر و ریسک','مقدار مورد انتظار','مقدار فعلی','راهکار رفع','شواهد فنی','تعداد تکرار','اولین مشاهده','آخرین مشاهده','آخرین Run','یادداشت حل']);
+    csv_write_row($out,['شناسه','کلید تست','دسته','عنوان','هدف','وضعیت ثبت','نتیجه تست','شدت','امتیاز ریسک','اطمینان','OWASP','CWE','بخش متاثر','روش بررسی','شرح مشکل','دلیل احتمالی','اثر و ریسک','مقدار مورد انتظار','مقدار فعلی','راهکار رفع','شواهد فنی','تعداد تکرار','اولین مشاهده','آخرین مشاهده','آخرین Run','یادداشت حل']);
     foreach($normalized as $row){
-        fputcsv($out,[$row['id'],$row['case_key'],$row['category'],$row['title'],$row['target_label']??$row['target_type'],$row['registry_status'],$row['test_status'],$row['severity'],$row['risk_score']??null,$row['confidence']??null,$row['owasp_category']??null,$row['cwe_id']??null,$row['affected_component']??null,$row['verification_mode']??null,$row['message'],$row['root_cause'],$row['impact'],$row['expected_value'],$row['actual_value'],$row['remediation'],json_encode($row['evidence'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),$row['occurrence_count'],$row['first_seen_at'],$row['last_seen_at'],$row['last_run_id'],$row['resolution_note']]);
+        csv_write_row($out,[$row['id'],$row['case_key'],$row['category'],$row['title'],$row['target_label']??$row['target_type'],$row['registry_status'],$row['test_status'],$row['severity'],$row['risk_score']??null,$row['confidence']??null,$row['owasp_category']??null,$row['cwe_id']??null,$row['affected_component']??null,$row['verification_mode']??null,$row['message'],$row['root_cause'],$row['impact'],$row['expected_value'],$row['actual_value'],$row['remediation'],json_encode($row['evidence'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_INVALID_UTF8_SUBSTITUTE|JSON_THROW_ON_ERROR),$row['occurrence_count'],$row['first_seen_at'],$row['last_seen_at'],$row['last_run_id'],$row['resolution_note']]);
     }
     fclose($out);exit;
 }catch(Throwable $e){json_response(['success'=>false,'message'=>'ساخت خروجی ایرادات ناموفق بود.','request_id'=>defined('APP_REQUEST_ID')?APP_REQUEST_ID:null],500);}

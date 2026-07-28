@@ -3,12 +3,13 @@
 // Export accessible conversations as UTF-8 CSV.
 
 require_once __DIR__ . '/../../includes/cors.php';
+require_once __DIR__ . '/../../includes/response.php';
+require_once __DIR__ . '/../../includes/csv.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    http_response_code(405);
-    exit;
+    json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 }
 
 $user = require_auth($pdo);
@@ -102,13 +103,13 @@ try {
 
     $output = fopen('php://output', 'wb');
     fwrite($output, "\xEF\xBB\xBF");
-    fputcsv($output, [
+    csv_write_row($output, [
         'شناسه', 'وضعیت', 'اولویت', 'سنجاق‌شده', 'آرشیو', 'نام کاربر', 'ایمیل', 'تلفن',
         'سایت', 'دپارتمان', 'وضعیت صف', 'شماره صف', 'روش اختصاص', 'پشتیبان', 'صفحه ورود', 'آدرس صفحه', 'تعداد پیام', 'تعداد فایل', 'آخرین پیام', 'تاریخ ایجاد'
     ]);
 
     while ($row = $stmt->fetch()) {
-        fputcsv($output, [
+        csv_write_row($output, [
             $row['id'], $row['status'], $row['priority'], (int) $row['is_pinned'], (int) $row['is_archived'],
             $row['visitor_name'], $row['visitor_email'], $row['visitor_phone'], $row['site_name'],
             $row['department_name'], $row['queue_status'], $row['queue_position'], $row['assignment_method'], $row['assigned_agent_name'], $row['source_page_title'], $row['source_page_url'],
@@ -118,8 +119,6 @@ try {
     fclose($output);
     exit;
 } catch (Throwable $e) {
-    http_response_code(500);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['success' => false, 'message' => 'CSV export failed'], JSON_UNESCAPED_UNICODE);
-    exit;
+    app_log_error($e, ['endpoint' => 'agent/conversations-export.php', 'status_code' => 500]);
+    json_response(['success' => false, 'message' => 'CSV export failed'], 500);
 }

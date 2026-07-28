@@ -3,6 +3,7 @@
 // مسیر فایل: backend/api/system/maintenance-status.php
 // هدف: اعلام عمومی و سبک وضعیت Maintenance Mode برای پنل مشتری
 
+require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/maintenance.php';

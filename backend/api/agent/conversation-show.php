@@ -126,9 +126,9 @@ try {
         $canModify = message_can_be_modified_by($message, 'agent', (int) $user['id']);
         $mentionedUsers = $isDeleted ? [] : ($mentionsByMessageId[$messageId] ?? []);
         $mentionedMe = count(array_filter(
-                $mentionedUsers,
-                static fn ($mentionedUser) => (int) $mentionedUser['id'] === (int) $user['id']
-            )) > 0;
+            $mentionedUsers,
+            static fn ($mentionedUser) => (int) $mentionedUser['id'] === (int) $user['id']
+        )) > 0;
 
         return [
             'id' => $messageId,

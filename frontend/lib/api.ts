@@ -17,6 +17,28 @@ export type MaintenanceModeDetails = {
 
 export const MAINTENANCE_MODE_EVENT = "ai-chat:maintenance-mode";
 
+export class ApiProtocolError extends Error {
+  readonly status: number;
+  readonly path: string;
+  readonly requestId: string | null;
+  readonly contentType: string;
+
+  constructor(options: {
+    status: number;
+    path: string;
+    requestId: string | null;
+    contentType: string;
+  }) {
+    const requestHint = options.requestId ? ` شناسه پیگیری: ${options.requestId}` : "";
+    super(`پاسخ سرور برای ${options.path} JSON معتبر نیست (HTTP ${options.status}).${requestHint}`);
+    this.name = "ApiProtocolError";
+    this.status = options.status;
+    this.path = options.path;
+    this.requestId = options.requestId;
+    this.contentType = options.contentType;
+  }
+}
+
 export class MaintenanceModeError extends Error {
   readonly code = "maintenance_mode";
   readonly status = 503;
@@ -113,7 +135,25 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    throw new Error("پاسخ سرور JSON معتبر نیست.");
+    const requestId = response.headers.get("X-Request-ID");
+    const contentType = response.headers.get("Content-Type") || "";
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Invalid API JSON response", {
+        path,
+        status: response.status,
+        requestId,
+        contentType,
+        preview: text.slice(0, 500),
+      });
+    }
+
+    throw new ApiProtocolError({
+      status: response.status,
+      path,
+      requestId,
+      contentType,
+    });
   }
 
   if (response.status === 401) {

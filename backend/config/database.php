@@ -8,12 +8,13 @@ require_once __DIR__ . '/../includes/error-handler.php';
 
 $host = getenv('DB_HOST') ?: 'localhost';
 $dbname = getenv('DB_NAME') ?: 'ai_chat_saas';
+$port = (int) (getenv('DB_PORT') ?: 3306);
 $username = getenv('DB_USER') ?: 'root';
 $password = getenv('DB_PASS') ?: '';
 
 try {
     $pdo = new PDO(
-        "mysql:host={$host};dbname={$dbname};charset=utf8mb4",
+        "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4",
         $username,
         $password,
         [
@@ -29,15 +30,18 @@ try {
     require_once __DIR__ . '/../includes/maintenance.php';
     enforce_maintenance_mode($pdo);
 } catch (PDOException $e) {
-    app_log_error($e, [
-        'component' => 'database',
-        'host' => $host,
-        'database' => $dbname,
-        'status_code' => 500,
-    ]);
-
     if (function_exists('safe_json_error')) {
-        safe_json_error('Database connection failed', 500, $e);
+        safe_json_error(
+            'Database connection failed',
+            500,
+            $e,
+            [],
+            [
+                'component' => 'database',
+                'host' => $host,
+                'database' => $dbname,
+            ]
+        );
     }
 
     http_response_code(500);

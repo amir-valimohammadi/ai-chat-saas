@@ -8,6 +8,12 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/admin-impersonation.php';
+
+$impersonationCleanup = admin_impersonation_expire_stale($pdo);
+foreach ($impersonationCleanup as $label => $affected) {
+    echo sprintf("[%s] impersonation_%s: %d row(s) updated\n", date('Y-m-d H:i:s'), $label, (int) $affected);
+}
 
 $queries = [
     'request_logs' => "DELETE FROM system_request_logs WHERE occurred_at < DATE_SUB(NOW(), INTERVAL 30 DAY)",

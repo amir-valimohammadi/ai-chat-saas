@@ -26,7 +26,7 @@ if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
 
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Access-Control-Expose-Headers: Content-Disposition');
+header('Access-Control-Expose-Headers: Content-Disposition, X-Request-ID');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Max-Age: 86400');
 

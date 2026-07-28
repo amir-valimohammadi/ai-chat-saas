@@ -44,7 +44,9 @@ if (!function_exists('qa_browser_artifact_root')) {
 if (!function_exists('qa_browser_runner_root')) {
     function qa_browser_runner_root(): string
     {
-        return dirname(APP_ROOT) . '/qa-browser-runner';
+        $configured = trim((string) app_env('QA_BROWSER_RUNNER_DIR', ''));
+        $path = $configured !== '' ? $configured : dirname(APP_ROOT) . '/qa-browser-runner';
+        return rtrim(str_replace('\\', '/', $path), '/');
     }
 }
 
@@ -299,6 +301,13 @@ if (!function_exists('qa_browser_spawn_worker')) {
         $worker = APP_ROOT . '/cli/qa-browser-worker.php';
         if (!is_file($worker)) {
             return ['started' => false, 'message' => 'فایل Worker مرورگر پیدا نشد.'];
+        }
+        $runner = qa_browser_runner_root() . '/run.mjs';
+        if (!is_file($runner)) {
+            return [
+                'started' => false,
+                'message' => 'بسته qa-browser-runner یا فایل run.mjs در ریشه پروژه موجود نیست.',
+            ];
         }
         $base = escapeshellarg($php) . ' ' . escapeshellarg($worker) . ' ' . $runId;
         if (PHP_OS_FAMILY === 'Windows') {

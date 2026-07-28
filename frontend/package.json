@@ -6,9 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "npm run typecheck && npm run check:styles",
     "check:styles": "node scripts/check-css-architecture.mjs",
-    "cleanup:admin-css": "node scripts/cleanup-legacy-admin-css.mjs"
+    "cleanup:admin-css": "node scripts/cleanup-legacy-admin-css.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "next": "16.2.6",
@@ -21,5 +22,8 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "tailwindcss": "4.3.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }

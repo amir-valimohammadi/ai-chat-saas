@@ -1,7 +1,7 @@
 <?php
 
 // مسیر فایل: ai-chat-saas/backend/includes/response.php
-// هدف: خروجی JSON استاندارد و امن برای APIها
+// هدف: خروجی JSON استاندارد، معتبر و امن برای APIها
 
 require_once __DIR__ . '/../config/app.php';
 require_once __DIR__ . '/security-headers.php';
@@ -9,20 +9,16 @@ require_once __DIR__ . '/security-headers.php';
 if (!function_exists('sanitize_json_response_for_production')) {
     function sanitize_json_response_for_production(array $data, int $statusCode): array
     {
-        if (!function_exists('app_is_production') || !app_is_production()) {
+        if (
+            $statusCode < 400
+            || !function_exists('app_is_production')
+            || !app_is_production()
+        ) {
             return $data;
         }
 
         $sensitiveKeys = [
-            'error',
-            'debug',
-            'trace',
-            'exception',
-            'file',
-            'line',
-            'sql',
-            'query',
-            'pdo_error',
+            'error', 'debug', 'trace', 'exception', 'file', 'line', 'sql', 'query', 'pdo_error',
         ];
 
         $sanitize = static function (mixed $value) use (&$sanitize, $sensitiveKeys): mixed {
@@ -37,7 +33,6 @@ if (!function_exists('sanitize_json_response_for_production')) {
                 }
                 $clean[$key] = $sanitize($item);
             }
-
             return $clean;
         };
 
@@ -60,11 +55,19 @@ if (!function_exists('sanitize_json_response_for_production')) {
     }
 }
 
-
 if (!function_exists('json_response')) {
     function json_response(array $data, int $statusCode = 200): void
     {
+        if ($statusCode >= 400 && !array_key_exists('request_id', $data) && function_exists('app_request_id')) {
+            $data['request_id'] = app_request_id();
+        }
+
         $data = sanitize_json_response_for_production($data, $statusCode);
+
+        // هر خروجی ناخواسته قبلی (Warning، whitespace یا debug echo) حذف می‌شود.
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
 
         if (!headers_sent()) {
             http_response_code($statusCode);
@@ -73,6 +76,13 @@ if (!function_exists('json_response')) {
             header('X-Content-Type-Options: nosniff');
             header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
             header('Pragma: no-cache');
+            if (function_exists('app_request_id')) {
+                header('X-Request-ID: ' . app_request_id());
+            }
+            if ($statusCode >= 400) {
+                header_remove('Content-Disposition');
+                header_remove('Content-Length');
+            }
         }
 
         global $pdo;
@@ -82,10 +92,34 @@ if (!function_exists('json_response')) {
             && $pdo instanceof PDO
             && function_exists('operations_store_response_error')
         ) {
-            operations_store_response_error($pdo, $data, $statusCode);
+            try {
+                operations_store_response_error($pdo, $data, $statusCode);
+            } catch (Throwable $loggingError) {
+                error_log('[AI_CHAT_SAAS_RESPONSE_LOGGING_FAILURE] ' . $loggingError->getMessage());
+            }
         }
 
-        echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        try {
+            $json = json_encode(
+                $data,
+                JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_INVALID_UTF8_SUBSTITUTE
+                | JSON_THROW_ON_ERROR
+            );
+        } catch (Throwable $encodingError) {
+            error_log('[AI_CHAT_SAAS_JSON_ENCODING_FAILURE] ' . $encodingError->getMessage());
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
+            $json = json_encode([
+                'success' => false,
+                'message' => 'Internal server error',
+                'request_id' => function_exists('app_request_id') ? app_request_id() : null,
+            ], JSON_UNESCAPED_SLASHES);
+        }
+
+        echo $json;
         exit;
     }
 }

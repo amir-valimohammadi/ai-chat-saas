@@ -4,27 +4,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
+require_once __DIR__ . '/../../includes/csv.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
 
-if (!function_exists('customer_export_csv_cell')) {
-    function customer_export_csv_cell(mixed $value): string
-    {
-        if ($value === null) {
-            return '';
-        }
-        if (!is_scalar($value)) {
-            $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        }
-        $text = (string) $value;
-        // جلوگیری از اجرای Formula هنگام بازشدن CSV در Excel و ابزارهای مشابه.
-        if (preg_match('/^[=+\-@]/u', ltrim($text))) {
-            return "'" . $text;
-        }
-        return $text;
-    }
-}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response(['success' => false, 'message' => 'Method not allowed'], 405);
@@ -104,7 +88,7 @@ try {
 
     if ($format === 'json') {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
         exit;
     }
 
@@ -116,7 +100,7 @@ try {
     }
 
     $writeRow = static function (array $row) use ($output): void {
-        fputcsv($output, array_map('customer_export_csv_cell', $row));
+        csv_write_row($output, $row);
     };
     $writeRow(['بخش', 'شناسه/کلید', 'عنوان', 'مقدار', 'تاریخ']);
 
@@ -133,7 +117,7 @@ try {
                 $section,
                 $id,
                 $title,
-                json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR),
                 $date,
             ]);
         }
