@@ -24,6 +24,7 @@ type AppShellProps = {
     description?: string;
     kicker?: string;
     actions?: ReactNode;
+    variant?: "default" | "workspace";
 };
 
 type UserRole = "super_admin" | "customer_admin" | "agent";
@@ -68,6 +69,7 @@ export default function AppShell({
                                      description,
                                      kicker,
                                      actions,
+                                     variant = "default",
                                  }: AppShellProps) {
     const router = useRouter();
     const pathname = usePathname();
@@ -523,7 +525,7 @@ export default function AppShell({
     }
 
     return (
-        <div className={`app-shell app-shell-pro ${user.is_impersonating ? "has-impersonation" : ""}`}>
+        <div className={`app-shell app-shell-pro ${user.is_impersonating ? "has-impersonation" : ""} ${variant === "workspace" ? "app-shell-workspace" : ""}`}>
             {user.is_impersonating && (
                 <ImpersonationBanner
                     impersonatorName={user.impersonator_name}
@@ -630,26 +632,28 @@ export default function AppShell({
                 </div>
             </aside>
 
-            <main className="main-area main-area-pro">
-                <header className="page-header page-header-pro">
-                    <div>
-                        {kicker && (
-                            <div className="page-kicker">{kicker}</div>
-                        )}
-                        <h1 className="page-title">{title}</h1>
-                        {description && (
-                            <p className="muted page-description">
-                                {description}
-                            </p>
-                        )}
-                    </div>
+            <main className={`main-area main-area-pro ${variant === "workspace" ? "main-area-workspace" : ""}`}>
+                {variant !== "workspace" && (
+                    <header className="page-header page-header-pro">
+                        <div>
+                            {kicker && (
+                                <div className="page-kicker">{kicker}</div>
+                            )}
+                            <h1 className="page-title">{title}</h1>
+                            {description && (
+                                <p className="muted page-description">
+                                    {description}
+                                </p>
+                            )}
+                        </div>
 
-                    {actions && (
-                        <div className="page-actions">{actions}</div>
-                    )}
-                </header>
+                        {actions && (
+                            <div className="page-actions">{actions}</div>
+                        )}
+                    </header>
+                )}
 
-                <div className="page-content-pro">{children}</div>
+                <div className={`page-content-pro ${variant === "workspace" ? "page-content-workspace" : ""}`}>{children}</div>
             </main>
 
             {user.role !== "super_admin" && maintenance && (

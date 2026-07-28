@@ -392,3 +392,39 @@
 }
 .sidebar-link-badge{min-width:22px;height:22px;padding:0 6px;display:grid;place-items:center;color:white;font-size:9px;font-weight:900;border-radius:999px;background:#d05d65;box-shadow:0 6px 14px rgba(208,93,101,.2)}
 .sidebar-link.active .sidebar-link-badge{color:#a94750;background:white;box-shadow:none}
+
+/* Workspace mode: used by full-height operational screens such as conversation detail. */
+.main-area-workspace {
+    max-width: none;
+    padding: 10px;
+}
+
+.page-content-workspace {
+    min-height: calc(100vh - 20px);
+    gap: 0;
+}
+
+@media (max-width: 980px) {
+    .main-area-workspace {
+        padding: 8px;
+    }
+
+    .page-content-workspace {
+        min-height: auto;
+    }
+}
+
+@media (max-width: 980px) {
+    .app-shell-workspace {
+        display: block;
+    }
+
+    .app-shell-workspace > .sidebar {
+        display: none;
+    }
+
+    .app-shell-workspace .main-area-workspace {
+        width: 100%;
+        max-width: none;
+    }
+}

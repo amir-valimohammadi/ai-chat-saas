@@ -228,6 +228,34 @@ const conversationStatuses = [
     { value: "closed", label: "بسته‌شده" },
 ];
 
+type ChatIconName =
+    | "arrow-right"
+    | "close"
+    | "sound"
+    | "notification"
+    | "search"
+    | "refresh"
+    | "sparkles"
+    | "message"
+    | "note"
+    | "smile"
+    | "paperclip"
+    | "microphone"
+    | "send"
+    | "quick"
+    | "manage"
+    | "files"
+    | "info"
+    | "lock"
+    | "file"
+    | "audio"
+    | "external"
+    | "panel"
+    | "reply"
+    | "edit"
+    | "trash"
+    | "history";
+
 export default function ConversationShowPage() {
     const router = useRouter();
     const params = useParams();
@@ -262,6 +290,7 @@ export default function ConversationShowPage() {
     const [activePanel, setActivePanel] = useState<
         "quick" | "ai" | "manage" | "files" | "info"
     >("quick");
+    const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
     const [error, setError] = useState("");
     const [aiError, setAiError] = useState("");
@@ -668,6 +697,19 @@ export default function ConversationShowPage() {
     }
 
     useEffect(() => {
+        const media = window.matchMedia("(min-width: 1181px)");
+
+        function syncInspector(event?: MediaQueryListEvent) {
+            setIsInspectorOpen(event ? event.matches : media.matches);
+        }
+
+        syncInspector();
+        media.addEventListener("change", syncInspector);
+
+        return () => media.removeEventListener("change", syncInspector);
+    }, []);
+
+    useEffect(() => {
         if (!showMessageSearch) return;
         const timer = window.setTimeout(() => {
             if (messageSearchQuery.trim().length >= 2) searchMessages();
@@ -881,6 +923,23 @@ export default function ConversationShowPage() {
         setSelectedFile(null);
         setReply(message.content);
         window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
+    }
+
+    function changeComposerMode(nextMode: "public" | "internal") {
+        if (composerMode === nextMode || editingMessage) {
+            return;
+        }
+
+        stopAgentTyping();
+        setComposerMode(nextMode);
+        setSelectedFile(null);
+        setSelectedMentionIds([]);
+        setReply("");
+        setShowEmojiPicker(false);
+
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
     }
 
     function cancelComposerMode() {
@@ -1210,50 +1269,47 @@ export default function ConversationShowPage() {
     return (
         <AppShell
             title={`گفتگو با ${title}`}
-            kicker="Conversation"
+            kicker="مرکز گفتگو"
             description={
                 conversation
                     ? `${conversation.site.name} · ${statusLabel}`
                     : "در حال بارگذاری گفتگو"
             }
-            actions={
-                <div className="conversation-page-actions">
-                    <button
-                        className="btn secondary"
-                        onClick={() => router.push("/conversations")}
-                    >
-                        بازگشت به Inbox
-                    </button>
-
-                    {conversation && (
-                        <button
-                            className="btn danger"
-                            onClick={() => handleUpdateStatus("closed")}
-                            disabled={isClosed || changingStatus}
-                        >
-                            {changingStatus ? "در حال بستن..." : "بستن گفتگو"}
-                        </button>
-                    )}
-                </div>
-            }
+            variant="workspace"
         >
-            {error && <div className="error">{error}</div>}
+            <div className="conversation-detail-shell">
+            {error && <div className="error conversation-page-error">{error}</div>}
 
             {loading || !conversation ? (
                 <section className="conversation-loading-card">
-                    در حال بارگذاری گفتگو...
+                    <span className="conversation-loading-spinner" aria-hidden="true" />
+                    <div>
+                        <strong>در حال آماده‌سازی گفتگو</strong>
+                        <span>پیام‌ها و اطلاعات مشتری در حال دریافت است.</span>
+                    </div>
                 </section>
             ) : (
-                <div className="conversation-workspace-pro">
+                <div className={`conversation-workspace-pro ${isInspectorOpen ? "inspector-open" : "inspector-closed"}`}>
                     <section className="conversation-chat-pro">
                         <header className="conversation-chat-head-pro">
                             <div className="conversation-person-block">
-                                <ConversationAvatar
-                                    name={conversation.visitor.name || "کاربر"}
-                                    tone="visitor"
-                                />
+                                <button
+                                    className="conversation-back-btn"
+                                    type="button"
+                                    onClick={() => router.push("/conversations")}
+                                    title="بازگشت به فهرست گفتگوها"
+                                >
+                                    <ChatIcon name="arrow-right" />
+                                </button>
+                                <div className="conversation-person-avatar-wrap">
+                                    <ConversationAvatar
+                                        name={conversation.visitor.name || "کاربر"}
+                                        tone="visitor"
+                                    />
+                                    <span className={conversation.visitor.is_online ? "conversation-presence-dot online" : "conversation-presence-dot"} />
+                                </div>
 
-                                <div>
+                                <div className="conversation-person-copy">
                                     <div className="conversation-person-title-row">
                                         <h2>{conversation.visitor.name || "کاربر بدون نام"}</h2>
                                         <StatusChip status={conversation.status} />
@@ -1264,78 +1320,90 @@ export default function ConversationShowPage() {
                                         <span>{conversation.site.name}</span>
                                         <span className={conversation.visitor.is_online ? "visitor-online" : "visitor-offline"}>
                                             {conversation.visitor.is_online
-                                                ? "● آنلاین"
+                                                ? "آنلاین"
                                                 : `آخرین فعالیت: ${conversation.visitor.last_seen_at || "نامشخص"}`}
                                         </span>
-                                        <span>#{conversation.id}</span>
+                                        <span>شناسه {conversation.id}</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="conversation-head-actions">
                                 <button
-                                    className="btn secondary"
+                                    className={`conversation-tool-btn ${messageNotifications.preferences.sound_enabled ? "is-active" : ""}`}
                                     type="button"
                                     onClick={() => messageNotifications.toggleSound()}
                                     title="صدای پیام جدید"
                                 >
-                                    {messageNotifications.preferences.sound_enabled ? "🔔" : "🔕"}
+                                    <ChatIcon name="sound" />
+                                    <span>صدا</span>
                                 </button>
                                 <button
-                                    className="btn secondary"
+                                    className={`conversation-tool-btn ${messageNotifications.preferences.browser_notifications_enabled ? "is-active" : ""}`}
                                     type="button"
                                     onClick={() => messageNotifications.enableBrowserNotifications()}
                                     title="اعلان مرورگر"
                                 >
-                                    {messageNotifications.preferences.browser_notifications_enabled ? "اعلان فعال" : "فعال‌سازی اعلان"}
+                                    <ChatIcon name="notification" />
+                                    <span>اعلان</span>
                                 </button>
                                 <button
-                                    className="btn secondary"
+                                    className={`conversation-tool-btn ${showMessageSearch ? "is-active" : ""}`}
                                     type="button"
                                     onClick={() => setShowMessageSearch((value) => !value)}
                                 >
-                                    {showMessageSearch ? "بستن جست‌وجو" : "جست‌وجوی پیام"}
+                                    <ChatIcon name="search" />
+                                    <span>{showMessageSearch ? "بستن جست‌وجو" : "جست‌وجو"}</span>
                                 </button>
 
                                 <button
-                                    className="btn secondary"
+                                    className="conversation-tool-btn"
                                     type="button"
                                     onClick={() => loadConversation(true)}
                                 >
-                                    بروزرسانی
+                                    <ChatIcon name="refresh" />
+                                    <span>بروزرسانی</span>
                                 </button>
 
                                 <button
-                                    className="btn secondary"
+                                    className={`conversation-tool-btn ${isInspectorOpen ? "is-active" : ""}`}
+                                    type="button"
+                                    onClick={() => setIsInspectorOpen((value) => !value)}
+                                    title="پنل اطلاعات گفتگو"
+                                >
+                                    <ChatIcon name="panel" />
+                                    <span>اطلاعات</span>
+                                </button>
+
+                                {!isClosed && (
+                                    <button
+                                        className="conversation-tool-btn is-danger"
+                                        type="button"
+                                        onClick={() => handleUpdateStatus("closed")}
+                                        disabled={changingStatus}
+                                    >
+                                        <ChatIcon name="close" />
+                                        <span>{changingStatus ? "در حال بستن" : "بستن"}</span>
+                                    </button>
+                                )}
+
+                                <button
+                                    className="conversation-tool-btn is-primary"
                                     type="button"
                                     onClick={handleGenerateAiSuggestion}
                                     disabled={generatingAi || isClosed}
                                 >
-                                    {generatingAi ? "AI..." : "پیشنهاد AI"}
+                                    <ChatIcon name="sparkles" />
+                                    <span>{generatingAi ? "در حال تولید" : "پیشنهاد هوشمند"}</span>
                                 </button>
                             </div>
                         </header>
 
                         <div className="conversation-context-strip">
-                            <InfoPill label="پیام‌ها" value={conversation.messages.length} />
-                            <InfoPill
-                                label="مسئول"
-                                value={
-                                    conversation.assigned_agent
-                                        ? conversation.assigned_agent.name
-                                        : "بدون مسئول"
-                                }
-                            />
-                            <InfoPill
-                                label="آخرین پیام"
-                                value={conversation.last_message_at || "ثبت نشده"}
-                            />
-                            <InfoPill
-                                label="صفحه ورود"
-                                value={conversation.source_page_title || "نامشخص"}
-                            />
+                            <InfoPill label="مسئول گفتگو" value={conversation.assigned_agent ? conversation.assigned_agent.name : "بدون مسئول"} />
+                            <InfoPill label="دپارتمان" value={conversation.department?.name || "بدون دپارتمان"} />
                             <InfoPill label="اولویت" value={priorityLabel(conversation.priority)} />
-                            <InfoPill label="مدیریت" value={`${conversation.is_pinned ? "سنجاق" : "عادی"}${conversation.is_archived ? " · آرشیو" : ""}`} />
+                            <InfoPill label="پیام‌ها" value={conversation.messages.length} />
                         </div>
 
                         {showMessageSearch && (
@@ -1380,7 +1448,7 @@ export default function ConversationShowPage() {
 
                             {conversation.messages.length === 0 ? (
                                 <div className="conversation-empty-chat">
-                                    <div>💬</div>
+                                    <div className="conversation-empty-chat-icon"><ChatIcon name="message" /></div>
                                     <strong>هنوز پیامی وجود ندارد</strong>
                                     <p>
                                         وقتی کاربر از ویجت پیام بدهد، مکالمه اینجا نمایش داده می‌شود.
@@ -1426,177 +1494,220 @@ export default function ConversationShowPage() {
                         )}
 
                         <form onSubmit={handleSendReply} className={`conversation-composer-pro ${composerMode === "internal" ? "internal-mode" : ""}`}>
-                            {(replyingTo || editingMessage) && (
-                                <div className="composer-context-banner">
-                                    <div>
-                                        <strong>{editingMessage ? "ویرایش پیام" : "پاسخ به پیام"}{composerMode === "internal" ? " · یادداشت داخلی" : ""}</strong>
-                                        <span>{editingMessage ? editingMessage.content : replyingTo?.content}</span>
+                            <div className="conversation-composer-shell">
+                                <div className="conversation-composer-heading">
+                                    <div className="conversation-composer-mode-group">
+                                        <div className="conversation-composer-tabs" role="tablist" aria-label="نوع پیام">
+                                            <button
+                                                type="button"
+                                                className={composerMode === "public" ? "active" : ""}
+                                                onClick={() => changeComposerMode("public")}
+                                                disabled={isClosed || Boolean(editingMessage)}
+                                            >
+                                                <ChatIcon name="message" />
+                                                <span>پاسخ به مشتری</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={composerMode === "internal" ? "active internal" : ""}
+                                                onClick={() => changeComposerMode("internal")}
+                                                disabled={isClosed || Boolean(editingMessage)}
+                                            >
+                                                <ChatIcon name="lock" />
+                                                <span>یادداشت داخلی</span>
+                                            </button>
+                                        </div>
+                                        <div className={`conversation-composer-state-chip ${composerMode === "internal" ? "internal" : "public"}`}>
+                                            {isClosed
+                                                ? "گفتگو بسته است"
+                                                : composerMode === "internal"
+                                                    ? "فقط اعضای تیم این یادداشت را می‌بینند"
+                                                    : "پیام برای مشتری ارسال می‌شود"}
+                                        </div>
                                     </div>
-                                    <button type="button" onClick={cancelComposerMode}>انصراف</button>
                                 </div>
-                            )}
 
-                            {selectedFile && (
-                                <div className="composer-file-preview">
-                                    <span>{selectedMessageType === "voice" ? "پیام صوتی آماده ارسال" : `فایل انتخاب‌شده: ${selectedFile.name}`}</span>
+                                {(replyingTo || editingMessage) && (
+                                    <div className="composer-context-banner">
+                                        <div>
+                                            <strong>{editingMessage ? "ویرایش پیام" : "پاسخ به پیام"}{composerMode === "internal" ? " · یادداشت داخلی" : ""}</strong>
+                                            <span>{editingMessage ? editingMessage.content : replyingTo?.content}</span>
+                                        </div>
+                                        <button type="button" onClick={cancelComposerMode}>انصراف</button>
+                                    </div>
+                                )}
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedFile(null);
-                                            setSelectedMessageType("file");
+                                {selectedFile && (
+                                    <div className="composer-file-preview">
+                                        <span>{selectedMessageType === "voice" ? "پیام صوتی آماده ارسال" : `فایل انتخاب‌شده: ${selectedFile.name}`}</span>
 
-                                            if (fileInputRef.current) {
-                                                fileInputRef.current.value = "";
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedFile(null);
+                                                setSelectedMessageType("file");
+
+                                                if (fileInputRef.current) {
+                                                    fileInputRef.current.value = "";
+                                                }
+                                            }}
+                                        >
+                                            حذف
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="conversation-composer-editor-wrap">
+                                    <div className="conversation-composer-editor">
+                                        <textarea
+                                            className="conversation-composer-input"
+                                            value={reply}
+                                            onChange={(event) => {
+                                                const nextValue = event.target.value;
+
+                                                setReply(nextValue);
+                                                if (composerMode === "public") {
+                                                    notifyAgentTyping(nextValue);
+                                                } else {
+                                                    stopAgentTyping();
+                                                }
+                                            }}
+                                            placeholder={
+                                                isClosed
+                                                    ? "این گفتگو بسته شده است."
+                                                    : editingMessage
+                                                        ? "متن ویرایش‌شده را بنویسید..."
+                                                        : composerMode === "internal"
+                                                            ? "یادداشت داخلی برای تیم بنویسید؛ برای منشن از @ استفاده کنید..."
+                                                            : "پاسخ خود را برای کاربر بنویسید..."
                                             }
-                                        }}
-                                    >
-                                        حذف
-                                    </button>
-                                </div>
-                            )}
-
-                            <textarea
-                                className="conversation-composer-input"
-                                value={reply}
-                                onChange={(event) => {
-                                    const nextValue = event.target.value;
-
-                                    setReply(nextValue);
-                                    if (composerMode === "public") {
-                                        notifyAgentTyping(nextValue);
-                                    } else {
-                                        stopAgentTyping();
-                                    }
-                                }}
-                                placeholder={
-                                    isClosed
-                                        ? "این گفتگو بسته شده است."
-                                        : editingMessage
-                                            ? "متن ویرایش‌شده را بنویسید..."
-                                            : composerMode === "internal"
-                                                ? "یادداشت داخلی برای تیم بنویسید؛ برای منشن از @ استفاده کنید..."
-                                                : "پاسخ خود را برای کاربر بنویسید..."
-                                }
-                                disabled={isClosed}
-                            />
-
-                            {composerMode === "internal" && assignableAgents.length > 0 && (
-                                <div className="composer-mentions">
-                                    <span>منشن همکار:</span>
-                                    {assignableAgents.map((agent) => (
-                                        <button
-                                            key={agent.id}
-                                            type="button"
-                                            className={selectedMentionIds.includes(agent.id) ? "selected" : ""}
-                                            onClick={() => toggleMention(agent)}
-                                        >
-                                            @{agent.name}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="conversation-composer-footer">
-                                <div className="conversation-composer-tools">
-                                    <button
-                                        className={`btn secondary ${composerMode === "internal" ? "active" : ""}`}
-                                        type="button"
-                                        onClick={() => {
-                                            stopAgentTyping();
-                                            setComposerMode((mode) => mode === "public" ? "internal" : "public");
-                                            setSelectedFile(null);
-                                            setSelectedMentionIds([]);
-                                            setReply("");
-                                            setShowEmojiPicker(false);
-                                        }}
-                                        disabled={isClosed || Boolean(editingMessage)}
-                                    >
-                                        {composerMode === "internal" ? "یادداشت داخلی فعال" : "یادداشت داخلی"}
-                                    </button>
-
-                                    <div className="composer-emoji-wrap">
-                                        <button
-                                            className="btn secondary"
-                                            type="button"
-                                            onClick={() => setShowEmojiPicker((value) => !value)}
                                             disabled={isClosed}
-                                        >
-                                            Emoji
-                                        </button>
-                                        {showEmojiPicker && (
-                                            <div className="composer-emoji-picker">
-                                                {quickEmojis.map((emoji) => (
-                                                    <button key={emoji} type="button" onClick={() => insertComposerEmoji(emoji)}>{emoji}</button>
-                                                ))}
-                                            </div>
-                                        )}
+                                        />
                                     </div>
 
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav"
-                                        onChange={(event) => {
-                                            setSelectedFile(event.target.files?.[0] || null);
-                                            setSelectedMessageType(event.target.files?.[0]?.type.startsWith("audio/") ? "voice" : "file");
-                                        }}
-                                        style={{ display: "none" }}
-                                    />
+                                    <div className="conversation-composer-bottom">
+                                        <div className="conversation-composer-tools">
+                                            <div className="composer-emoji-wrap">
+                                                <button
+                                                    className={`composer-tool-btn ${showEmojiPicker ? "active" : ""}`}
+                                                    type="button"
+                                                    onClick={() => setShowEmojiPicker((value) => !value)}
+                                                    disabled={isClosed}
+                                                >
+                                                    <ChatIcon name="smile" />
+                                                    <span>ایموجی</span>
+                                                </button>
+                                                {showEmojiPicker && (
+                                                    <div className="composer-emoji-picker">
+                                                        <div className="composer-emoji-picker-head">
+                                                            <strong>ایموجی‌های سریع</strong>
+                                                            <button type="button" onClick={() => setShowEmojiPicker(false)}>بستن</button>
+                                                        </div>
+                                                        <div className="composer-emoji-picker-grid">
+                                                            {quickEmojis.map((emoji) => (
+                                                                <button key={emoji} type="button" onClick={() => insertComposerEmoji(emoji)}>{emoji}</button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                    <button
-                                        className="btn secondary"
-                                        type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
-                                    >
-                                        پیوست
-                                    </button>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav"
+                                                onChange={(event) => {
+                                                    setSelectedFile(event.target.files?.[0] || null);
+                                                    setSelectedMessageType(event.target.files?.[0]?.type.startsWith("audio/") ? "voice" : "file");
+                                                }}
+                                                style={{ display: "none" }}
+                                            />
 
-                                    <button
-                                        className={`btn secondary ${recording ? "recording" : ""}`}
-                                        type="button"
-                                        onClick={recording ? stopVoiceRecording : startVoiceRecording}
-                                        disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
-                                    >
-                                        {recording ? `توقف ضبط ${recordingSeconds}s` : "پیام صوتی"}
-                                    </button>
+                                            <button
+                                                className="composer-tool-btn"
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                            >
+                                                <ChatIcon name="paperclip" />
+                                                <span>فایل</span>
+                                            </button>
 
-                                    <button
-                                        className="btn secondary"
-                                        type="button"
-                                        onClick={handleGenerateAiSuggestion}
-                                        disabled={generatingAi || isClosed}
-                                    >
-                                        {generatingAi ? "در حال تولید..." : "کمک AI"}
-                                    </button>
+                                            <button
+                                                className={`composer-tool-btn ${recording ? "recording" : ""}`}
+                                                type="button"
+                                                onClick={recording ? stopVoiceRecording : startVoiceRecording}
+                                                disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                            >
+                                                <ChatIcon name="microphone" />
+                                                <span>{recording ? `توقف ضبط ${recordingSeconds}s` : "صوت"}</span>
+                                            </button>
+
+                                            <button
+                                                className="composer-tool-btn is-ai"
+                                                type="button"
+                                                onClick={handleGenerateAiSuggestion}
+                                                disabled={generatingAi || isClosed}
+                                            >
+                                                <ChatIcon name="sparkles" />
+                                                <span>{generatingAi ? "در حال تولید" : "کمک هوشمند"}</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="conversation-composer-submit">
+                                            <span>{reply.trim().length} کاراکتر</span>
+
+                                            <button
+                                                className="btn secondary conversation-attachment-send"
+                                                type="button"
+                                                onClick={handleSendAttachment}
+                                                disabled={sendingFile || isClosed || !selectedFile || Boolean(editingMessage) || composerMode === "internal"}
+                                            >
+                                                <ChatIcon name="paperclip" />
+                                                <span>{sendingFile ? "در حال ارسال" : "ارسال فایل"}</span>
+                                            </button>
+
+                                            <button
+                                                className="btn conversation-send-btn"
+                                                type="submit"
+                                                disabled={sending || isClosed || reply.trim().length === 0}
+                                            >
+                                                <ChatIcon name="send" />
+                                                <span>{sending ? "در حال ذخیره..." : editingMessage ? "ذخیره ویرایش" : composerMode === "internal" ? "ثبت یادداشت" : "ارسال پاسخ"}</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="conversation-composer-submit">
-                                    <span>{reply.trim().length} کاراکتر</span>
-
-                                    <button
-                                        className="btn secondary"
-                                        type="button"
-                                        onClick={handleSendAttachment}
-                                        disabled={sendingFile || isClosed || !selectedFile || Boolean(editingMessage) || composerMode === "internal"}
-                                    >
-                                        {sendingFile ? "ارسال فایل..." : "ارسال فایل"}
-                                    </button>
-
-                                    <button
-                                        className="btn"
-                                        type="submit"
-                                        disabled={sending || isClosed || reply.trim().length === 0}
-                                    >
-                                        {sending ? "در حال ذخیره..." : editingMessage ? "ذخیره ویرایش" : composerMode === "internal" ? "ثبت یادداشت" : "ارسال پاسخ"}
-                                    </button>
-                                </div>
+                                {composerMode === "internal" && assignableAgents.length > 0 && (
+                                    <div className="composer-mentions">
+                                        <span>منشن همکار:</span>
+                                        {assignableAgents.map((agent) => (
+                                            <button
+                                                key={agent.id}
+                                                type="button"
+                                                className={selectedMentionIds.includes(agent.id) ? "selected" : ""}
+                                                onClick={() => toggleMention(agent)}
+                                            >
+                                                @{agent.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </form>
                     </section>
 
-                    <aside className="conversation-side-pro">
+                    <aside className={`conversation-side-pro ${isInspectorOpen ? "is-open" : ""}`}>
+                        <header className="conversation-inspector-head">
+                            <div>
+                                <strong>جزئیات گفتگو</strong>
+                                <span>اطلاعات مشتری و ابزارهای پشتیبانی</span>
+                            </div>
+                            <button type="button" onClick={() => setIsInspectorOpen(false)} title="بستن پنل">
+                                <ChatIcon name="close" />
+                            </button>
+                        </header>
                         <section className="conversation-user-card-pro">
                             <div className="conversation-user-top">
                                 <ConversationAvatar
@@ -1629,7 +1740,8 @@ export default function ConversationShowPage() {
                                 className={activePanel === "quick" ? "active" : ""}
                                 onClick={() => setActivePanel("quick")}
                             >
-                                آماده
+                                <ChatIcon name="quick" />
+                                <span>آماده</span>
                             </button>
 
                             <button
@@ -1637,7 +1749,8 @@ export default function ConversationShowPage() {
                                 className={activePanel === "ai" ? "active" : ""}
                                 onClick={() => setActivePanel("ai")}
                             >
-                                AI
+                                <ChatIcon name="sparkles" />
+                                <span>هوشمند</span>
                             </button>
 
                             <button
@@ -1645,7 +1758,8 @@ export default function ConversationShowPage() {
                                 className={activePanel === "manage" ? "active" : ""}
                                 onClick={() => setActivePanel("manage")}
                             >
-                                مدیریت
+                                <ChatIcon name="manage" />
+                                <span>مدیریت</span>
                             </button>
 
                             <button
@@ -1653,7 +1767,8 @@ export default function ConversationShowPage() {
                                 className={activePanel === "files" ? "active" : ""}
                                 onClick={() => setActivePanel("files")}
                             >
-                                فایل‌ها
+                                <ChatIcon name="files" />
+                                <span>فایل‌ها</span>
                             </button>
 
                             <button
@@ -1661,7 +1776,8 @@ export default function ConversationShowPage() {
                                 className={activePanel === "info" ? "active" : ""}
                                 onClick={() => setActivePanel("info")}
                             >
-                                اطلاعات
+                                <ChatIcon name="info" />
+                                <span>اطلاعات</span>
                             </button>
                         </div>
 
@@ -2022,12 +2138,21 @@ export default function ConversationShowPage() {
                                         target="_blank"
                                         rel="noopener noreferrer"
                                     >
-                                        باز کردن صفحه کاربر
+                                        <ChatIcon name="external" />
+                                        <span>باز کردن صفحه کاربر</span>
                                     </a>
                                 )}
                             </section>
                         )}
                     </aside>
+                    {isInspectorOpen && (
+                        <button
+                            type="button"
+                            className="conversation-inspector-backdrop"
+                            onClick={() => setIsInspectorOpen(false)}
+                            aria-label="بستن پنل اطلاعات"
+                        />
+                    )}
                 </div>
             )}
 
@@ -2063,6 +2188,7 @@ export default function ConversationShowPage() {
                     </section>
                 </div>
             )}
+            </div>
         </AppShell>
     );
 }
@@ -2087,36 +2213,100 @@ function MessageBubble({
     highlighted: boolean;
 }) {
     const sender = getSenderMeta(message);
-    const sideClass = message.is_internal ? "from-internal" : message.sender_type === "visitor" ? "from-visitor" : "from-agent";
+    const sideClass = message.is_internal
+        ? "from-internal"
+        : message.sender_type === "visitor"
+            ? "from-visitor"
+            : message.sender_type === "system"
+                ? "from-system"
+                : "from-agent";
 
     return (
-        <div className={`message-row-pro ${sideClass} ${highlighted ? "message-search-highlight-pro" : ""}`} id={`message-${message.id}`}>
-            <ConversationAvatar name={sender.label} tone={sender.tone} small />
+        <article
+            className={`message-row-pro ${sideClass} ${highlighted ? "message-search-highlight-pro" : ""}`}
+            id={`message-${message.id}`}
+        >
+            {!message.is_internal && message.sender_type !== "system" && (
+                <ConversationAvatar name={sender.label} tone={sender.tone} small />
+            )}
 
-            <div className={`message-bubble-pro ${sender.tone} ${message.is_internal ? "internal-note" : ""} ${message.mentioned_me ? "mentioned-me" : ""} ${message.is_deleted ? "deleted" : ""}`}>
-                {message.is_internal && <div className="message-internal-label">🔒 فقط برای تیم پشتیبانی{message.mentioned_me ? " · شما منشن شده‌اید" : ""}</div>}
-                {message.reply_to && (
-                    <div className="message-reply-preview-pro">
-                        <strong>{message.reply_to.sender_name || "پیام قبلی"}</strong>
-                        <span>{message.reply_to.content}</span>
+            <div className="message-stack-pro">
+                {!message.is_internal && message.sender_type !== "system" && (
+                    <div className="message-author-pro">
+                        <strong>{sender.label}</strong>
+                        <span>{message.created_at}</span>
                     </div>
                 )}
 
-                {message.mentioned_users?.length > 0 && (
-                    <div className="message-mentions-pro">
-                        {message.mentioned_users.map((user) => <span key={user.id}>@{user.name}</span>)}
-                    </div>
-                )}
+                <div className={`message-bubble-pro ${sender.tone} ${message.is_internal ? "internal-note" : ""} ${message.mentioned_me ? "mentioned-me" : ""} ${message.is_deleted ? "deleted" : ""}`}>
+                    {message.is_internal && (
+                        <div className="message-internal-label">
+                            <ChatIcon name="lock" />
+                            <span>یادداشت داخلی{message.mentioned_me ? " · شما منشن شده‌اید" : ""}</span>
+                            <time>{message.created_at}</time>
+                        </div>
+                    )}
 
-                <div className="message-body-pro">{message.content}</div>
+                    {message.sender_type === "system" && !message.is_internal && (
+                        <div className="message-system-label">رویداد سیستم · {message.created_at}</div>
+                    )}
 
-                {!message.is_deleted && message.attachments && message.attachments.length > 0 && (
-                    <div className="attachment-grid-pro">
-                        {message.attachments.map((attachment) => (
-                            <AttachmentPreview key={attachment.id} attachment={attachment} />
-                        ))}
+                    {message.reply_to && (
+                        <div className="message-reply-preview-pro">
+                            <strong>{message.reply_to.sender_name || "پیام قبلی"}</strong>
+                            <span>{message.reply_to.content}</span>
+                        </div>
+                    )}
+
+                    {message.mentioned_users?.length > 0 && (
+                        <div className="message-mentions-pro">
+                            {message.mentioned_users.map((user) => <span key={user.id}>@{user.name}</span>)}
+                        </div>
+                    )}
+
+                    <div className="message-body-pro">{message.content}</div>
+
+                    {!message.is_deleted && message.attachments && message.attachments.length > 0 && (
+                        <div className="attachment-grid-pro">
+                            {message.attachments.map((attachment) => (
+                                <AttachmentPreview key={attachment.id} attachment={attachment} />
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="message-bubble-footer-pro">
+                        <div className="message-state-pro">
+                            {message.is_edited && !message.is_deleted && <span>ویرایش‌شده</span>}
+                            {message.is_deleted && <span>حذف‌شده</span>}
+                            {message.sender_type === "agent" && !message.is_internal && !message.is_deleted && (
+                                <span>{formatDeliveryStatus(message.delivery_status)}</span>
+                            )}
+                        </div>
+
+                        <div className="message-actions-pro">
+                            {!message.is_deleted && (
+                                <button type="button" onClick={() => onReply(message)} disabled={disabled} title="پاسخ">
+                                    <ChatIcon name="reply" />
+                                </button>
+                            )}
+                            {message.can_edit && (
+                                <button type="button" onClick={() => onEdit(message)} disabled={disabled} title="ویرایش">
+                                    <ChatIcon name="edit" />
+                                </button>
+                            )}
+                            {message.can_delete && (
+                                <button type="button" onClick={() => onDelete(message)} disabled={disabled} title="حذف">
+                                    <ChatIcon name="trash" />
+                                </button>
+                            )}
+                            {message.has_history && (
+                                <button type="button" onClick={() => onHistory(message)} disabled={disabled} title="تاریخچه">
+                                    <ChatIcon name="history" />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                )}
+                </div>
 
                 {!message.is_deleted && (
                     <div className="message-reactions-pro">
@@ -2138,35 +2328,8 @@ function MessageBubble({
                         </div>
                     </div>
                 )}
-
-                <div className="message-foot-pro">
-                    <span>{sender.label}</span>
-                    <span>
-                        {message.created_at}
-                        {message.is_edited && !message.is_deleted ? " · ویرایش‌شده" : ""}
-                        {message.is_deleted ? " · حذف‌شده" : ""}
-                        {message.sender_type === "agent" && !message.is_internal && !message.is_deleted
-                            ? ` · ${formatDeliveryStatus(message.delivery_status)}`
-                            : ""}
-                    </span>
-                </div>
-
-                <div className="message-actions-pro">
-                    {!message.is_deleted && (
-                        <button type="button" onClick={() => onReply(message)} disabled={disabled}>پاسخ</button>
-                    )}
-                    {message.can_edit && (
-                        <button type="button" onClick={() => onEdit(message)} disabled={disabled}>ویرایش</button>
-                    )}
-                    {message.can_delete && (
-                        <button type="button" onClick={() => onDelete(message)} disabled={disabled}>حذف</button>
-                    )}
-                    {message.has_history && (
-                        <button type="button" onClick={() => onHistory(message)} disabled={disabled}>تاریخچه</button>
-                    )}
-                </div>
             </div>
-        </div>
+        </article>
     );
 }
 
@@ -2179,10 +2342,10 @@ function AttachmentLibraryPreview({ attachment }: { attachment: AttachmentLibrar
         );
     }
 
-    const icon = attachment.category === "audio" ? "🎙️" : attachment.category === "document" ? "📄" : "📎";
+    const iconName: ChatIconName = attachment.category === "audio" ? "audio" : attachment.category === "document" ? "file" : "paperclip";
     return (
         <a href={attachment.file_url} target="_blank" rel="noopener noreferrer" className="conversation-file-icon-pro" title={attachment.original_name}>
-            {icon}
+            <ChatIcon name={iconName} />
         </a>
     );
 }
@@ -2211,7 +2374,7 @@ function AttachmentPreview({ attachment }: { attachment: Attachment }) {
                 <img src={attachment.file_url} alt={attachment.original_name} />
             ) : (
                 <div className="attachment-file-pro">
-                    <span>📎</span>
+                    <span><ChatIcon name="file" /></span>
                     <strong>{attachment.original_name}</strong>
                 </div>
             )}
@@ -2295,6 +2458,43 @@ function InfoItem({ label, value }: { label: string; value: string }) {
     );
 }
 
+function ChatIcon({ name }: { name: ChatIconName }) {
+    const paths: Record<ChatIconName, JSX.Element> = {
+        "arrow-right": <><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></>,
+        close: <><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>,
+        sound: <><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></>,
+        notification: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></>,
+        search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
+        refresh: <><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></>,
+        sparkles: <><path d="m12 3-1.4 3.6L7 8l3.6 1.4L12 13l1.4-3.6L17 8l-3.6-1.4z"/><path d="m5 14-.9 2.1L2 17l2.1.9L5 20l.9-2.1L8 17l-2.1-.9z"/><path d="m19 14-.7 1.8-1.8.7 1.8.7L19 19l.7-1.8 1.8-.7-1.8-.7z"/></>,
+        message: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 8h8"/><path d="M8 12h5"/></>,
+        note: <><path d="M4 4h16v16H4z"/><path d="M8 8h8"/><path d="M8 12h6"/><path d="M8 16h4"/></>,
+        smile: <><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></>,
+        paperclip: <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.6-9.6a4 4 0 0 1 5.7 5.7l-9.6 9.6a2 2 0 1 1-2.8-2.8l8.9-8.9"/>,
+        microphone: <><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v5"/></>,
+        send: <><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></>,
+        quick: <><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></>,
+        manage: <><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
+        files: <><path d="M14 2H6a2 2 0 0 0-2 2v16h14V6z"/><path d="M14 2v4h4"/><path d="M8 13h6"/><path d="M8 17h6"/></>,
+        info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></>,
+        lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>,
+        file: <><path d="M14 2H6a2 2 0 0 0-2 2v16h16V8z"/><path d="M14 2v6h6"/></>,
+        audio: <><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></>,
+        external: <><path d="M14 3h7v7"/><path d="m10 14 11-11"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></>,
+        panel: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/><path d="M7 9h4"/><path d="M7 13h4"/></>,
+        reply: <><path d="m9 17-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></>,
+        edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></>,
+        trash: <><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 15H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></>,
+        history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></>,
+    };
+
+    return (
+        <svg className="chat-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {paths[name]}
+        </svg>
+    );
+}
+
 function getSenderMeta(message: Message): {
     label: string;
     tone: "visitor" | "agent" | "ai" | "system";
@@ -2312,7 +2512,7 @@ function getSenderMeta(message: Message): {
 
     if (message.sender_type === "ai") {
         return {
-            label: "AI Assistant",
+            label: "دستیار هوشمند",
             tone: "ai",
         };
     }
