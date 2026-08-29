@@ -387,9 +387,7 @@ export default function AiCenterPage() {
     const [crawling, setCrawling] = useState(false);
     const [crawlRun, setCrawlRun] = useState<CrawlRun | null>(null);
     const crawlLoopRunIdRef = useRef<number | null>(null);
-    const crawlPollTimerRef = useRef<ReturnType<
-        typeof window.setInterval
-    > | null>(null);
+    const crawlPollTimerRef = useRef<number | null>(null);
     const [testing, setTesting] = useState(false);
 
     const [error, setError] = useState("");

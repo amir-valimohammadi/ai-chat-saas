@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
@@ -26,6 +26,10 @@ const severityLabels:Record<Severity,string>={info:"اطلاعاتی",low:"کم"
 const categoryLabels:Record<string,string>={runtime:"محیط اجرا",database:"دیتابیس",storage:"فضا و فایل",security:"امنیت",api:"API",widget:"ویجت",messaging:"پیام‌رسان",visitors:"بازدیدکنندگان",crawl:"خزش",operations:"عملیات"};
 
 export default function QaFindingsPage(){
+    return <Suspense fallback={<div className="qa-empty-table">در حال آماده‌سازی فهرست ایرادات…</div>}><QaFindingsContent /></Suspense>;
+}
+
+function QaFindingsContent(){
     const router=useRouter();
     const searchParams=useSearchParams();
     const focusId=Number(searchParams.get("focus")||0);

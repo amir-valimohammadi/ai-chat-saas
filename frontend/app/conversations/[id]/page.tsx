@@ -4,6 +4,7 @@
 "use client";
 
 import {
+    type ReactElement,
     FormEvent,
     Fragment,
     useCallback,
@@ -2459,7 +2460,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
 }
 
 function ChatIcon({ name }: { name: ChatIconName }) {
-    const paths: Record<ChatIconName, JSX.Element> = {
+    const paths: Record<ChatIconName, ReactElement> = {
         "arrow-right": <><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></>,
         close: <><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>,
         sound: <><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></>,

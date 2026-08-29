@@ -51,6 +51,9 @@ backend/storage/logs/
 backend/storage/cache/
 backend/storage/sessions/
 backend/storage/tmp/
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+!backend/storage/uploads/.htaccess
 
 *.log
 
@@ -76,3 +79,15 @@ backend/storage/tmp/
 *.tmp
 *.temp
 *.bak
+
+
+# ==============================
+# LaTeX generated files
+# ==============================
+
+doc/LaTeX/**/.texmf-var/
+doc/LaTeX/**/*.aux
+doc/LaTeX/**/*.out
+doc/LaTeX/**/*.toc
+doc/LaTeX/**/*.nav
+doc/LaTeX/**/*.snm
