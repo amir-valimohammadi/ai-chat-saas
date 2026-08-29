@@ -11,6 +11,7 @@ import ImpersonationBanner from "@/components/auth/ImpersonationBanner";
 import {
     apiRequest,
     getAuthUser,
+    updateAuthUser,
     logout,
     logoutCurrentDevice,
     clearImpersonationAuth,
@@ -80,7 +81,8 @@ export default function AppShell({
         useState<MaintenanceModeDetails | null>(null);
 
     useEffect(() => {
-        const authUser = getAuthUser();
+        let active = true;
+        const authUser = getAuthUser() as User | null;
 
         if (!authUser) {
             router.push("/login");
@@ -89,10 +91,26 @@ export default function AppShell({
 
         setUser(authUser);
 
-        if (authUser.must_change_password && pathname !== "/security") {
+        apiRequest("/auth/me.php", { cache: "no-store" })
+            .then((data) => {
+                if (!active || !data?.user) return;
+                updateAuthUser(data.user);
+                setUser(data.user as User);
+            })
+            .catch(() => {
+                // apiRequest handles expired sessions and redirects to login.
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [router]);
+
+    useEffect(() => {
+        if (user?.must_change_password && pathname !== "/security") {
             router.replace("/security?required=1");
         }
-    }, [pathname, router]);
+    }, [pathname, router, user?.must_change_password]);
 
     useEffect(() => {
         if (!user || user.role === "super_admin") {

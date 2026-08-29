@@ -72,6 +72,10 @@ function visitor_presence_parse_user_agent(string $userAgent): array
 
 function visitor_presence_access_condition(array $user, string $siteAlias = 'sites'): array
 {
+    if (!preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/D', $siteAlias)) {
+        throw new InvalidArgumentException('Invalid site alias.');
+    }
+
     if ($user['role'] === 'agent') {
         return [
             "EXISTS (SELECT 1 FROM agent_site_access asa WHERE asa.site_id = {$siteAlias}.id AND asa.user_id = :access_user_id)",

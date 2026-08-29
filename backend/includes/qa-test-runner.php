@@ -223,6 +223,10 @@ if (!function_exists('qa_scope')) {
 if (!function_exists('qa_scope_sql')) {
     function qa_scope_sql(array $scope, string $siteAlias = 's'): array
     {
+        if (!preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/D', $siteAlias)) {
+            throw new InvalidArgumentException('Invalid QA scope alias.');
+        }
+
         if ($scope['site_id']) {
             return ["{$siteAlias}.id = :scope_site_id", [':scope_site_id' => (int) $scope['site_id']]];
         }
@@ -880,8 +884,8 @@ if (!function_exists('qa_insert_item')) {
             ':expected'=>qa_scalar_string($result['expected']),
             ':actual'=>qa_scalar_string($result['actual']),
             ':remediation'=>$result['remediation'],
-            ':details'=>$details ? json_encode($details,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) : null,
-            ':evidence'=>$evidence ? json_encode($evidence,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) : null,
+            ':details'=>$details ? json_encode($details,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_INVALID_UTF8_SUBSTITUTE) : null,
+            ':evidence'=>$evidence ? json_encode($evidence,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_INVALID_UTF8_SUBSTITUTE) : null,
             ':risk_score'=>isset($result['risk_score']) ? (float)$result['risk_score'] : null,
             ':confidence'=>$result['confidence'] ?? null,
             ':owasp_category'=>$result['owasp_category'] ?? null,

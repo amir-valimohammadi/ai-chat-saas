@@ -248,6 +248,12 @@ if (!function_exists('qa_browser_fixture_context')) {
             'timeout_ms' => max(5000, (int) app_env('QA_BROWSER_TIMEOUT_MS', 20000)),
             'admin' => ['token' => $adminSession['token'], 'user' => $adminSession['user']],
             'customer' => ['token' => $customerSession['token'], 'user' => $customerSession['user']],
+            'auth_transport' => [
+                'cookie_name' => auth_session_cookie_name(),
+                'csrf_cookie_name' => auth_csrf_cookie_name(),
+                'secure' => auth_cookie_secure(),
+                'same_site' => auth_cookie_same_site(),
+            ],
             'site' => $site,
             'artifact_dir' => qa_browser_artifact_root() . '/' . $run['run_key'],
         ];

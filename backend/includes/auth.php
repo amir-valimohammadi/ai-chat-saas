@@ -8,6 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/response.php';
 require_once __DIR__ . '/jwt.php';
 require_once __DIR__ . '/auth-session.php';
+require_once __DIR__ . '/auth-cookie.php';
 require_once __DIR__ . '/admin-access.php';
 require_once __DIR__ . '/security-events.php';
 
@@ -47,9 +48,15 @@ if (!function_exists('get_bearer_token')) {
 if (!function_exists('require_auth')) {
     function require_auth(PDO $pdo): array
     {
-        $token = get_bearer_token();
+        $bearerToken = get_bearer_token();
+        $usesCookie = $bearerToken === null;
+        $impersonationContext = auth_request_uses_impersonation();
+        $token = $bearerToken ?? auth_cookie_token_for_request();
         if (!$token) {
-            json_response(['success' => false, 'message' => 'Authorization token is required'], 401);
+            json_response(['success' => false, 'message' => 'Authentication session is required'], 401);
+        }
+        if ($usesCookie) {
+            auth_validate_csrf_request($impersonationContext);
         }
 
         try {
@@ -65,6 +72,12 @@ if (!function_exists('require_auth')) {
 
         if (($payload['purpose'] ?? 'access') !== 'access') {
             json_response(['success' => false, 'message' => 'Invalid authentication token'], 401);
+        }
+
+        $payloadIsImpersonation = !empty($payload['impersonation_id']);
+        if ($usesCookie && $payloadIsImpersonation !== $impersonationContext) {
+            auth_clear_session_cookies($impersonationContext);
+            json_response(['success' => false, 'message' => 'Authentication context is invalid'], 401);
         }
 
         $userId = (int) $payload['sub'];
@@ -115,6 +128,42 @@ if (!function_exists('require_auth')) {
             'ip_allowlist_enabled' => (bool) $dbUser['ip_allowlist_enabled'],
             'session_jti' => (string) $payload['jti'],
         ];
+
+        if ($payloadIsImpersonation) {
+            $impersonationId = (int) $payload['impersonation_id'];
+            $impersonatorUserId = (int) ($payload['impersonator_user_id'] ?? 0);
+            $impersonation = $pdo->prepare(
+                "SELECT ai.id,ai.admin_user_id,ai.target_user_id,ai.expires_at,admin.name AS admin_name
+                 FROM admin_impersonations ai
+                 INNER JOIN users admin ON admin.id=ai.admin_user_id AND admin.role='super_admin' AND admin.is_active=1
+                 WHERE ai.id=:id
+                   AND ai.admin_user_id=:admin_user_id
+                   AND ai.target_user_id=:target_user_id
+                   AND ai.status='active'
+                   AND ai.used_at IS NOT NULL
+                   AND ai.expires_at>NOW()
+                 LIMIT 1"
+            );
+            $impersonation->execute([
+                ':id' => $impersonationId,
+                ':admin_user_id' => $impersonatorUserId,
+                ':target_user_id' => $userId,
+            ]);
+            $impersonationRow = $impersonation->fetch();
+            if (!$impersonationRow) {
+                if ($usesCookie) {
+                    auth_clear_session_cookies(true);
+                }
+                json_response(['success' => false, 'message' => 'Impersonation session has expired or been revoked'], 401);
+            }
+            $user += [
+                'is_impersonating' => true,
+                'impersonation_id' => $impersonationId,
+                'impersonator_user_id' => $impersonatorUserId,
+                'impersonator_name' => $impersonationRow['admin_name'],
+                'impersonation_expires_at' => date(DATE_ATOM, strtotime((string) $impersonationRow['expires_at'])),
+            ];
+        }
 
         if ($dbUser['role'] === 'super_admin') {
             $access = admin_load_access($pdo, (int) $dbUser['id']);

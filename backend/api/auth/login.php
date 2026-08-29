@@ -55,12 +55,11 @@ try {
             $lockThreshold = max(3, (int) app_env('ADMIN_LOGIN_LOCK_THRESHOLD', 5));
             $lockMinutes = max(5, (int) app_env('ADMIN_LOGIN_LOCK_MINUTES', 15));
             $locked = $attempts >= $lockThreshold;
-            $lockedUntilSql = $locked
-                ? "DATE_ADD(NOW(), INTERVAL {$lockMinutes} MINUTE)"
-                : "NULL";
-            $update = $pdo->prepare("\n                UPDATE users SET failed_login_attempts=:attempts,\n                    locked_until={$lockedUntilSql}\n                WHERE id=:id\n            ");
+            $update = $pdo->prepare("\n                UPDATE users SET failed_login_attempts=:attempts,\n                    locked_until=CASE\n                        WHEN :locked = 1 THEN DATE_ADD(NOW(), INTERVAL :lock_minutes MINUTE)\n                        ELSE NULL\n                    END\n                WHERE id=:id\n            ");
             $update->execute([
                 ':attempts' => $locked ? 0 : $attempts,
+                ':locked' => $locked ? 1 : 0,
+                ':lock_minutes' => $lockMinutes,
                 ':id' => (int) $user['id'],
             ]);
             if ($locked) {
@@ -117,6 +116,7 @@ try {
     }
 
     $session = auth_issue_session($pdo, $user);
+    $csrfToken = auth_set_session_cookies($session);
     $pdo->prepare('UPDATE users SET last_login_at=NOW(),last_login_ip=:ip,last_seen_at=NOW() WHERE id=:id')
         ->execute([':ip' => auth_client_ip(), ':id' => (int) $user['id']]);
     security_log_login_attempt($pdo, (int) $user['id'], $email, true, null);
@@ -126,7 +126,8 @@ try {
     json_response([
         'success' => true,
         'message' => 'ورود موفق بود.',
-        'token' => $session['token'],
+        'auth_transport' => 'cookie',
+        'csrf_token' => $csrfToken,
         'expires_at' => $session['expires_at'],
         'user' => $session['user'],
     ]);

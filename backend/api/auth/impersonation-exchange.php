@@ -116,6 +116,7 @@ try {
         ':id' => (int) $row['id'],
     ]);
     $pdo->commit();
+    $csrfToken = auth_set_session_cookies($session, true);
 
     $actor = [
         'id' => (int) $row['admin_user_id'],
@@ -142,7 +143,8 @@ try {
     json_response([
         'success' => true,
         'message' => 'ورود موقت آغاز شد.',
-        'token' => $session['token'],
+        'auth_transport' => 'cookie',
+        'csrf_token' => $csrfToken,
         'expires_at' => $session['expires_at'],
         'user' => $session['user'],
     ]);

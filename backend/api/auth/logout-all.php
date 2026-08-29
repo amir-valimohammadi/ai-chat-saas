@@ -19,6 +19,7 @@ try {
         ->execute([':id' => (int) $user['id']]);
     auth_revoke_sessions($pdo, (int) $user['id'], (int) $user['id'], 'Logout from all devices');
     $pdo->commit();
+    auth_clear_session_cookies(auth_request_uses_impersonation());
     json_response(['success' => true, 'message' => 'تمام نشست‌ها باطل شدند.']);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {

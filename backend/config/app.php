@@ -193,6 +193,10 @@ if (!function_exists('app_validate_production_security')) {
             $problems[] = 'WIDGET_ALLOW_EMPTY_ORIGIN must be false';
         }
 
+        if (app_env('AUTH_COOKIE_SECURE', null) === false) {
+            $problems[] = 'AUTH_COOKIE_SECURE must not be false in production';
+        }
+
         if (!$problems) {
             return;
         }

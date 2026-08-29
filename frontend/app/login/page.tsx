@@ -51,7 +51,7 @@ export default function LoginPage() {
                 return;
             }
 
-            saveAuth(data.token, data.user);
+            saveAuth(data.user, data.csrf_token);
             if (data.user.must_change_password) {
                 router.push("/security?required=1");
                 return;

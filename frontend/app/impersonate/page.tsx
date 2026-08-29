@@ -35,7 +35,7 @@ export default function ImpersonationExchangePage() {
       auth: false,
       body: JSON.stringify({ ticket }),
     }).then((data) => {
-      saveImpersonationAuth(data.token, data.user);
+      saveImpersonationAuth(data.user, data.csrf_token);
       setMessage("ورود موقت تأیید شد؛ در حال انتقال به پنل مشتری...");
       router.replace("/dashboard");
     }).catch((reason) => {

@@ -1570,9 +1570,14 @@
     composerContextCancel: shadow.querySelector("[data-composer-context-cancel]"),
   };
 
-  elements.emojiPicker.innerHTML = QUICK_EMOJIS.map(function (emoji) {
-    return `<button type="button" data-compose-emoji="${emoji}">${emoji}</button>`;
-  }).join("");
+  elements.emojiPicker.replaceChildren();
+  for (const emoji of QUICK_EMOJIS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.composeEmoji = emoji;
+    button.textContent = emoji;
+    elements.emojiPicker.appendChild(button);
+  }
 
   bindEvents();
   schedulePreview();
@@ -2115,20 +2120,33 @@
   function renderRoutingStatus(currentConversation) {
     const box = shadow.querySelector("[data-routing-status]");
     if (!box || !currentConversation) return;
+    box.replaceChildren();
     const departmentName = currentConversation.department?.name || "پشتیبانی";
     if (currentConversation.queue_status === "waiting") {
       const position = currentConversation.queue_position ? `شماره ${currentConversation.queue_position}` : "در انتظار";
       box.className = "ai-chat-routing-status show";
-      box.innerHTML = `<span class="ai-chat-routing-dot"></span><span>${escapeHtml(currentConversation.queue_message || `گفتگوی شما در صف ${departmentName} قرار گرفت.`)} <strong>${escapeHtml(position)}</strong></span>`;
+      const dot = document.createElement("span");
+      dot.className = "ai-chat-routing-dot";
+      const message = document.createElement("span");
+      message.appendChild(document.createTextNode(
+        `${currentConversation.queue_message || `گفتگوی شما در صف ${departmentName} قرار گرفت.`} `
+      ));
+      const positionLabel = document.createElement("strong");
+      positionLabel.textContent = position;
+      message.appendChild(positionLabel);
+      box.append(dot, message);
       return;
     }
     if (currentConversation.assigned_agent) {
       box.className = "ai-chat-routing-status show assigned";
-      box.innerHTML = `<span class="ai-chat-routing-dot"></span><span>گفتگو به ${escapeHtml(currentConversation.assigned_agent.name || "پشتیبان")} در دپارتمان ${escapeHtml(departmentName)} اختصاص داده شد.</span>`;
+      const dot = document.createElement("span");
+      dot.className = "ai-chat-routing-dot";
+      const message = document.createElement("span");
+      message.textContent = `گفتگو به ${currentConversation.assigned_agent.name || "پشتیبان"} در دپارتمان ${departmentName} اختصاص داده شد.`;
+      box.append(dot, message);
       return;
     }
     box.className = "ai-chat-routing-status";
-    box.innerHTML = "";
   }
 
   async function handleSendMessage(event) {
@@ -2486,7 +2504,10 @@
           chip.className = `ai-chat-reaction-chip${reaction?.mine ? " mine" : ""}`;
           chip.dataset.messageReaction = String(reaction?.emoji || "");
           chip.dataset.messageId = String(messageId);
-          chip.innerHTML = `${escapeHtml(String(reaction?.emoji || ""))}<span>${Number(reaction?.count || 0)}</span>`;
+          chip.textContent = String(reaction?.emoji || "");
+          const count = document.createElement("span");
+          count.textContent = String(Number(reaction?.count || 0));
+          chip.appendChild(count);
           reactions.appendChild(chip);
         }
       }
@@ -2973,9 +2994,12 @@
   }
 
   function renderError(message) {
-    elements.body.innerHTML = `
-      <div class="ai-chat-error" role="alert">${escapeHtml(message)}</div>
-    `;
+    elements.body.replaceChildren();
+    const error = document.createElement("div");
+    error.className = "ai-chat-error";
+    error.setAttribute("role", "alert");
+    error.textContent = String(message || "");
+    elements.body.appendChild(error);
     setChatComposerActive(false);
   }
 

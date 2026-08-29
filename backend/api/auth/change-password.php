@@ -137,6 +137,8 @@ try {
         rate_limit_identifier('user:' . $user['id'] . '|ip:' . $clientIp)
     );
 
+    auth_clear_session_cookies(auth_request_uses_impersonation());
+
     json_response([
         'success' => true,
         'message' => 'Password changed successfully. Please login again.'

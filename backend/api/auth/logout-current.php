@@ -18,4 +18,5 @@ $stmt->execute([
     ':session_user_id' => (int) $user['id'],
     ':jti_hash' => hash('sha256', (string) $user['session_jti']),
 ]);
+auth_clear_session_cookies(auth_request_uses_impersonation());
 json_response(['success' => true, 'message' => 'از حساب خارج شدید.']);

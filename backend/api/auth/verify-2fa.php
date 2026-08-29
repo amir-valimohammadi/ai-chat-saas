@@ -74,6 +74,7 @@ if (!$valid) {
 }
 
 $session = auth_issue_session($pdo, $user);
+$csrfToken = auth_set_session_cookies($session);
 $pdo->prepare('UPDATE users SET last_login_at=NOW(),last_login_ip=:ip,last_seen_at=NOW(),failed_login_attempts=0,locked_until=NULL WHERE id=:id')
     ->execute([':ip' => auth_client_ip(), ':id' => (int) $user['id']]);
 security_log_login_attempt($pdo, (int) $user['id'], (string) $user['email'], true, null);
@@ -84,7 +85,8 @@ if ($usedRecovery) {
 json_response([
     'success' => true,
     'message' => 'ورود موفق بود.',
-    'token' => $session['token'],
+    'auth_transport' => 'cookie',
+    'csrf_token' => $csrfToken,
     'expires_at' => $session['expires_at'],
     'user' => $session['user'],
 ]);

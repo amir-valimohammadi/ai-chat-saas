@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import crypto from "node:crypto";
 
 function arg(name) {
   const prefix = `--${name}=`;
@@ -59,16 +60,37 @@ async function shouldCancel() {
 }
 
 async function createAuthContext(auth, viewport = { width: 1440, height: 1000 }) {
+  const csrfToken = crypto.randomBytes(32).toString("hex");
+  const transport = contextData.auth_transport;
   const context = await browser.newContext({
     viewport,
     locale: "fa-IR",
     timezoneId: "Asia/Tehran",
     ignoreHTTPSErrors: false,
   });
-  await context.addInitScript(({ token, user }) => {
-    localStorage.setItem("auth_token", token);
+  await context.addCookies([
+    {
+      name: transport.cookie_name,
+      value: auth.token,
+      url: apiBase,
+      httpOnly: true,
+      secure: Boolean(transport.secure),
+      sameSite: transport.same_site,
+    },
+    {
+      name: transport.csrf_cookie_name,
+      value: csrfToken,
+      url: apiBase,
+      httpOnly: false,
+      secure: Boolean(transport.secure),
+      sameSite: transport.same_site,
+    },
+  ]);
+  await context.addInitScript(({ user, csrfToken }) => {
+    localStorage.removeItem("auth_token");
     localStorage.setItem("auth_user", JSON.stringify(user));
-  }, auth);
+    sessionStorage.setItem("auth_csrf_token", csrfToken);
+  }, { user: auth.user, csrfToken });
   return context;
 }
 

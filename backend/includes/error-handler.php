@@ -122,6 +122,21 @@ if (!function_exists('safe_json_error')) {
             ], $logContext));
         }
 
+        if (PHP_SAPI === 'cli') {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            fwrite(
+                STDERR,
+                json_encode(
+                    safe_error_payload($publicMessage, $exception, $extra),
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+                ) . PHP_EOL
+            );
+            exit(1);
+        }
+
         if (function_exists('json_response')) {
             json_response(safe_error_payload($publicMessage, $exception, $extra), $statusCode);
         }

@@ -51,6 +51,7 @@ try {
         ':impersonation_id' => (int) $user['impersonation_id'],
     ]);
     $pdo->commit();
+    auth_clear_session_cookies(true);
 
     if ($row) {
         $actor = [

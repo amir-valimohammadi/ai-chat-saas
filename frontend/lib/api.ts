@@ -5,6 +5,9 @@ const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "http://localhost/ai-chat-saas/backend/api";
 
+const PRIMARY_CSRF_KEY = "auth_csrf_token";
+const IMPERSONATION_CSRF_KEY = "impersonation_csrf_token";
+
 type ApiOptions = RequestInit & {
   auth?: boolean;
 };
@@ -88,7 +91,7 @@ function maintenanceDetailsFromPayload(data: any): MaintenanceModeDetails {
 }
 
 function hasImpersonationSession() {
-  return typeof window !== "undefined" && Boolean(sessionStorage.getItem("impersonation_auth_token"));
+  return typeof window !== "undefined" && sessionStorage.getItem("impersonation_active") === "1";
 }
 
 function clearAuthStorage() {
@@ -100,32 +103,93 @@ function clearAuthStorage() {
     sessionStorage.removeItem("impersonation_auth_token");
     sessionStorage.removeItem("impersonation_auth_user");
     sessionStorage.removeItem("impersonation_active");
+    sessionStorage.removeItem(IMPERSONATION_CSRF_KEY);
     return;
   }
 
   localStorage.removeItem("auth_token");
   localStorage.removeItem("auth_user");
+  sessionStorage.removeItem(PRIMARY_CSRF_KEY);
+}
+
+function csrfStorageKey(impersonation: boolean) {
+  return impersonation ? IMPERSONATION_CSRF_KEY : PRIMARY_CSRF_KEY;
+}
+
+function isStateChangingMethod(method?: string) {
+  return !["GET", "HEAD", "OPTIONS"].includes((method || "GET").toUpperCase());
+}
+
+function applyAuthContext(headers: Headers, impersonation: boolean) {
+  if (impersonation) {
+    headers.set("X-Auth-Context", "impersonation");
+  }
+}
+
+function redirectAfterUnauthorized(wasImpersonating: boolean) {
+  clearAuthStorage();
+  if (typeof window === "undefined") return;
+  if (wasImpersonating) {
+    window.location.href = "/impersonate?ended=1";
+  } else if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
+}
+
+async function ensureCsrfToken(impersonation: boolean): Promise<string> {
+  if (typeof window === "undefined") {
+    throw new Error("CSRF protection is only available in the browser.");
+  }
+
+  const storageKey = csrfStorageKey(impersonation);
+  const existing = sessionStorage.getItem(storageKey) || "";
+  if (/^[a-f0-9]{64}$/.test(existing)) {
+    return existing;
+  }
+
+  const headers = new Headers();
+  applyAuthContext(headers, impersonation);
+  const response = await fetch(`${API_BASE_URL}/auth/csrf.php`, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+    headers,
+  });
+  const data = await response.json().catch(() => null);
+  if (response.status === 401) {
+    redirectAfterUnauthorized(impersonation);
+  }
+  const token = typeof data?.csrf_token === "string" ? data.csrf_token : "";
+  if (!response.ok || !/^[a-f0-9]{64}$/.test(token)) {
+    throw new Error(data?.message || "دریافت توکن امنیتی ناموفق بود. صفحه را تازه‌سازی کنید.");
+  }
+  sessionStorage.setItem(storageKey, token);
+  return token;
 }
 
 export async function apiRequest(path: string, options: ApiOptions = {}) {
-  const token = getAuthToken();
-
   const isFormData =
       typeof FormData !== "undefined" && options.body instanceof FormData;
 
   const headers = new Headers(options.headers);
+  const usesAuth = options.auth !== false;
+  const impersonation = usesAuth && hasImpersonationSession();
 
   if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (options.auth !== false && token) {
-    headers.set("Authorization", `Bearer ${token}`);
+  if (usesAuth) {
+    applyAuthContext(headers, impersonation);
+    if (isStateChangingMethod(options.method)) {
+      headers.set("X-CSRF-Token", await ensureCsrfToken(impersonation));
+    }
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   const text = await response.text();
@@ -158,15 +222,7 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
 
   if (response.status === 401) {
     const wasImpersonating = hasImpersonationSession();
-    clearAuthStorage();
-
-    if (typeof window !== "undefined") {
-      if (wasImpersonating) {
-        window.location.href = "/impersonate?ended=1";
-      } else if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
-    }
+    redirectAfterUnauthorized(wasImpersonating);
 
     throw new Error(data?.message || "نشست شما منقضی شده است. دوباره وارد شوید.");
   }
@@ -193,14 +249,11 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
 }
 
 export async function apiDownload(path: string, fallbackFilename = "download") {
-  const token = getAuthToken();
-
   const headers = new Headers();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  const impersonation = hasImpersonationSession();
+  applyAuthContext(headers, impersonation);
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers, credentials: "include" });
 
   if (response.status === 401) {
     const wasImpersonating = hasImpersonationSession();
@@ -244,21 +297,16 @@ export async function apiDownload(path: string, fallbackFilename = "download") {
   URL.revokeObjectURL(url);
 }
 
-export function saveAuth(token: string, user: unknown) {
-  if (!token || !user) {
+export function saveAuth(user: unknown, csrfToken?: string) {
+  if (!user) {
     throw new Error("اطلاعات ورود ناقص است.");
   }
 
-  localStorage.setItem("auth_token", token);
+  localStorage.removeItem("auth_token");
   localStorage.setItem("auth_user", JSON.stringify(user));
-}
-
-export function getAuthToken() {
-  if (typeof window === "undefined") {
-    return null;
+  if (csrfToken && /^[a-f0-9]{64}$/.test(csrfToken)) {
+    sessionStorage.setItem(PRIMARY_CSRF_KEY, csrfToken);
   }
-
-  return sessionStorage.getItem("impersonation_auth_token") || localStorage.getItem("auth_token");
 }
 
 export function getAuthUser() {
@@ -295,13 +343,16 @@ export function updateAuthUser(user: unknown) {
   }
 }
 
-export function saveImpersonationAuth(token: string, user: unknown) {
-  if (typeof window === "undefined" || !token || !user) {
+export function saveImpersonationAuth(user: unknown, csrfToken?: string) {
+  if (typeof window === "undefined" || !user) {
     throw new Error("اطلاعات ورود موقت ناقص است.");
   }
-  sessionStorage.setItem("impersonation_auth_token", token);
+  sessionStorage.removeItem("impersonation_auth_token");
   sessionStorage.setItem("impersonation_auth_user", JSON.stringify(user));
   sessionStorage.setItem("impersonation_active", "1");
+  if (csrfToken && /^[a-f0-9]{64}$/.test(csrfToken)) {
+    sessionStorage.setItem(IMPERSONATION_CSRF_KEY, csrfToken);
+  }
 }
 
 export function clearImpersonationAuth() {
@@ -309,6 +360,7 @@ export function clearImpersonationAuth() {
   sessionStorage.removeItem("impersonation_auth_token");
   sessionStorage.removeItem("impersonation_auth_user");
   sessionStorage.removeItem("impersonation_active");
+  sessionStorage.removeItem(IMPERSONATION_CSRF_KEY);
 }
 
 export function isImpersonationSession() {

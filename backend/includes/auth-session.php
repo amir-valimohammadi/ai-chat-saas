@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/jwt.php';
 require_once __DIR__ . '/admin-access.php';
+require_once __DIR__ . '/auth-cookie.php';
 
 if (!function_exists('auth_client_ip')) {
     function auth_client_ip(): ?string
@@ -51,12 +52,20 @@ if (!function_exists('auth_public_user')) {
 }
 
 if (!function_exists('auth_issue_session')) {
-    function auth_issue_session(PDO $pdo, array $user): array
+    function auth_issue_session(PDO $pdo, array $user, array $context = []): array
     {
         $now = time();
         $ttl = (int) app_config('jwt_expiration_seconds', 604800);
         if ($ttl <= 0) {
             $ttl = 604800;
+        }
+        $expiresAt = $now + $ttl;
+        if (!empty($context['expires_at'])) {
+            $contextExpiresAt = strtotime((string) $context['expires_at']);
+            if ($contextExpiresAt === false || $contextExpiresAt <= $now) {
+                throw new InvalidArgumentException('Session context expiration must be in the future.');
+            }
+            $expiresAt = min($expiresAt, $contextExpiresAt);
         }
 
         $jti = bin2hex(random_bytes(24));
@@ -72,8 +81,22 @@ if (!function_exists('auth_issue_session')) {
             'jti' => $jti,
             'iat' => $now,
             'nbf' => $now - 5,
-            'exp' => $now + $ttl,
+            'exp' => $expiresAt,
         ];
+
+        $impersonationId = (int) ($context['impersonation_id'] ?? 0);
+        if ($impersonationId > 0) {
+            $impersonatorUserId = (int) ($context['impersonator_user_id'] ?? 0);
+            if ($impersonatorUserId <= 0) {
+                throw new InvalidArgumentException('Impersonation sessions require an impersonator user.');
+            }
+            $payload += [
+                'impersonation_id' => $impersonationId,
+                'impersonator_user_id' => $impersonatorUserId,
+                'impersonator_name' => substr(trim((string) ($context['impersonator_name'] ?? '')), 0, 190),
+                'impersonation_expires_at' => date(DATE_ATOM, $expiresAt),
+            ];
+        }
 
         $token = jwt_encode($payload);
         $stmt = $pdo->prepare("\n            INSERT INTO auth_sessions(\n                user_id,jti_hash,ip_address,user_agent,created_at,last_seen_at,expires_at\n            ) VALUES(\n                :user_id,:jti_hash,:ip_address,:user_agent,NOW(),NOW(),:expires_at\n            )\n        ");
@@ -82,14 +105,25 @@ if (!function_exists('auth_issue_session')) {
             ':jti_hash' => hash('sha256', $jti),
             ':ip_address' => auth_client_ip(),
             ':user_agent' => auth_user_agent(),
-            ':expires_at' => date('Y-m-d H:i:s', $now + $ttl),
+            ':expires_at' => date('Y-m-d H:i:s', $expiresAt),
         ]);
+
+        $publicUser = auth_public_user($pdo, $user);
+        if ($impersonationId > 0) {
+            $publicUser += [
+                'is_impersonating' => true,
+                'impersonation_id' => $impersonationId,
+                'impersonator_user_id' => (int) $payload['impersonator_user_id'],
+                'impersonator_name' => $payload['impersonator_name'],
+                'impersonation_expires_at' => $payload['impersonation_expires_at'],
+            ];
+        }
 
         return [
             'token' => $token,
-            'expires_at' => date(DATE_ATOM, $now + $ttl),
+            'expires_at' => date(DATE_ATOM, $expiresAt),
             'session_id' => (int) $pdo->lastInsertId(),
-            'user' => auth_public_user($pdo, $user),
+            'user' => $publicUser,
         ];
     }
 }
