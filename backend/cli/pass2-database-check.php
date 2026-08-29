@@ -150,7 +150,7 @@ try {
         ['integrity.orphan_messages', "SELECT COUNT(*) FROM messages m LEFT JOIN conversations c ON c.id=m.conversation_id WHERE c.id IS NULL", 0, 'failed'],
         ['integrity.orphan_attachments', "SELECT COUNT(*) FROM message_attachments a LEFT JOIN messages m ON m.id=a.message_id WHERE m.id IS NULL", 0, 'failed'],
         ['integrity.duplicate_visitor_browser_identity', "SELECT COUNT(*) FROM (SELECT site_id,browser_id,COUNT(*) n FROM visitors WHERE browser_id IS NOT NULL AND browser_id<>'' GROUP BY site_id,browser_id HAVING COUNT(*)>1) d", 0, 'warning'],
-        ['runtime.active_expired_auth_sessions', "SELECT COUNT(*) FROM auth_sessions WHERE revoked_at IS NULL AND expires_at<NOW()", 0, 'warning'],
+        ['runtime.expired_auth_sessions_past_retention', "SELECT COUNT(*) FROM auth_sessions WHERE revoked_at IS NULL AND expires_at<DATE_SUB(NOW(), INTERVAL 30 DAY)", 0, 'warning'],
         ['runtime.active_expired_impersonations', "SELECT COUNT(*) FROM admin_impersonations WHERE (status='issued' AND ticket_expires_at<NOW()) OR (status='active' AND expires_at<NOW())", 0, 'warning'],
         ['runtime.expired_rate_limit_rows', "SELECT COUNT(*) FROM api_rate_limits WHERE expires_at<DATE_SUB(NOW(), INTERVAL 1 DAY)", 0, 'warning'],
         ['runtime.unresolved_critical_errors', "SELECT COUNT(*) FROM system_error_logs WHERE resolved_at IS NULL AND level='critical'", 0, 'warning'],

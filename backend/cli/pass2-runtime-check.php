@@ -49,7 +49,10 @@ $recommendedExtensions = [
     'opcache' => 'Production PHP performance',
 ];
 foreach ($recommendedExtensions as $extension => $purpose) {
-    $add("php.extension.{$extension}", extension_loaded($extension), extension_loaded($extension) ? 'loaded' : 'missing', "loaded ({$purpose})", 'recommended');
+    $loaded = $extension === 'opcache'
+        ? extension_loaded('Zend OPcache') || extension_loaded('opcache')
+        : extension_loaded($extension);
+    $add("php.extension.{$extension}", $loaded, $loaded ? 'loaded' : 'missing', "loaded ({$purpose})", 'recommended');
 }
 
 $requiredFunctions = ['random_bytes', 'password_hash', 'password_verify', 'hash_equals'];
