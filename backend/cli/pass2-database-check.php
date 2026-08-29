@@ -109,6 +109,39 @@ try {
         $add("schema.unique_index.{$table}.{$needle}", $found ? 'passed' : 'failed', $found, true, $found ? 'Unique index exists.' : 'Required unique index is missing.');
     }
 
+    $requiredTableOptions = [
+        'tenant_subscriptions' => ['engine' => 'InnoDB', 'collation' => 'utf8mb4_unicode_ci'],
+        'subscription_payments' => ['engine' => 'InnoDB', 'collation' => 'utf8mb4_unicode_ci'],
+    ];
+    foreach ($requiredTableOptions as $table => $expectedOptions) {
+        if (!in_array($table, $actualTables, true)) continue;
+        $stmt = $pdo->prepare('SELECT ENGINE,TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=:schema AND TABLE_NAME=:table LIMIT 1');
+        $stmt->execute([':schema' => $database, ':table' => $table]);
+        $options = $stmt->fetch() ?: [];
+        $actualOptions = [
+            'engine' => (string) ($options['ENGINE'] ?? ''),
+            'collation' => (string) ($options['TABLE_COLLATION'] ?? ''),
+        ];
+        $valid = strcasecmp($actualOptions['engine'], $expectedOptions['engine']) === 0
+            && strcasecmp($actualOptions['collation'], $expectedOptions['collation']) === 0;
+        $add("schema.table_options.{$table}", $valid ? 'passed' : 'failed', $actualOptions, $expectedOptions, $valid ? 'Storage engine and collation are correct.' : 'Table engine or collation must be normalized.');
+    }
+
+    $requiredCheckConstraints = [
+        'tenant_subscriptions' => ['chk_subscription_dates', 'chk_subscription_price'],
+        'subscription_payments' => ['chk_payment_amount'],
+    ];
+    foreach ($requiredCheckConstraints as $table => $constraintNames) {
+        if (!in_array($table, $actualTables, true)) continue;
+        $stmt = $pdo->prepare("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=:schema AND TABLE_NAME=:table AND CONSTRAINT_TYPE='CHECK'");
+        $stmt->execute([':schema' => $database, ':table' => $table]);
+        $actualConstraints = array_map(static fn(array $row): string => (string) $row['CONSTRAINT_NAME'], $stmt->fetchAll());
+        foreach ($constraintNames as $constraintName) {
+            $found = in_array($constraintName, $actualConstraints, true);
+            $add("schema.check_constraint.{$table}.{$constraintName}", $found ? 'passed' : 'failed', $found, true, $found ? 'Check constraint exists.' : 'Required check constraint is missing.');
+        }
+    }
+
     $countChecks = [
         ['integrity.orphan_conversations_site', "SELECT COUNT(*) FROM conversations c LEFT JOIN sites s ON s.id=c.site_id WHERE s.id IS NULL", 0, 'failed'],
         ['integrity.orphan_conversations_visitor', "SELECT COUNT(*) FROM conversations c LEFT JOIN visitors v ON v.id=c.visitor_id WHERE v.id IS NULL", 0, 'failed'],

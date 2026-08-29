@@ -9,6 +9,7 @@
 - `widget/`: ویجت مستقل چت مبتنی بر Shadow DOM
 - `qa-browser-runner/`: تست‌های مرورگری Playwright
 - `tools/`: Smoke testهای خط فرمان
+- `backend/database/schema.sql`: schema کامل، پاک‌سازی‌شده و بدون داده برای نصب تازه
 - `backend/database/migrations/`: migrationهای افزایشی دیتابیس
 - `doc/`: مستندات فنی و تجاری
 
@@ -38,7 +39,14 @@
 
 4. دیتابیس `ai_chat_saas` را با Collation مبتنی بر `utf8mb4` ایجاد کنید.
 
-5. ابتدا schema پایه را import و سپس فایل‌های `backend/database/migrations` را به‌ترتیب نام اجرا کنید. در نسخه محلی فعلی یک dump توسعه‌ای در `database/ai_chat_saas (4).sql` وجود دارد؛ این فایل حاوی داده است و عمداً توسط Git دنبال نمی‌شود. برای استقرار یا Clone تازه باید یک schema پایه پاک‌سازی‌شده و بدون داده حساس تهیه شود.
+5. برای نصب تازه فقط `backend/database/schema.sql` را import کنید. این فایل شامل ساختار نهایی همه migrationها تا `2026_08_29_database_baseline_fixes.sql` است و هیچ داده کاربر، نشست، پیام یا Secret ندارد. migrationهای قدیمی را بعد از این schema دوباره اجرا نکنید.
+
+   ```powershell
+   Get-Content backend\database\schema.sql -Raw |
+     & C:\xampp\mysql\bin\mysql.exe -u root ai_chat_saas
+   ```
+
+   برای دیتابیس موجود، فقط migrationهایی را اجرا کنید که قبلاً روی آن محیط اعمال نشده‌اند. dumpهای کامل داخل `database/` حاوی داده واقعی هستند، توسط Git نادیده گرفته می‌شوند و فقط برای Backup/Restore محلی‌اند.
 
 6. در XAMPP، مسیر پروژه باید از طریق Apache در دسترس باشد. سلامت بک‌اند از این آدرس قابل بررسی است:
 
