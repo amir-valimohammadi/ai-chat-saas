@@ -39,4 +39,4 @@ try{
     $progress=$total>0?min(99,round(($completed/$total)*100,2)):1;
     $pdo->prepare('UPDATE qa_test_runs SET progress_percent=:progress,current_case_key=:case_key,heartbeat_at=NOW() WHERE id=:id')->execute([':progress'=>$progress,':case_key'=>$caseKey,':id'=>$runId]);
     json_response(['success'=>true,'item_id'=>$itemId,'progress_percent'=>$progress]);
-}catch(Throwable $e){json_response(['success'=>false,'message'=>$e->getMessage()],422);}
+}catch(Throwable $e){json_response(['success'=>false,'message'=>safe_api_exception_message($e,'QA browser result could not be stored.')],422);}

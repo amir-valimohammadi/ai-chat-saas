@@ -468,7 +468,7 @@ try {
     json_response([
         'success' => false,
         'message' => 'پردازش خزش ناموفق بود.',
-        'error' => $e->getMessage(),
+        ...safe_api_exception_context($e),
         'run' => $failedRun ? ai_crawl_run_to_array($failedRun) : null,
     ], 500);
 }

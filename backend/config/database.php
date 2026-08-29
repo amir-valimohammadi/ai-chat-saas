@@ -6,11 +6,11 @@
 require_once __DIR__ . '/app.php';
 require_once __DIR__ . '/../includes/error-handler.php';
 
-$host = getenv('DB_HOST') ?: 'localhost';
-$dbname = getenv('DB_NAME') ?: 'ai_chat_saas';
-$port = (int) (getenv('DB_PORT') ?: 3306);
-$username = getenv('DB_USER') ?: 'root';
-$password = getenv('DB_PASS') ?: '';
+$host = (string) app_env('DB_HOST', 'localhost');
+$dbname = (string) app_env('DB_NAME', 'ai_chat_saas');
+$port = (int) app_env('DB_PORT', 3306);
+$username = (string) app_env('DB_USER', 'root');
+$password = (string) app_env('DB_PASS', '');
 
 try {
     $pdo = new PDO(

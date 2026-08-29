@@ -179,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'message' => 'دریافت تنظیمات صفحه پشتیبانی ممکن نیست.',
         ];
         if (!app_is_production()) {
-            $payload['error'] = $e->getMessage();
+            safe_api_exception_context($e);
         }
         json_response($payload, 500);
     }
@@ -460,7 +460,7 @@ try {
         'message' => 'ذخیره تنظیمات صفحه پشتیبانی ممکن نیست.',
     ];
     if (!app_is_production()) {
-        $payload['error'] = $e->getMessage();
+        safe_api_exception_context($e);
     }
     json_response($payload, 500);
 }

@@ -150,7 +150,6 @@ try {
     ];
 
     if (app_debug_enabled()) {
-        $response['error'] = $e->getMessage();
     }
 
     json_response($response, 500);

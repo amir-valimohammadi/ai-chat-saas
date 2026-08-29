@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS `admin_impersonations` (
   `target_session_id` bigint(20) UNSIGNED DEFAULT NULL,
   `started_at` datetime DEFAULT NULL,
   `ticket_expires_at` datetime NOT NULL,
+  `used_at` datetime DEFAULT NULL,
   `expires_at` datetime NOT NULL,
   `ended_at` datetime DEFAULT NULL,
   `ended_by` int(10) UNSIGNED DEFAULT NULL,

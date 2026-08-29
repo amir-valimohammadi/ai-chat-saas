@@ -294,7 +294,7 @@ try {
     ];
 
     if (!app_is_production()) {
-        $payload['error'] = $e->getMessage();
+        safe_api_exception_context($e);
     }
 
     json_response($payload, 500);

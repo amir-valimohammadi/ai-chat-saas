@@ -52,6 +52,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'Failed to disable quick reply',
-        'error' => $e->getMessage()
+        ...safe_api_exception_context($e)
     ], 500);
 }

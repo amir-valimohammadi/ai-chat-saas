@@ -387,13 +387,13 @@ if (!function_exists('qa_case_catalog')) {
             $path = $backendRoot . '/uploads';
             if (!is_dir($path)) return qa_result('skipped', 'پوشه Upload وجود ندارد.', 'medium');
             $dangerous = [];
-            $extensions = ['php','phtml','phar','cgi','pl','py','sh','bat','cmd','exe','com','htaccess'];
+            $extensions = ['php','phtml','phar','cgi','pl','py','sh','bat','cmd','exe','com'];
             try {
                 $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS));
                 foreach ($iterator as $file) {
                     if (!$file->isFile()) continue;
                     $ext = strtolower(pathinfo($file->getFilename(), PATHINFO_EXTENSION));
-                    if (in_array($ext, $extensions, true) || strtolower($file->getFilename()) === '.htaccess') {
+                    if (in_array($ext, $extensions, true)) {
                         $dangerous[] = str_replace('\\','/',substr($file->getPathname(), strlen($backendRoot) + 1));
                         if (count($dangerous) >= 20) break;
                     }

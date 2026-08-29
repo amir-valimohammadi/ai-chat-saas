@@ -30,6 +30,6 @@ try {
     json_response(['success' => true, 'message' => 'Queue processed', 'result' => $result]);
 } catch (Throwable $e) {
     $payload = ['success' => false, 'message' => 'Failed to process queue'];
-    if (!app_is_production()) $payload['error'] = $e->getMessage();
+    safe_api_exception_context($e);
     json_response($payload, 500);
 }

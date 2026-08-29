@@ -249,7 +249,7 @@ try {
 } catch (Exception $e) {
     $payload = ['success' => false, 'message' => 'Failed to load conversation'];
     if (!app_is_production()) {
-        $payload['error'] = $e->getMessage();
+        safe_api_exception_context($e);
     }
     json_response($payload, 500);
 }

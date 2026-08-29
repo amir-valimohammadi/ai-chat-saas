@@ -215,6 +215,8 @@ export default function SystemHealthPage() {
                 : "Maintenance Mode غیرفعال شود؟"
         );
         if (!confirmed) return;
+        const currentPassword = window.prompt("برای تغییر Maintenance Mode، رمز فعلی مدیر را وارد کنید:") || "";
+        if (!currentPassword) return;
 
         try {
             setActionId("maintenance");
@@ -224,6 +226,7 @@ export default function SystemHealthPage() {
                     enabled: maintenanceEnabled,
                     message: maintenanceMessage,
                     until: maintenanceUntil || null,
+                    current_password: currentPassword,
                 }),
             });
             setMaintenanceOpen(false);

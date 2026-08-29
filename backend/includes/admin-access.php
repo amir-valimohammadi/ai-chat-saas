@@ -139,6 +139,12 @@ if (!function_exists('admin_permission_for_script')) {
             'qa-run-show.php' => 'tests.view',
             'qa-run-create.php' => 'tests.view',
             'qa-run-rerun-failed.php' => 'tests.view',
+            'qa-artifact-download.php' => 'tests.view_artifacts',
+            'qa-browser-run-cancel.php' => 'tests.cancel_runs',
+            'qa-browser-run-start.php' => 'tests.run_browser',
+            'qa-finding-update.php' => 'tests.manage_findings',
+            'qa-findings-export.php' => 'tests.export_findings',
+            'qa-findings-list.php' => 'tests.view',
         ];
 
         return $map[$script] ?? null;

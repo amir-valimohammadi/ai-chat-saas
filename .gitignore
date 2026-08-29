@@ -46,6 +46,10 @@ pnpm-debug.log*
 
 backend/uploads/*
 !backend/uploads/.gitkeep
+!backend/uploads/.htaccess
+!backend/uploads/qa-artifacts/
+backend/uploads/qa-artifacts/*
+!backend/uploads/qa-artifacts/.htaccess
 
 backend/storage/logs/
 backend/storage/cache/

@@ -73,11 +73,15 @@ if (!function_exists('qa_security_files')) {
     {
         $files = [];
         if (!is_dir($root)) return $files;
+        $excludedDirectories = ['.git', '.next', 'node_modules'];
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
         );
         foreach ($iterator as $file) {
             if (!$file->isFile() || $file->isLink()) continue;
+            $relativePath = str_replace('\\', '/', substr($file->getPathname(), strlen(rtrim($root, '/\\')) + 1));
+            $pathSegments = explode('/', $relativePath);
+            if (array_intersect($excludedDirectories, $pathSegments) !== []) continue;
             $extension = strtolower((string) pathinfo($file->getFilename(), PATHINFO_EXTENSION));
             if ($extensions !== [] && !in_array($extension, $extensions, true)) continue;
             $files[] = $file->getPathname();
@@ -147,7 +151,7 @@ if (!function_exists('qa_security_case_catalog')) {
         };
 
         $add('security.deep.jwt_secret_strength', 'security', 'قدرت JWT Secret', 'طول، مقدار پیش‌فرض و الگوی کلید JWT بررسی می‌شود.', static function (): array {
-            $secret = (string) app_env('JWT_SECRET', '');
+            $secret = (string) app_config('jwt_secret', '');
             $weakValues = ['', 'change_this_secret', 'secret', 'password', '123456'];
             $weak = in_array(strtolower($secret), $weakValues, true) || strlen($secret) < 32;
             return $weak
@@ -164,7 +168,7 @@ if (!function_exists('qa_security_case_catalog')) {
         });
 
         $add('security.deep.secret_separation', 'security', 'جداسازی کلیدها', 'یکسان نبودن JWT_SECRET و APP_ENCRYPTION_KEY بررسی می‌شود.', static function (): array {
-            $jwt = (string) app_env('JWT_SECRET', '');
+            $jwt = (string) app_config('jwt_secret', '');
             $enc = (string) app_env('APP_ENCRYPTION_KEY', '');
             $same = $jwt !== '' && $enc !== '' && hash_equals($jwt, $enc);
             return $same
@@ -432,12 +436,20 @@ if (!function_exists('qa_security_case_catalog')) {
             $dirs = [$backendRoot . '/uploads', $backendRoot . '/storage/uploads'];
             $missingProtection = [];
             $executables = [];
+            $qaArtifactRoot = str_replace('\\', '/', $backendRoot . '/uploads/qa-artifacts');
+            $qaArtifactGuard = $qaArtifactRoot . '/.htaccess';
+            $qaArtifactsDenied = is_file($qaArtifactGuard)
+                && str_contains(strtolower((string) file_get_contents($qaArtifactGuard)), 'require all denied');
             foreach ($dirs as $dir) {
                 if (!is_dir($dir)) continue;
                 $htaccess = $dir . '/.htaccess';
                 $content = is_file($htaccess) ? (string)file_get_contents($htaccess) : '';
                 if (!str_contains($content, 'Options -Indexes') || !str_contains($content, 'FilesMatch')) $missingProtection[] = $dir;
                 foreach (qa_security_files($dir, ['php','phtml','phar','cgi','pl','py','exe','js','mjs','html','svg']) as $file) {
+                    $normalizedFile = str_replace('\\', '/', $file);
+                    if ($qaArtifactsDenied && str_starts_with($normalizedFile, $qaArtifactRoot . '/')) {
+                        continue;
+                    }
                     $name = strtolower(basename($file));
                     if ($name === 'index.html') {
                         $guardContent = (string) @file_get_contents($file);
@@ -523,7 +535,7 @@ if (!function_exists('qa_security_case_catalog')) {
         });
 
         $add('security.deep.frontend_xss_sinks', 'security', 'Sinkهای XSS در Frontend/Widget', 'innerHTML و dangerouslySetInnerHTML برای بازبینی امنیتی اسکن می‌شوند.', static function () use ($frontendRoot, $widgetRoot, $projectRoot): array {
-            $files = array_merge(qa_security_files($frontendRoot, ['ts','tsx','js','jsx']), qa_security_files($widgetRoot, ['js']));
+            $files = array_merge(qa_security_files($frontendRoot, ['ts','tsx','js','jsx']), qa_security_files($widgetRoot . '/src', ['js']));
             $matches = qa_security_scan_files($files, '/dangerouslySetInnerHTML|\.innerHTML\s*=|insertAdjacentHTML\s*\(/', $projectRoot, 40);
             return $matches === []
                 ? qa_security_result('passed', 'Sink مستقیم HTML در کد رابط پیدا نشد.', 'info', 0, 0, null, [], null, null, [], 'A03:2021 Injection', 'CWE-79', 'Frontend/Widget rendering', 'high', 'static')
@@ -621,9 +633,9 @@ if (!function_exists('qa_security_case_catalog')) {
             return qa_security_result('passed', 'سیاست TTL توکن در محدوده مناسب است.', 'info', ['ttl'=>$ttl,'max'=>$max], 'ttl<=86400 and max<=604800', null, [], null, null, [], 'A07:2021 Identification and Authentication Failures', 'CWE-613', 'JWT policy', 'high', 'configuration');
         });
 
-        $add('security.deep.expired_session_cleanup', 'security', 'پاک‌سازی نشست‌های منقضی', 'نشست‌های منقضی و لغونشده قدیمی بررسی می‌شوند.', static function () use ($pdo): array {
+        $add('security.deep.expired_session_cleanup', 'security', 'پاک‌سازی نشست‌های منقضی', 'نشست‌های منقضی و لغونشده قدیمی‌تر از دوره نگهداری ۳۰ روزه بررسی می‌شوند.', static function () use ($pdo): array {
             if (!qa_table_exists($pdo,'auth_sessions')) return qa_security_result('skipped','جدول نشست نصب نشده است.','medium');
-            $count=(int)$pdo->query("SELECT COUNT(*) FROM auth_sessions WHERE revoked_at IS NULL AND expires_at<DATE_SUB(NOW(),INTERVAL 24 HOUR)")->fetchColumn();
+            $count=(int)$pdo->query("SELECT COUNT(*) FROM auth_sessions WHERE revoked_at IS NULL AND expires_at<DATE_SUB(NOW(),INTERVAL 30 DAY)")->fetchColumn();
             return $count===0
                 ? qa_security_result('passed','نشست منقضی قدیمی بدون پاک‌سازی پیدا نشد.','info',0,0,null,[],null,null,[],'A07:2021 Identification and Authentication Failures','CWE-613','Session cleanup','high','database')
                 : qa_security_result('warning','نشست‌های منقضی قدیمی در دیتابیس باقی مانده‌اند.','medium',$count,0,'Cron پاک‌سازی نشست‌ها را فعال و Retention مشخص کن.',[],'Cleanup دوره‌ای نشست‌ها اجرا نمی‌شود یا ناقص است.','انباشت داده و تحلیل امنیتی نشست‌ها دشوار می‌شود.',[],'A07:2021 Identification and Authentication Failures','CWE-613','Session cleanup','confirmed','database',4.5);

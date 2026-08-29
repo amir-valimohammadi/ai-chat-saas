@@ -137,7 +137,7 @@ try {
 } catch (Throwable $e) {
     $payload = ['success' => false, 'message' => 'Failed to load plans'];
     if (!app_is_production()) {
-        $payload['error'] = $e->getMessage();
+        safe_api_exception_context($e);
     }
     json_response($payload, 500);
 }

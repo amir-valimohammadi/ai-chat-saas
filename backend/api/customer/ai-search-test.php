@@ -122,6 +122,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'AI search test failed',
-        'error' => $e->getMessage()
+        ...safe_api_exception_context($e)
     ], 500);
 }

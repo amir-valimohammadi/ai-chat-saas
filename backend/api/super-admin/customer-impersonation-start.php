@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/admin-access.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../includes/auth-session.php';
+require_once __DIR__ . '/../../includes/rate-limit.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['success' => false, 'message' => 'Method not allowed'], 405);
@@ -19,6 +20,14 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 $input = get_json_input();
 require_sensitive_confirmation($pdo, $user, $input);
+enforce_rate_limit(
+    $pdo,
+    'admin_impersonation_start',
+    rate_limit_identifier('admin:' . (int) $user['id'] . '|ip:' . (auth_client_ip() ?? 'unknown')),
+    5,
+    10 * 60,
+    'تعداد درخواست‌های ورود موقت بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.'
+);
 
 $tenantId = filter_var(
     $input['tenant_id'] ?? 0,

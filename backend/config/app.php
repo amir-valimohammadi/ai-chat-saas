@@ -7,6 +7,10 @@ if (!defined('APP_ROOT')) {
     define('APP_ROOT', dirname(__DIR__));
 }
 
+if (!isset($GLOBALS['app_env_file_values']) || !is_array($GLOBALS['app_env_file_values'])) {
+    $GLOBALS['app_env_file_values'] = [];
+}
+
 if (!function_exists('app_load_env')) {
     function app_load_env(string $path): void
     {
@@ -51,7 +55,9 @@ if (!function_exists('app_load_env')) {
             $value = trim($value, "\"'");
 
             if (getenv($key) === false) {
-                putenv($key . '=' . $value);
+                // Keep file-backed values request-local. putenv() mutates process state
+                // and is unreliable under Windows Apache's threaded MPM.
+                $GLOBALS['app_env_file_values'][$key] = $value;
                 $_ENV[$key] = $value;
                 $_SERVER[$key] = $value;
             }
@@ -67,7 +73,11 @@ if (!function_exists('app_env')) {
         $value = getenv($key);
 
         if ($value === false) {
-            return $default;
+            $fileValues = $GLOBALS['app_env_file_values'] ?? [];
+            if (!is_array($fileValues) || !array_key_exists($key, $fileValues)) {
+                return $default;
+            }
+            $value = $fileValues[$key];
         }
 
         $lowerValue = strtolower((string) $value);
@@ -103,11 +113,10 @@ $appConfig = [
 
     'jwt_secret' => app_env('JWT_SECRET', 'change_this_secret'),
 
-    // پیشنهاد:
-    // برای پنل ادمین بهتر است access token کوتاه‌تر باشد.
-    // مقدار پیش‌فرض فعلاً 7 روز مانده تا پروژه‌ات نشکند.
-    'jwt_expiration_seconds' => (int) app_env('JWT_EXPIRATION_SECONDS', 604800),
-    'jwt_max_ttl_seconds' => (int) app_env('JWT_MAX_TTL_SECONDS', 604800),
+    // Access tokenها حداکثر یک روز معتبر می‌مانند. برای Production می‌توان
+    // JWT_EXPIRATION_SECONDS را کوتاه‌تر (مثلاً یک ساعت) تنظیم کرد.
+    'jwt_expiration_seconds' => (int) app_env('JWT_EXPIRATION_SECONDS', 86400),
+    'jwt_max_ttl_seconds' => (int) app_env('JWT_MAX_TTL_SECONDS', 86400),
     'jwt_issuer' => app_env('JWT_ISSUER', 'ai-chat-saas'),
     'jwt_audience' => app_env('JWT_AUDIENCE', 'ai-chat-saas-panel'),
 ];

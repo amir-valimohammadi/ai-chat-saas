@@ -20,4 +20,4 @@ try{
     $status=in_array($requested,['completed','failed','cancelled'],true)?$requested:'completed';
     $run=qa_browser_finalize_run($pdo,$runId,$status,$input['error']??null);
     json_response(['success'=>true,'run'=>$run,'cleanup'=>$cleanup]);
-}catch(Throwable $e){json_response(['success'=>false,'message'=>$e->getMessage()],422);}
+}catch(Throwable $e){json_response(['success'=>false,'message'=>safe_api_exception_message($e,'QA browser run could not be finalized.')],422);}

@@ -294,6 +294,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'Failed to generate AI suggestion',
-        'error' => $e->getMessage()
+        ...safe_api_exception_context($e)
     ], 500);
 }

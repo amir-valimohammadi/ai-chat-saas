@@ -134,6 +134,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'Failed to upload image',
-        'error' => $e->getMessage()
+        ...safe_api_exception_context($e)
     ], 500);
 }

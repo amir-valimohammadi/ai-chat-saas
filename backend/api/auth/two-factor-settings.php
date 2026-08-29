@@ -35,7 +35,7 @@ if($currentPassword===''||!$dbUser||!password_verify($currentPassword,(string)$d
 try{$pdo->beginTransaction();
  if($action==='confirm'){
   $secret=strtoupper(trim((string)($in['secret']??'')));$code=(string)($in['code']??'');
-  if($secret===''||!totp_verify($secret,$code))throw new RuntimeException('کد Authenticator صحیح نیست.');
+  if($secret===''||!totp_verify($secret,$code))throw new ApiPublicException('کد Authenticator صحیح نیست.');
   $encrypted=security_encrypt_secret($secret);$codes=totp_recovery_codes(8);
   $pdo->prepare('UPDATE users SET two_factor_enabled=1,two_factor_secret_encrypted=:secret,two_factor_confirmed_at=NOW(),token_version=token_version+1 WHERE id=:id')->execute([':secret'=>$encrypted,':id'=>$user['id']]);
   $pdo->prepare('DELETE FROM admin_two_factor_recovery_codes WHERE user_id=:id')->execute([':id'=>$user['id']]);$ins=$pdo->prepare('INSERT INTO admin_two_factor_recovery_codes(user_id,code_hash,created_at) VALUES(:user_id,:hash,NOW())');foreach($codes as $recovery)$ins->execute([':user_id'=>$user['id'],':hash'=>hash('sha256',$recovery)]);
@@ -45,11 +45,11 @@ try{$pdo->beginTransaction();
  if($action==='disable'){
   $code=strtoupper(trim((string)($in['code']??'')));$secret=security_decrypt_secret((string)$dbUser['two_factor_secret_encrypted']);$valid=$secret!==''&&totp_verify($secret,$code);
   if(!$valid&&preg_match('/^[A-F0-9]{8}$/',$code)){$hash=hash('sha256',$code);$q=$pdo->prepare('SELECT id FROM admin_two_factor_recovery_codes WHERE user_id=:user_id AND code_hash=:hash AND used_at IS NULL LIMIT 1');$q->execute([':user_id'=>$user['id'],':hash'=>$hash]);$valid=(bool)$q->fetchColumn();}
-  if(!$valid)throw new RuntimeException('کد امنیتی صحیح نیست.');
+  if(!$valid)throw new ApiPublicException('کد امنیتی صحیح نیست.');
   $pdo->prepare('UPDATE users SET two_factor_enabled=0,two_factor_secret_encrypted=NULL,two_factor_confirmed_at=NULL,token_version=token_version+1 WHERE id=:id')->execute([':id'=>$user['id']]);$pdo->prepare('DELETE FROM admin_two_factor_recovery_codes WHERE user_id=:id')->execute([':id'=>$user['id']]);auth_revoke_sessions($pdo,(int)$user['id'],(int)$user['id'],'Two-factor authentication disabled');security_log_event($pdo,(int)$user['id'],'two_factor_disabled','warning','ورود دومرحله‌ای غیرفعال شد');$pdo->commit();json_response(['success'=>true,'message'=>'ورود دومرحله‌ای غیرفعال شد. دوباره وارد شوید.','requires_relogin'=>true]);
  }
  if($action==='regenerate_recovery'){
-  $code=(string)($in['code']??'');$secret=security_decrypt_secret((string)$dbUser['two_factor_secret_encrypted']);if(!$dbUser['two_factor_enabled']||$secret===''||!totp_verify($secret,$code))throw new RuntimeException('کد Authenticator صحیح نیست.');$codes=totp_recovery_codes(8);$pdo->prepare('DELETE FROM admin_two_factor_recovery_codes WHERE user_id=:id')->execute([':id'=>$user['id']]);$ins=$pdo->prepare('INSERT INTO admin_two_factor_recovery_codes(user_id,code_hash,created_at) VALUES(:user_id,:hash,NOW())');foreach($codes as $recovery)$ins->execute([':user_id'=>$user['id'],':hash'=>hash('sha256',$recovery)]);security_log_event($pdo,(int)$user['id'],'recovery_codes_regenerated','warning','کدهای بازیابی جدید ساخته شد');$pdo->commit();json_response(['success'=>true,'message'=>'کدهای بازیابی جدید ساخته شد.','recovery_codes'=>$codes]);
+  $code=(string)($in['code']??'');$secret=security_decrypt_secret((string)$dbUser['two_factor_secret_encrypted']);if(!$dbUser['two_factor_enabled']||$secret===''||!totp_verify($secret,$code))throw new ApiPublicException('کد Authenticator صحیح نیست.');$codes=totp_recovery_codes(8);$pdo->prepare('DELETE FROM admin_two_factor_recovery_codes WHERE user_id=:id')->execute([':id'=>$user['id']]);$ins=$pdo->prepare('INSERT INTO admin_two_factor_recovery_codes(user_id,code_hash,created_at) VALUES(:user_id,:hash,NOW())');foreach($codes as $recovery)$ins->execute([':user_id'=>$user['id'],':hash'=>hash('sha256',$recovery)]);security_log_event($pdo,(int)$user['id'],'recovery_codes_regenerated','warning','کدهای بازیابی جدید ساخته شد');$pdo->commit();json_response(['success'=>true,'message'=>'کدهای بازیابی جدید ساخته شد.','recovery_codes'=>$codes]);
  }
- throw new RuntimeException('عملیات نامعتبر است.');
-}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();json_response(['success'=>false,'message'=>$e->getMessage()],422);}
+ throw new ApiPublicException('عملیات نامعتبر است.');
+}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();json_response(['success'=>false,'message'=>safe_api_exception_message($e,'تغییر تنظیمات ورود دومرحله‌ای ناموفق بود.')],422);}

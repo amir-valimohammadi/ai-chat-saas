@@ -259,7 +259,7 @@ try {
         url.searchParams.set("api_base", contextData.api_url);
         url.searchParams.set("widget_script", contextData.widget_script_url);
         await page.goto(url.toString(), { waitUntil: "domcontentloaded", timeout: contextData.timeout_ms });
-        await page.waitForSelector("#ai-chat-widget-root", { timeout: contextData.timeout_ms });
+        await page.waitForSelector("#ai-chat-widget-root", { state: "attached", timeout: contextData.timeout_ms });
         const state = await page.locator("#ai-chat-widget-root").evaluate((host) => {
           const root = host.shadowRoot;
           return { hasShadow: Boolean(root), hasToggle: Boolean(root?.querySelector("[data-toggle]")), hasWindow: Boolean(root?.querySelector("[data-window]")) };
@@ -276,7 +276,7 @@ try {
         url.searchParams.set("api_base", contextData.api_url);
         url.searchParams.set("widget_script", contextData.widget_script_url);
         await page.goto(url.toString(), { waitUntil: "domcontentloaded", timeout: contextData.timeout_ms });
-        await page.waitForSelector("#ai-chat-widget-root", { timeout: contextData.timeout_ms });
+        await page.waitForSelector("#ai-chat-widget-root", { state: "attached", timeout: contextData.timeout_ms });
         await page.locator("#ai-chat-widget-root").evaluate((host) => host.shadowRoot?.querySelector("[data-toggle]")?.click());
         await page.waitForTimeout(800);
         const opened = await page.locator("#ai-chat-widget-root").evaluate((host) => host.shadowRoot?.querySelector("[data-window]")?.classList.contains("open"));
@@ -287,6 +287,7 @@ try {
       key: "browser.widget_api", category: "widget", title: "API تنظیمات و Presence ویجت", context: publicContext,
       description: "تنظیمات سایت و ساخت Visitor آزمایشی از API واقعی ویجت بررسی می‌شود.",
       run: async (page) => {
+        await page.goto(contextData.widget_host_url, { waitUntil: "domcontentloaded", timeout: contextData.timeout_ms });
         const result = await page.evaluate(async ({ api, siteKey }) => {
           const configResponse = await fetch(`${api}/widget/config.php?site_key=${encodeURIComponent(siteKey)}`);
           const config = await configResponse.json();

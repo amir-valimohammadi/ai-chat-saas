@@ -57,6 +57,7 @@ CREATE TABLE `admin_impersonations` (
   `target_session_id` bigint(20) unsigned DEFAULT NULL,
   `started_at` datetime DEFAULT NULL,
   `ticket_expires_at` datetime NOT NULL,
+  `used_at` datetime DEFAULT NULL,
   `expires_at` datetime NOT NULL,
   `ended_at` datetime DEFAULT NULL,
   `ended_by` int(10) unsigned DEFAULT NULL,
@@ -644,7 +645,8 @@ CREATE TABLE `auth_sessions` (
   UNIQUE KEY `uq_auth_sessions_jti` (`jti_hash`),
   KEY `idx_auth_sessions_user_active` (`user_id`,`revoked_at`,`expires_at`),
   KEY `idx_auth_sessions_last_seen` (`last_seen_at`),
-  KEY `idx_auth_sessions_impersonation` (`impersonation_id`,`revoked_at`,`expires_at`)
+  KEY `idx_auth_sessions_impersonation` (`impersonation_id`,`revoked_at`,`expires_at`),
+  CONSTRAINT `fk_auth_sessions_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

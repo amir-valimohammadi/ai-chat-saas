@@ -35,6 +35,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'غیرفعال کردن منبع ناموفق بود.',
-        'error' => $e->getMessage(),
+        ...safe_api_exception_context($e),
     ], 500);
 }

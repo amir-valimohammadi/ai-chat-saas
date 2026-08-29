@@ -40,12 +40,12 @@ try {
     $pdo->beginTransaction();
     if ($id === 0) {
         if (!admin_password_is_strong($password)) {
-            throw new RuntimeException('رمز عبور باید حداقل ۱۰ کاراکتر و شامل حرف، عدد و نماد باشد.');
+            throw new ApiPublicException('رمز عبور باید حداقل ۱۰ کاراکتر و شامل حرف، عدد و نماد باشد.');
         }
         $exists = $pdo->prepare('SELECT COUNT(*) FROM users WHERE email=:email');
         $exists->execute([':email' => $email]);
         if ((int) $exists->fetchColumn() > 0) {
-            throw new RuntimeException('این ایمیل قبلاً ثبت شده است.');
+            throw new ApiPublicException('این ایمیل قبلاً ثبت شده است.');
         }
         $stmt = $pdo->prepare("\n            INSERT INTO users(tenant_id,name,email,phone,password_hash,role,admin_role_id,is_active,token_version,must_change_password,availability_status,created_at)\n            VALUES(NULL,:name,:email,:phone,:password_hash,'super_admin',:admin_role_id,1,1,:must_change_password,'online',NOW())\n        ");
         $stmt->execute([
@@ -66,15 +66,15 @@ try {
         $oldStmt->execute([':id' => $id]);
         $old = $oldStmt->fetch();
         if (!$old) {
-            throw new RuntimeException('مدیر موردنظر پیدا نشد.');
+            throw new ApiPublicException('مدیر موردنظر پیدا نشد.');
         }
         if ($old['role_code'] === 'owner' && $role['code'] !== 'owner' && admin_active_owner_count($pdo, $id) < 1) {
-            throw new RuntimeException('حداقل یک مالک فعال باید در سامانه باقی بماند.');
+            throw new ApiPublicException('حداقل یک مالک فعال باید در سامانه باقی بماند.');
         }
         $exists = $pdo->prepare('SELECT COUNT(*) FROM users WHERE email=:email AND id<>:id');
         $exists->execute([':email' => $email, ':id' => $id]);
         if ((int) $exists->fetchColumn() > 0) {
-            throw new RuntimeException('این ایمیل قبلاً ثبت شده است.');
+            throw new ApiPublicException('این ایمیل قبلاً ثبت شده است.');
         }
         $securityChanged =
             strtolower((string) $old['email']) !== $email ||
@@ -101,5 +101,5 @@ try {
     json_response(['success' => true, 'message' => 'اطلاعات مدیر ذخیره شد.', 'admin_id' => $id]);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    json_response(['success' => false, 'message' => $e->getMessage()], 422);
+    json_response(['success' => false, 'message' => safe_api_exception_message($e, 'ذخیره اطلاعات مدیر ناموفق بود.')], 422);
 }

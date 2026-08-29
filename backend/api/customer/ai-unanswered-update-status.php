@@ -69,6 +69,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'Failed to update unanswered question',
-        'error' => $e->getMessage()
+        ...safe_api_exception_context($e)
     ], 500);
 }

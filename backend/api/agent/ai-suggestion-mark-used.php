@@ -76,6 +76,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'Failed to mark AI suggestion as used',
-        'error' => $e->getMessage()
+        ...safe_api_exception_context($e)
     ], 500);
 }

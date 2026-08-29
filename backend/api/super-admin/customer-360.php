@@ -237,7 +237,7 @@ try {
     error_log('[AI_CHAT_SAAS_CUSTOMER360] ' . $e->getMessage());
     $payload = ['success' => false, 'message' => 'بارگذاری پرونده ۳۶۰ مشتری ناموفق بود.'];
     if (function_exists('app_debug_enabled') && app_debug_enabled()) {
-        $payload['error'] = $e->getMessage();
+        safe_api_exception_context($e);
     }
     json_response($payload, 500);
 }

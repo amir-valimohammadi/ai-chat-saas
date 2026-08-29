@@ -44,6 +44,7 @@ try {
     if (
         !$row ||
         $row['status'] !== 'issued' ||
+        $row['used_at'] !== null ||
         strtotime((string) $row['ticket_expires_at']) <= time() ||
         strtotime((string) $row['expires_at']) <= time()
     ) {
@@ -75,11 +76,16 @@ try {
         json_response(['success' => false, 'message' => 'حساب هدف فعال نیست.'], 403);
     }
 
-    $pdo->prepare(
+    $consumeTicket = $pdo->prepare(
         "UPDATE admin_impersonations
-         SET status='active',started_at=NOW()
-         WHERE id=:id AND status='issued'"
-    )->execute([':id' => (int) $row['id']]);
+         SET status='active',started_at=NOW(),used_at=NOW()
+         WHERE id=:id AND status='issued' AND used_at IS NULL"
+    );
+    $consumeTicket->execute([':id' => (int) $row['id']]);
+    if ($consumeTicket->rowCount() !== 1) {
+        $pdo->rollBack();
+        json_response(['success' => false, 'message' => 'Ticket ورود موقت قبلاً استفاده شده است.'], 410);
+    }
 
     // ai.* contains its own `id`; never pass the raw joined row to
     // auth_issue_session(), otherwise the impersonation record id becomes

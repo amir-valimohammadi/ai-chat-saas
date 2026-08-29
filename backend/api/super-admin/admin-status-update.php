@@ -20,10 +20,10 @@ if($id===(int)$actor['id'] && !$active) json_response(['success'=>false,'message
 try{
  $pdo->beginTransaction();
  $q=$pdo->prepare("SELECT u.id,u.name,u.email,u.is_active,r.code AS role_code FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=:id AND u.role='super_admin' LIMIT 1 FOR UPDATE");
- $q->execute([':id'=>$id]); $old=$q->fetch(); if(!$old) throw new RuntimeException('مدیر پیدا نشد.');
- if(!$active && $old['role_code']==='owner' && admin_active_owner_count($pdo,$id)<1) throw new RuntimeException('آخرین مالک فعال را نمی‌توان غیرفعال کرد.');
+ $q->execute([':id'=>$id]); $old=$q->fetch(); if(!$old) throw new ApiPublicException('مدیر پیدا نشد.');
+ if(!$active && $old['role_code']==='owner' && admin_active_owner_count($pdo,$id)<1) throw new ApiPublicException('آخرین مالک فعال را نمی‌توان غیرفعال کرد.');
  $pdo->prepare('UPDATE users SET is_active=:active,token_version=token_version+1,updated_at=NOW() WHERE id=:id')->execute([':active'=>$active,':id'=>$id]);
  if(!$active) auth_revoke_sessions($pdo,$id,(int)$actor['id'],'Admin account deactivated');
  admin_audit_log($pdo,$actor,'admin.status_changed','admin_user',$id,'وضعیت مدیر تغییر کرد',['is_active'=>(bool)$old['is_active']],['is_active'=>(bool)$active],['target_user_id'=>$id]);
  $pdo->commit(); json_response(['success'=>true,'message'=>$active?'مدیر فعال شد.':'مدیر غیرفعال شد.']);
-}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();json_response(['success'=>false,'message'=>$e->getMessage()],422);}
+}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();json_response(['success'=>false,'message'=>safe_api_exception_message($e,'تغییر وضعیت مدیر ناموفق بود.')],422);}

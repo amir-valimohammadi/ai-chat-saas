@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/admin-access.php';
 require_once __DIR__ . '/../../includes/system-settings.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -18,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 $input = get_json_input();
+require_sensitive_confirmation($pdo, $user, $input);
 
 if (!array_key_exists('enabled', $input)) {
     json_response(['success' => false, 'message' => 'enabled is required'], 422);

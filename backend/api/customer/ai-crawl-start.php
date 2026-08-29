@@ -234,6 +234,6 @@ try {
     json_response([
         'success' => false,
         'message' => 'شروع خزش ناموفق بود.',
-        'error' => $e->getMessage(),
+        ...safe_api_exception_context($e),
     ], 500);
 }

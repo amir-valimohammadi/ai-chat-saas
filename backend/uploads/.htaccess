@@ -1,0 +1,13 @@
+Options -Indexes
+
+<FilesMatch "\.(php|php3|php4|php5|phtml|phar|cgi|pl|py|sh|bat|cmd|exe|js|html|htm|svg|xml)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

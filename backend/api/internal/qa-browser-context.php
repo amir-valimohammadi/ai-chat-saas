@@ -17,4 +17,4 @@ try{
     $context=qa_browser_prepare_fixture($pdo,$run);
     if(!is_dir($context['artifact_dir'])&&!mkdir($context['artifact_dir'],0775,true)&&!is_dir($context['artifact_dir'])) throw new RuntimeException('پوشه Artifact قابل ساخت نیست.');
     json_response(['success'=>true,'context'=>$context]);
-}catch(Throwable $e){json_response(['success'=>false,'message'=>$e->getMessage()],403);}
+}catch(Throwable $e){json_response(['success'=>false,'message'=>safe_api_exception_message($e,'QA browser context could not be prepared.')],403);}

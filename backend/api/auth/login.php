@@ -134,7 +134,6 @@ try {
     error_log('[AI_CHAT_SAAS_AUTH_LOGIN] ' . $e->getMessage());
     $response = ['success' => false, 'message' => 'ورود ناموفق بود.'];
     if (app_debug_enabled()) {
-        $response['error'] = $e->getMessage();
     }
     json_response($response, 500);
 }
