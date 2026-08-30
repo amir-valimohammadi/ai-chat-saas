@@ -4,7 +4,7 @@
 
 ## اجزای پروژه
 
-- `backend/`: APIهای PHP، احراز هویت JWT، مدیریت مشتریان، پیام‌رسانی، AI، گزارش‌ها و ابزارهای QA
+- `backend/`: APIهای PHP، نشست امن HttpOnly، مدیریت مشتریان، پیام‌رسانی، AI، گزارش‌ها و ابزارهای QA
 - `frontend/`: پنل Next.js برای Super Admin، مدیر مشتری و اپراتور
 - `widget/`: ویجت مستقل چت مبتنی بر Shadow DOM
 - `qa-browser-runner/`: تست‌های مرورگری Playwright
@@ -80,6 +80,19 @@ npm run dev
 
 کد توسعه در `widget/src/widget.js` نگهداری می‌شود. در حال حاضر pipeline ساخت جداگانه‌ای برای ویجت وجود ندارد؛ هر تغییر ویجت باید به‌صورت کنترل‌شده در نسخه `dist` نیز منتشر شود.
 
+## چت بلادرنگ
+
+صفحه گفتگو، صندوق ورودی اپراتور، صفحه پشتیبانی عمومی و ویجت از Server-Sent Events استفاده می‌کنند. ارسال پیام همچنان با APIهای معمول انجام می‌شود و SSE تغییرات پیام، رسید خواندن، وضعیت گفتگو و تایپ اپراتور را فوراً به طرف مقابل اعلام می‌کند. اگر مرورگر، پراکسی یا میزبان از stream پشتیبانی نکند، کلاینت به‌صورت خودکار به polling قبلی برمی‌گردد و بعداً اتصال بلادرنگ را دوباره امتحان می‌کند.
+
+تنظیمات اختیاری:
+
+```dotenv
+REALTIME_STREAM_DURATION_SECONDS=25
+REALTIME_POLL_INTERVAL_MS=750
+```
+
+در Production، فشرده‌سازی و buffering مسیرهای `*/conversation-stream.php` و `*/inbox-stream.php` باید در Reverse Proxy غیرفعال باشد. هر اتصال SSE یک درخواست نسبتاً طولانی نگه می‌دارد؛ بنابراین تعداد Workerهای PHP/Apache باید متناسب با تعداد اپراتورها و گفتگوهای هم‌زمان تنظیم شود.
+
 ## بررسی کیفیت
 
 فرانت‌اند:
@@ -95,6 +108,7 @@ npm run build
 ```powershell
 php backend\cli\pass2-runtime-check.php
 php backend\cli\pass2-database-check.php
+php backend\cli\auth-cookie-smoke-test.php
 
 $files = rg --files backend -g '*.php'
 foreach ($file in $files) { php -l $file }

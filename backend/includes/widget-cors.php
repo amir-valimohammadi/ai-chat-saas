@@ -146,7 +146,7 @@ if (!function_exists('send_widget_cors_headers')) {
         }
 
         // ویجت عمومی از Cookie استفاده نمی‌کند؛ پس Credentials را فعال نمی‌کنیم.
-        header('Access-Control-Allow-Headers: Content-Type');
+        header('Access-Control-Allow-Headers: Content-Type, Last-Event-ID');
         header('Access-Control-Expose-Headers: X-Request-ID');
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
         header('Access-Control-Max-Age: 86400');

@@ -17,6 +17,7 @@ import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest } from "@/lib/api";
 import { useMessageNotifications } from "@/hooks/useMessageNotifications";
+import { useApiEventStream } from "@/hooks/useApiEventStream";
 
 type Attachment = {
     id: number;
@@ -736,13 +737,22 @@ export default function ConversationShowPage() {
         loadQuickReplies();
         loadAssignableAgents();
         loadDepartments();
-
-        const timer = window.setInterval(() => {
-            loadConversation(true);
-        }, 3500);
-
-        return () => window.clearInterval(timer);
     }, [conversationId]);
+
+    useApiEventStream({
+        path: conversationId
+            ? `/agent/conversation-stream.php?conversation_id=${encodeURIComponent(conversationId)}`
+            : null,
+        fallbackIntervalMs: 3500,
+        onEvent: (message) => {
+            if (message.event === "conversation.updated") {
+                void loadConversation(true);
+            } else if (message.event === "conversation.removed") {
+                setError("این گفتگو دیگر در دسترس نیست.");
+            }
+        },
+        onFallbackTick: () => void loadConversation(true),
+    });
 
     useEffect(() => {
         const handleVisibilityChange = () => {

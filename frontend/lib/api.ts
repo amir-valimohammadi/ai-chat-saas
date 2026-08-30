@@ -12,6 +12,20 @@ type ApiOptions = RequestInit & {
   auth?: boolean;
 };
 
+export type ApiEventStreamMessage = {
+  event: string;
+  data: unknown;
+  id: string | null;
+};
+
+type ApiEventStreamOptions = {
+  signal: AbortSignal;
+  auth?: boolean;
+  lastEventId?: string | null;
+  onOpen?: () => void;
+  onEvent: (message: ApiEventStreamMessage) => void;
+};
+
 export type MaintenanceModeDetails = {
   enabled: true;
   message: string;
@@ -246,6 +260,96 @@ export async function apiRequest(path: string, options: ApiOptions = {}) {
   }
 
   return data;
+}
+
+export async function apiEventStream(path: string, options: ApiEventStreamOptions): Promise<void> {
+  const headers = new Headers({ Accept: "text/event-stream" });
+  const impersonation = hasImpersonationSession();
+  const requiresAuth = options.auth !== false;
+  if (requiresAuth) {
+    applyAuthContext(headers, impersonation);
+  }
+  if (options.lastEventId && /^[a-f0-9]{64}$/i.test(options.lastEventId)) {
+    headers.set("Last-Event-ID", options.lastEventId);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "GET",
+    headers,
+    credentials: requiresAuth ? "include" : "omit",
+    cache: "no-store",
+    signal: options.signal,
+  });
+
+  if (requiresAuth && response.status === 401) {
+    redirectAfterUnauthorized(impersonation);
+  }
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    if (response.status === 503 && data?.code === "maintenance_mode") {
+      const details = maintenanceDetailsFromPayload(data);
+      emitMaintenanceMode(details);
+      throw new MaintenanceModeError(details);
+    }
+    throw new Error(data?.message || `Realtime connection failed (HTTP ${response.status})`);
+  }
+
+  const contentType = response.headers.get("Content-Type") || "";
+  if (!contentType.toLowerCase().includes("text/event-stream") || !response.body) {
+    throw new Error("Realtime server response is not an event stream.");
+  }
+
+  options.onOpen?.();
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  function dispatchBlock(block: string) {
+    let event = "message";
+    let id: string | null = null;
+    const dataLines: string[] = [];
+
+    for (const line of block.split(/\r?\n/)) {
+      if (!line || line.startsWith(":")) continue;
+      const separator = line.indexOf(":");
+      const field = separator === -1 ? line : line.slice(0, separator);
+      const value = separator === -1 ? "" : line.slice(separator + 1).replace(/^ /, "");
+      if (field === "event") event = value || "message";
+      else if (field === "id") id = value;
+      else if (field === "data") dataLines.push(value);
+    }
+
+    if (!dataLines.length) return;
+    const rawData = dataLines.join("\n");
+    let data: unknown = rawData;
+    try {
+      data = JSON.parse(rawData);
+    } catch {
+      // SSE may legally carry plain text; keep it as-is.
+    }
+    options.onEvent({ event, data, id });
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = buffer.search(/\r?\n\r?\n/);
+      while (boundary !== -1) {
+        const block = buffer.slice(0, boundary);
+        const delimiter = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] || "\n\n";
+        buffer = buffer.slice(boundary + delimiter.length);
+        dispatchBlock(block);
+        boundary = buffer.search(/\r?\n\r?\n/);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export async function apiDownload(path: string, fallbackFilename = "download") {

@@ -30,6 +30,7 @@
 
   const POLLING_INTERVAL = 2500;
   const PRESENCE_INTERVAL = 20000;
+  const REALTIME_RECONNECT_MAX_MS = 15000;
   const QUICK_EMOJIS = ["😀", "😂", "😍", "🙏", "👍", "❤️", "🎉", "🔥", "✅", "🤝"];
   const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
   const MAX_UPLOAD_SIZE = 3 * 1024 * 1024;
@@ -54,6 +55,11 @@
   let conversation = readStorageJson(STORAGE_KEYS.conversation);
   let lastMessageId = 0;
   let pollingTimer = null;
+  let realtimeSource = null;
+  let realtimeReconnectTimer = null;
+  let realtimeFailureCount = 0;
+  let realtimeConversationId = 0;
+  let lastRealtimeConversationVersion = "";
   let presenceTimer = null;
   let isOpen = false;
   let isSending = false;
@@ -1629,6 +1635,7 @@
 
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) {
+        stopRealtime();
         stopPolling();
       } else {
         sendPresenceHeartbeat("heartbeat").catch(function () {});
@@ -1636,7 +1643,7 @@
           loadMessages().catch(function (error) {
             console.warn("AI Chat Widget message refresh failed:", error);
           });
-          startPolling();
+          startRealtime();
         }
       }
     });
@@ -1646,6 +1653,7 @@
     });
 
     window.addEventListener("beforeunload", function () {
+      stopRealtime();
       stopPolling();
       stopPresenceTracking();
       sendPresenceCloseBeacon();
@@ -1694,7 +1702,7 @@
       if (visitor && conversation) {
         renderChat();
         await loadMessages();
-        startPolling();
+        startRealtime();
       } else if (pendingOperatorInvite) {
         renderOperatorInvite();
       } else {
@@ -1841,7 +1849,7 @@
       pendingOperatorInvite = null;
       renderChat();
       await loadMessages();
-      startPolling();
+      startRealtime();
     } catch (error) {
       renderInlineError("این دعوت دیگر معتبر نیست. لطفاً گفتگوی جدیدی شروع کنید.");
       pendingOperatorInvite = null;
@@ -2042,7 +2050,7 @@
       renderChat();
       await sendVisitorMessage(firstMessage);
       await loadMessages();
-      startPolling();
+      startRealtime();
     } catch (error) {
       renderInlineError("شروع گفتگو با خطا مواجه شد. لطفاً دوباره تلاش کنید.");
       console.error("AI Chat Widget start conversation failed:", error);
@@ -2949,6 +2957,140 @@
     }
   }
 
+  function realtimeStreamUrl() {
+    return (
+      `${apiBase}/widget/conversation-stream.php` +
+      `?site_key=${encodeURIComponent(siteKey)}` +
+      `&visitor_id=${encodeURIComponent(visitor.id)}` +
+      `&conversation_id=${encodeURIComponent(conversation.id)}`
+    );
+  }
+
+  function parseRealtimeEvent(event) {
+    try {
+      return JSON.parse(event.data || "{}");
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function scheduleRealtimeReconnect(delayMs) {
+    if (realtimeReconnectTimer || document.hidden || !visitor || !conversation) {
+      return;
+    }
+
+    realtimeReconnectTimer = window.setTimeout(function () {
+      realtimeReconnectTimer = null;
+      startRealtime();
+    }, Math.max(100, delayMs));
+  }
+
+  function handleRealtimeFailure(source, delayMs) {
+    if (realtimeSource !== source) {
+      return;
+    }
+
+    source.close();
+    realtimeSource = null;
+    realtimeFailureCount += 1;
+    host.dataset.realtimeTransport = "polling";
+    startPolling();
+    const retryDelay = delayMs || Math.min(
+      REALTIME_RECONNECT_MAX_MS,
+      1000 * 2 ** Math.min(realtimeFailureCount - 1, 4)
+    );
+    scheduleRealtimeReconnect(retryDelay);
+  }
+
+  function startRealtime() {
+    stopRealtime();
+
+    if (document.hidden || !visitor || !conversation) {
+      stopPolling();
+      return;
+    }
+
+    if (typeof window.EventSource !== "function") {
+      host.dataset.realtimeTransport = "polling";
+      startPolling();
+      return;
+    }
+
+    const activeConversationId = Number(conversation.id || 0);
+    if (activeConversationId !== realtimeConversationId) {
+      realtimeConversationId = activeConversationId;
+      lastRealtimeConversationVersion = "";
+    }
+
+    // Polling remains active only while the SSE handshake is pending.
+    host.dataset.realtimeTransport = "connecting";
+    startPolling();
+    const source = new window.EventSource(realtimeStreamUrl());
+    realtimeSource = source;
+
+    source.onopen = function () {
+      if (realtimeSource !== source) return;
+      realtimeFailureCount = 0;
+      host.dataset.realtimeTransport = "sse";
+      stopPolling();
+    };
+
+    source.addEventListener("conversation.updated", function (event) {
+      if (realtimeSource !== source) return;
+      const payload = parseRealtimeEvent(event);
+      const version = String(payload.version || "");
+      if (version && version === lastRealtimeConversationVersion) return;
+      if (version) lastRealtimeConversationVersion = version;
+      loadMessages().catch(function (error) {
+        console.warn("AI Chat Widget realtime refresh failed:", error);
+      });
+    });
+
+    source.addEventListener("typing.updated", function (event) {
+      if (realtimeSource !== source) return;
+      const typing = parseRealtimeEvent(event);
+      if (typing.is_typing) {
+        agentTypingText = String(typing.text || "پشتیبان در حال نوشتن...");
+        showAgentTyping();
+      } else {
+        hideTyping();
+      }
+    });
+
+    source.addEventListener("conversation.removed", function () {
+      if (realtimeSource !== source) return;
+      resetConversation();
+    });
+
+    source.addEventListener("reconnect", function (event) {
+      if (realtimeSource !== source) return;
+      const payload = parseRealtimeEvent(event);
+      const retryAfter = Number(payload.retry_after_ms);
+      source.close();
+      realtimeSource = null;
+      scheduleRealtimeReconnect(Number.isFinite(retryAfter) ? retryAfter : 250);
+    });
+
+    source.addEventListener("stream.error", function () {
+      handleRealtimeFailure(source, 1000);
+    });
+
+    source.onerror = function () {
+      handleRealtimeFailure(source);
+    };
+  }
+
+  function stopRealtime() {
+    if (realtimeReconnectTimer) {
+      window.clearTimeout(realtimeReconnectTimer);
+      realtimeReconnectTimer = null;
+    }
+    if (realtimeSource) {
+      realtimeSource.close();
+      realtimeSource = null;
+    }
+  }
+
   function showAgentTyping() {
     const typing = shadow.querySelector("[data-typing]");
     const typingText = shadow.querySelector("[data-typing-text]");
@@ -2982,7 +3124,10 @@
     clearComposerContext();
     cleanupVoiceRecording();
     agentTypingText = "پشتیبان در حال نوشتن...";
+    realtimeConversationId = 0;
+    lastRealtimeConversationVersion = "";
 
+    stopRealtime();
     stopPolling();
     updateUnreadState();
     clearInlineError();

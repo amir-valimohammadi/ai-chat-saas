@@ -425,6 +425,36 @@
     background: color-mix(in srgb, var(--hosted-primary) 5%, white);
 }
 
+.hosted-agent-typing {
+    align-self: flex-end;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: fit-content;
+    padding: 9px 12px;
+    color: #667875;
+    font-size: 11px;
+    border: 1px solid #dde9e6;
+    border-radius: 15px 15px 15px 5px;
+    background: white;
+}
+
+.hosted-agent-typing i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #91a19e;
+    animation: hostedTypingDot 1.2s infinite ease-in-out;
+}
+
+.hosted-agent-typing i:nth-of-type(2) { animation-delay: .15s; }
+.hosted-agent-typing i:nth-of-type(3) { animation-delay: .3s; }
+
+@keyframes hostedTypingDot {
+    0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+    30% { transform: translateY(-3px); opacity: 1; }
+}
+
 .hosted-empty-chat {
     margin: auto;
     max-width: 320px;

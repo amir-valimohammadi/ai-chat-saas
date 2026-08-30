@@ -82,6 +82,49 @@ function auth_cookie_smoke_request(
     ];
 }
 
+function auth_cookie_smoke_stream_request(
+    string $url,
+    array $cookies,
+    string $expectedEvent,
+    array $extraHeaders = []
+): array {
+    $body = '';
+    $headers = array_merge([
+        'Accept: text/event-stream',
+        'Origin: ' . (string) app_config('frontend_url', 'http://localhost:3000'),
+    ], $extraHeaders);
+    if ($cookies !== []) {
+        $headers[] = 'Cookie: ' . implode('; ', array_map(
+            static fn(string $name, string $value): string => $name . '=' . $value,
+            array_keys($cookies),
+            array_values($cookies)
+        ));
+    }
+
+    $curl = curl_init($url);
+    curl_setopt_array($curl, [
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_TIMEOUT => 5,
+        CURLOPT_WRITEFUNCTION => static function ($curlHandle, string $chunk) use (&$body, $expectedEvent): int {
+            $body .= $chunk;
+            if (str_contains($body, 'event: ' . $expectedEvent) && str_contains($body, "\n\n")) {
+                return 0;
+            }
+            return strlen($chunk);
+        },
+    ]);
+    curl_exec($curl);
+    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    $contentType = (string) curl_getinfo($curl, CURLINFO_CONTENT_TYPE);
+    curl_close($curl);
+
+    return [
+        'status' => $status,
+        'content_type' => $contentType,
+        'body' => $body,
+    ];
+}
+
 $suffix = substr(bin2hex(random_bytes(8)), 0, 12);
 $email = 'cookie-' . $suffix . '@example.invalid';
 $password = 'Cookie!' . bin2hex(random_bytes(10));
@@ -136,6 +179,61 @@ try {
 
     $me = auth_cookie_smoke_request('GET', $baseUrl . '/auth/me.php', null, $cookies);
     auth_cookie_smoke_assert($me['status'] === 200 && ($me['data']['user']['email'] ?? '') === $email, 'Cookie-authenticated /me request failed.');
+
+    $siteKey = bin2hex(random_bytes(32));
+    $pdo->prepare("INSERT INTO sites(tenant_id,name,domain,site_key,is_active) VALUES(:tenant,:name,'localhost',:site_key,1)")
+        ->execute([':tenant'=>$tenantId, ':name'=>'Realtime Smoke Site', ':site_key'=>$siteKey]);
+    $siteId = (int) $pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO visitors(site_id,name,browser_id,last_seen_at) VALUES(:site,'Realtime Visitor',:browser,NOW())")
+        ->execute([':site'=>$siteId, ':browser'=>'realtime-' . $suffix]);
+    $visitorId = (int) $pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO conversations(site_id,visitor_id,status,last_message_at) VALUES(:site,:visitor,'open',NOW())")
+        ->execute([':site'=>$siteId, ':visitor'=>$visitorId]);
+    $conversationId = (int) $pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO messages(conversation_id,sender_type,sender_id,content) VALUES(:conversation,'visitor',:visitor,'Realtime smoke message')")
+        ->execute([':conversation'=>$conversationId, ':visitor'=>$visitorId]);
+
+    $conversationStream = auth_cookie_smoke_stream_request(
+        $baseUrl . '/agent/conversation-stream.php?conversation_id=' . $conversationId,
+        $cookies,
+        'conversation.updated'
+    );
+    auth_cookie_smoke_assert($conversationStream['status'] === 200, 'Agent conversation SSE did not return HTTP 200.');
+    auth_cookie_smoke_assert(str_contains(strtolower($conversationStream['content_type']), 'text/event-stream'), 'Agent conversation SSE content type is invalid.');
+    auth_cookie_smoke_assert(str_contains($conversationStream['body'], 'event: conversation.updated'), 'Agent conversation SSE did not emit an update event.');
+    auth_cookie_smoke_assert(
+        preg_match('/^id: ([a-f0-9]{64})$/m', $conversationStream['body'], $initialEventId) === 1,
+        'Agent conversation SSE did not emit a valid event id.'
+    );
+
+    $pdo->prepare("INSERT INTO messages(conversation_id,sender_type,content) VALUES(:conversation,'ai','Realtime mutation smoke message')")
+        ->execute([':conversation'=>$conversationId]);
+    $pdo->prepare('UPDATE conversations SET last_message_at=NOW() WHERE id=:id')
+        ->execute([':id'=>$conversationId]);
+    $resumedConversationStream = auth_cookie_smoke_stream_request(
+        $baseUrl . '/agent/conversation-stream.php?conversation_id=' . $conversationId,
+        $cookies,
+        'conversation.updated',
+        ['Last-Event-ID: ' . $initialEventId[1]]
+    );
+    auth_cookie_smoke_assert(
+        preg_match('/^id: ([a-f0-9]{64})$/m', $resumedConversationStream['body'], $updatedEventId) === 1
+        && !hash_equals($initialEventId[1], $updatedEventId[1]),
+        'Agent conversation SSE did not emit a new version after a message mutation.'
+    );
+
+    $inboxStream = auth_cookie_smoke_stream_request($baseUrl . '/agent/inbox-stream.php', $cookies, 'inbox.updated');
+    auth_cookie_smoke_assert($inboxStream['status'] === 200, 'Agent inbox SSE did not return HTTP 200.');
+    auth_cookie_smoke_assert(str_contains($inboxStream['body'], 'event: inbox.updated'), 'Agent inbox SSE did not emit an update event.');
+
+    $widgetStream = auth_cookie_smoke_stream_request(
+        $baseUrl . '/widget/conversation-stream.php?site_key=' . rawurlencode($siteKey)
+            . '&visitor_id=' . $visitorId . '&conversation_id=' . $conversationId,
+        [],
+        'conversation.updated'
+    );
+    auth_cookie_smoke_assert($widgetStream['status'] === 200, 'Widget conversation SSE did not return HTTP 200.');
+    auth_cookie_smoke_assert(str_contains($widgetStream['body'], 'event: conversation.updated'), 'Widget conversation SSE did not emit an update event.');
 
     $blocked = auth_cookie_smoke_request('POST', $baseUrl . '/auth/logout-current.php', [], $cookies);
     auth_cookie_smoke_assert(

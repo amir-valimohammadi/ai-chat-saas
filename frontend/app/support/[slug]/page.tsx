@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
+import { useApiEventStream } from "@/hooks/useApiEventStream";
 
 type SupportPageConfig = {
     page: {
@@ -77,6 +78,7 @@ export default function HostedSupportPage() {
     const [visitorId, setVisitorId] = useState(0);
     const [conversationId, setConversationId] = useState(0);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [agentTypingText, setAgentTypingText] = useState("");
     const [draft, setDraft] = useState("");
     const [openFaq, setOpenFaq] = useState<number | null>(null);
     const [prechat, setPrechat] = useState({
@@ -87,6 +89,16 @@ export default function HostedSupportPage() {
 
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
     const storageKey = useMemo(() => `hosted-support:${slug}`, [slug]);
+    const realtimePath = useMemo(() => {
+        const siteKey = config?.site.site_key;
+        if (!started || !siteKey || !visitorId || !conversationId) return null;
+        const query = new URLSearchParams({
+            site_key: siteKey,
+            visitor_id: String(visitorId),
+            conversation_id: String(conversationId),
+        });
+        return `/widget/conversation-stream.php?${query.toString()}`;
+    }, [config?.site.site_key, conversationId, started, visitorId]);
 
     useEffect(() => {
         if (!slug) return;
@@ -98,10 +110,36 @@ export default function HostedSupportPage() {
         if (!started || !visitorId || !conversationId || !config) return;
 
         void loadMessages();
-        const timer = window.setInterval(() => void loadMessages(), 3000);
-        return () => window.clearInterval(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [started, visitorId, conversationId, config?.site.site_key]);
+
+    useApiEventStream({
+        path: realtimePath,
+        enabled: Boolean(realtimePath),
+        auth: false,
+        fallbackIntervalMs: 3000,
+        onFallbackTick: () => void loadMessages(),
+        onEvent: (message) => {
+            if (message.event === "conversation.updated") {
+                void loadMessages();
+                return;
+            }
+
+            if (message.event === "typing.updated") {
+                const typing = message.data as { is_typing?: unknown; text?: unknown } | null;
+                setAgentTypingText(
+                    typing?.is_typing
+                        ? String(typing.text || "پشتیبان در حال نوشتن...")
+                        : "",
+                );
+                return;
+            }
+
+            if (message.event === "conversation.removed") {
+                resetConversation();
+            }
+        },
+    });
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -315,6 +353,7 @@ export default function HostedSupportPage() {
         setVisitorId(0);
         setConversationId(0);
         setMessages([]);
+        setAgentTypingText("");
         setDraft("");
         setFormError("");
     }
@@ -496,6 +535,12 @@ export default function HostedSupportPage() {
                                         <small>{formatMessageTime(message.created_at)}</small>
                                     </div>
                                 ))}
+                                {agentTypingText && (
+                                    <div className="hosted-agent-typing" role="status">
+                                        <span>{agentTypingText}</span>
+                                        <i /><i /><i />
+                                    </div>
+                                )}
                                 <div ref={messagesEndRef} />
                             </div>
 

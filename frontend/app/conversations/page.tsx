@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
 import { useMessageNotifications } from "@/hooks/useMessageNotifications";
+import { useApiEventStream } from "@/hooks/useApiEventStream";
 
 type StatusFilter = "" | "new" | "open" | "in_progress" | "waiting_customer" | "follow_up" | "pending" | "closed";
 type Priority = "" | "low" | "normal" | "high" | "urgent";
@@ -241,10 +242,16 @@ export default function ConversationsPage() {
         return () => window.clearTimeout(timer);
     }, [filters, page]);
 
-    useEffect(() => {
-        const timer = window.setInterval(() => loadConversations(true), 6000);
-        return () => window.clearInterval(timer);
-    }, []);
+    useApiEventStream({
+        path: "/agent/inbox-stream.php",
+        fallbackIntervalMs: 6000,
+        onEvent: (message) => {
+            if (message.event === "inbox.updated") {
+                void loadConversations(true);
+            }
+        },
+        onFallbackTick: () => void loadConversations(true),
+    });
 
     function changeFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
         setPage(1);
