@@ -76,15 +76,16 @@ try {
         ->execute([':tenant_id' => (int) $conversation['tenant_id']]);
     $slaPolicyStmt = $pdo->prepare("
         INSERT INTO automation_sla_policies (
-            tenant_id, site_id, name, first_response_minutes, resolution_minutes,
+            tenant_id, site_id, effective_from, name, first_response_minutes, resolution_minutes,
             warning_before_minutes, breach_priority, is_default, is_active
         ) VALUES (
-            :tenant_id, :site_id, :name, 10, 60, 3, 'urgent', 1, 1
+            :tenant_id, :site_id, :effective_from, :name, 10, 60, 3, 'urgent', 1, 1
         )
     ");
     $slaPolicyStmt->execute([
         ':tenant_id' => (int) $conversation['tenant_id'],
         ':site_id' => (int) $conversation['site_id'],
+        ':effective_from' => '1970-01-01 00:00:00',
         ':name' => 'Automation smoke SLA',
     ]);
     $slaPolicyId = (int) $pdo->lastInsertId();

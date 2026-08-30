@@ -39,7 +39,7 @@
 
 4. دیتابیس `ai_chat_saas` را با Collation مبتنی بر `utf8mb4` ایجاد کنید.
 
-5. برای نصب تازه فقط `backend/database/schema.sql` را import کنید. این فایل شامل ساختار نهایی همه migrationها تا `2026_08_30_automation_center.sql` است و هیچ داده کاربر، نشست، پیام یا Secret ندارد. migrationهای قدیمی را بعد از این schema دوباره اجرا نکنید.
+5. برای نصب تازه فقط `backend/database/schema.sql` را import کنید. این فایل شامل ساختار نهایی همه migrationها تا `2026_08_30_automation_guardrails.sql` است و هیچ داده کاربر، نشست، پیام یا Secret ندارد. migrationهای قدیمی را بعد از این schema دوباره اجرا نکنید.
 
    ```powershell
    Get-Content backend\database\schema.sql -Raw |
@@ -107,6 +107,7 @@ C:\xampp\php\php-win.exe C:\xampp\htdocs\ai-chat-saas\backend\cron\automation-wo
 
 ```text
 backend/database/migrations/2026_08_30_automation_center.sql
+backend/database/migrations/2026_08_30_automation_guardrails.sql
 ```
 
 برای افزودن یا به‌روزرسانی سه قانون پیشنهادی یک حساب مشتری، اسکریپت زیر idempotent است و قانون تکراری نمی‌سازد:

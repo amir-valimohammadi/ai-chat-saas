@@ -43,7 +43,7 @@ $criticalColumns = [
     'auth_sessions' => ['id','user_id','jti_hash','expires_at','revoked_at'],
     'system_error_logs' => ['id','fingerprint','level','message','status_code','occurrences'],
     'automation_rules' => ['id','tenant_id','site_id','trigger_type','conditions_json','actions_json','is_active'],
-    'automation_sla_policies' => ['id','tenant_id','site_id','first_response_minutes','resolution_minutes','warning_before_minutes'],
+    'automation_sla_policies' => ['id','tenant_id','site_id','effective_from','first_response_minutes','resolution_minutes','warning_before_minutes'],
     'conversation_sla_status' => ['conversation_id','policy_id','state','first_response_due_at','resolution_due_at'],
     'automation_execution_logs' => ['id','rule_id','tenant_id','conversation_id','trigger_type','status','created_at'],
 ];

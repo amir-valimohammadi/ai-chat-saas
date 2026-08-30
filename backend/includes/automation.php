@@ -753,10 +753,15 @@ function automation_attach_sla(PDO $pdo, int $conversationId): ?array
         WHERE tenant_id = :tenant_id
           AND (site_id = :site_id OR site_id IS NULL)
           AND is_active = 1
+          AND :conversation_created_at >= effective_from
         ORDER BY (site_id IS NOT NULL) DESC, is_default DESC, id ASC
         LIMIT 1
     ");
-    $policyStmt->execute([':tenant_id' => (int) $conversation['tenant_id'], ':site_id' => (int) $conversation['site_id']]);
+    $policyStmt->execute([
+        ':tenant_id' => (int) $conversation['tenant_id'],
+        ':site_id' => (int) $conversation['site_id'],
+        ':conversation_created_at' => $conversation['created_at'],
+    ]);
     $policy = $policyStmt->fetch();
     if (!$policy) return null;
 
@@ -828,7 +833,7 @@ function automation_preview_rule(PDO $pdo, int $tenantId, int $conversationId, a
     ];
 }
 
-function automation_run_scheduled(PDO $pdo, int $limit = 200): array
+function automation_run_scheduled(PDO $pdo, int $limit = 200, ?int $tenantId = null): array
 {
     if (!automation_tables_ready($pdo)) return ['available' => false];
 
@@ -843,26 +848,32 @@ function automation_run_scheduled(PDO $pdo, int $limit = 200): array
         'failed' => 0,
     ];
 
-    $missing = $pdo->query("
+    $tenantId = $tenantId !== null && $tenantId > 0 ? $tenantId : null;
+    $missingTenantSql = $tenantId !== null ? ' AND sites.tenant_id = :missing_tenant_id ' : '';
+    $missing = $pdo->prepare("
         SELECT conversations.id
         FROM conversations
         INNER JOIN sites ON sites.id = conversations.site_id
         WHERE conversations.status <> 'closed'
+          {$missingTenantSql}
           AND NOT EXISTS (SELECT 1 FROM conversation_sla_status WHERE conversation_sla_status.conversation_id = conversations.id)
           AND EXISTS (
               SELECT 1 FROM automation_sla_policies
               WHERE automation_sla_policies.tenant_id = sites.tenant_id
                 AND (automation_sla_policies.site_id = conversations.site_id OR automation_sla_policies.site_id IS NULL)
                 AND automation_sla_policies.is_active = 1
+                AND conversations.created_at >= automation_sla_policies.effective_from
           )
         ORDER BY conversations.id ASC
         LIMIT {$limit}
     ");
+    $missing->execute($tenantId !== null ? [':missing_tenant_id' => $tenantId] : []);
     foreach ($missing->fetchAll() as $row) {
         if (automation_attach_sla($pdo, (int) $row['id'])) $summary['sla_attached']++;
     }
 
-    $slaStmt = $pdo->query("
+    $slaTenantSql = $tenantId !== null ? ' AND sites.tenant_id = :sla_tenant_id ' : '';
+    $slaStmt = $pdo->prepare("
         SELECT
             conversation_sla_status.*, automation_sla_policies.warning_before_minutes,
             automation_sla_policies.breach_priority, automation_sla_policies.breach_department_id,
@@ -871,12 +882,15 @@ function automation_run_scheduled(PDO $pdo, int $limit = 200): array
         FROM conversation_sla_status
         INNER JOIN automation_sla_policies ON automation_sla_policies.id = conversation_sla_status.policy_id
         INNER JOIN conversations ON conversations.id = conversation_sla_status.conversation_id
+        INNER JOIN sites ON sites.id = conversations.site_id
         WHERE conversations.status <> 'closed'
+          {$slaTenantSql}
           AND automation_sla_policies.is_active = 1
           AND conversation_sla_status.state <> 'resolved'
         ORDER BY LEAST(conversation_sla_status.first_response_due_at, conversation_sla_status.resolution_due_at) ASC
         LIMIT {$limit}
     ");
+    $slaStmt->execute($tenantId !== null ? [':sla_tenant_id' => $tenantId] : []);
 
     foreach ($slaStmt->fetchAll() as $sla) {
         $conversationId = (int) $sla['conversation_id'];
@@ -932,7 +946,9 @@ function automation_run_scheduled(PDO $pdo, int $limit = 200): array
         }
     }
 
-    $ruleStmt = $pdo->query("SELECT * FROM automation_rules WHERE trigger_type = 'scheduled_check' AND is_active = 1 ORDER BY priority, id");
+    $ruleTenantSql = $tenantId !== null ? ' AND tenant_id = :rule_tenant_id ' : '';
+    $ruleStmt = $pdo->prepare("SELECT * FROM automation_rules WHERE trigger_type = 'scheduled_check' AND is_active = 1 {$ruleTenantSql} ORDER BY priority, id");
+    $ruleStmt->execute($tenantId !== null ? [':rule_tenant_id' => $tenantId] : []);
     $bucket = date('YmdHi');
     foreach ($ruleStmt->fetchAll() as $rule) {
         $params = [':tenant_id' => (int) $rule['tenant_id']];

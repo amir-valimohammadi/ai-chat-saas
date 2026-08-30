@@ -1737,6 +1737,7 @@ CREATE TABLE `automation_sla_policies` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` int(10) unsigned NOT NULL,
   `site_id` int(10) unsigned DEFAULT NULL,
+  `effective_from` datetime NOT NULL DEFAULT current_timestamp(),
   `name` varchar(190) NOT NULL,
   `first_response_minutes` int(10) unsigned NOT NULL DEFAULT 15,
   `resolution_minutes` int(10) unsigned NOT NULL DEFAULT 1440,

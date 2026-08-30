@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
+require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/automation.php';
@@ -198,6 +199,24 @@ try {
     $conversationStmt->execute($conversationParams);
     $conversations = $conversationStmt->fetchAll();
 
+    $workerStmt = $pdo->prepare("
+        SELECT status, message, metadata_json, last_seen_at,
+               TIMESTAMPDIFF(SECOND, last_seen_at, NOW()) AS seconds_ago
+        FROM system_service_heartbeats
+        WHERE service_key = 'automation_worker'
+        LIMIT 1
+    ");
+    $workerStmt->execute();
+    $workerRow = $workerStmt->fetch() ?: null;
+    $workerStaleSeconds = max(60, (int) app_env('SYSTEM_HEARTBEAT_STALE_SECONDS', 180));
+    $workerSecondsAgo = $workerRow ? max(0, (int) ($workerRow['seconds_ago'] ?? 0)) : null;
+    $workerStatus = 'never';
+    if ($workerRow) {
+        $workerStatus = ($workerRow['status'] ?? '') === 'down'
+            ? 'down'
+            : ($workerSecondsAgo !== null && $workerSecondsAgo <= $workerStaleSeconds ? 'healthy' : 'stale');
+    }
+
     json_response([
         'success' => true,
         'catalogs' => [
@@ -220,6 +239,14 @@ try {
         'sla_policies' => $policies,
         'logs' => $logs,
         'alerts' => $alerts,
+        'worker' => [
+            'status' => $workerStatus,
+            'last_seen_at' => $workerRow['last_seen_at'] ?? null,
+            'seconds_ago' => $workerSecondsAgo,
+            'message' => $workerRow['message'] ?? null,
+            'metadata' => !empty($workerRow['metadata_json']) ? json_decode((string) $workerRow['metadata_json'], true) : null,
+            'stale_after_seconds' => $workerStaleSeconds,
+        ],
         'sites' => array_map(static fn(array $row): array => ['id' => (int) $row['id'], 'name' => $row['name'], 'domain' => $row['domain']], $sites),
         'departments' => array_map(static fn(array $row): array => ['id' => (int) $row['id'], 'site_id' => (int) $row['site_id'], 'name' => $row['name'], 'color' => $row['color']], $departments),
         'agents' => array_map(static fn(array $row): array => ['id' => (int) $row['id'], 'name' => $row['name'], 'email' => $row['email'], 'role' => $row['role']], $agents),

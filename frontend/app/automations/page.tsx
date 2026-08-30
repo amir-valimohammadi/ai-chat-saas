@@ -42,10 +42,18 @@ type AutomationAlert = {
     id: number; conversation_id: number | null; severity: string; title: string; message: string;
     is_read: boolean; site_name: string | null; created_at: string;
 };
+type AutomationWorker = {
+    status: "healthy" | "stale" | "down" | "never";
+    last_seen_at: string | null;
+    seconds_ago: number | null;
+    message: string | null;
+    stale_after_seconds: number;
+};
 type OverviewData = {
     catalogs: { triggers: Dictionary; conditions: Dictionary; operators: Dictionary; actions: Dictionary };
     stats: { active_rules: number; executions_7d: number; successes_7d: number; failures_7d: number; average_duration_ms: number; open_alerts: number; sla_at_risk: number; sla_breached: number };
     rules: Rule[]; sla_policies: SlaPolicy[]; logs: ExecutionLog[]; alerts: AutomationAlert[];
+    worker: AutomationWorker;
     sites: Site[]; departments: Department[]; agents: Agent[]; conversations: Conversation[];
 };
 type Tab = "overview" | "rules" | "sla" | "history";
@@ -85,6 +93,7 @@ export default function AutomationsPage() {
     const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
     const [slaEditorOpen, setSlaEditorOpen] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
+    const [runningNow, setRunningNow] = useState(false);
     const [ruleForm, setRuleForm] = useState(emptyRule);
     const [slaForm, setSlaForm] = useState(emptySla);
     const [testConversationId, setTestConversationId] = useState("");
@@ -277,6 +286,23 @@ export default function AutomationsPage() {
         } catch (err) { setError(err instanceof Error ? err.message : "به‌روزرسانی هشدار ناموفق بود."); }
     }
 
+    async function runScheduledNow() {
+        try {
+            setRunningNow(true);
+            setError("");
+            const response = await apiRequest("/customer/automation-run.php", { method: "POST", body: "{}" }) as {
+                result?: { executed?: number; sla_attached?: number };
+            };
+            await loadData(true);
+            const result = response.result || {};
+            notify(`بررسی انجام شد؛ ${result.executed || 0} اقدام اجرا و ${result.sla_attached || 0} گفتگوی جدید وارد پایش SLA شد.`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "اجرای بررسی اتوماسیون ناموفق بود.");
+        } finally {
+            setRunningNow(false);
+        }
+    }
+
     function updateCondition(index: number, patch: Partial<Condition>) {
         setRuleForm((current) => ({ ...current, conditions: current.conditions.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item) }));
     }
@@ -317,6 +343,16 @@ export default function AutomationsPage() {
                                 <StatCard label="نرخ موفقیت" value={`${successRate}٪`} hint={`${data.stats.failures_7d} اجرای ناموفق`} tone="green" />
                                 <StatCard label="SLA در معرض خطر" value={data.stats.sla_at_risk + data.stats.sla_breached} hint={`${data.stats.sla_breached} مورد نقض‌شده`} tone="amber" />
                             </div>
+
+                            <article className={`automation-worker-health status-${data.worker.status}`}>
+                                <span className="automation-worker-pulse" />
+                                <div>
+                                    <small>Automation Worker</small>
+                                    <strong>{data.worker.status === "healthy" ? "پردازش زمان‌بندی‌شده فعال است" : data.worker.status === "down" ? "آخرین اجرای Worker ناموفق بوده" : data.worker.status === "stale" ? "Worker مدتی اجرا نشده است" : "Worker هنوز اجرا نشده است"}</strong>
+                                    <p>{data.worker.last_seen_at ? `آخرین اجرای زمان‌بندی‌شده: ${formatDate(data.worker.last_seen_at)}` : "برای اجرای قوانین دوره‌ای و SLA باید Worker هر دقیقه اجرا شود."}</p>
+                                </div>
+                                <button className="btn secondary" type="button" disabled={runningNow} onClick={runScheduledNow}>{runningNow ? "در حال بررسی..." : "اجرای بررسی اکنون"}</button>
+                            </article>
 
                             <div className="automation-dashboard-grid">
                                 <article className="automation-panel automation-flow-panel">

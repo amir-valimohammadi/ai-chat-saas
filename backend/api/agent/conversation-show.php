@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
 require_once __DIR__ . '/../../includes/message-helpers.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response(['success' => false, 'message' => 'Method not allowed'], 405);
@@ -185,6 +186,69 @@ try {
         'created_at' => $row['created_at'],
     ], $assignmentHistoryStmt->fetchAll());
 
+    $automationTags = [];
+    $automationSla = null;
+    $automationHistory = [];
+    if (automation_tables_ready($pdo)) {
+        $tagsStmt = $pdo->prepare("
+            SELECT conversation_tags.id, conversation_tags.name, conversation_tags.color
+            FROM conversation_tag_assignments
+            INNER JOIN conversation_tags ON conversation_tags.id = conversation_tag_assignments.tag_id
+            WHERE conversation_tag_assignments.conversation_id = :conversation_id
+            ORDER BY conversation_tags.name
+        ");
+        $tagsStmt->execute([':conversation_id' => $conversationId]);
+        $automationTags = array_map(static fn(array $row): array => [
+            'id' => (int) $row['id'],
+            'name' => $row['name'],
+            'color' => $row['color'],
+        ], $tagsStmt->fetchAll());
+
+        $slaStatusStmt = $pdo->prepare("
+            SELECT conversation_sla_status.state, conversation_sla_status.first_response_due_at,
+                   conversation_sla_status.resolution_due_at, conversation_sla_status.first_response_at,
+                   conversation_sla_status.warning_sent_at, conversation_sla_status.first_response_breached_at,
+                   conversation_sla_status.resolution_breached_at, conversation_sla_status.last_checked_at,
+                   automation_sla_policies.id AS policy_id, automation_sla_policies.name AS policy_name
+            FROM conversation_sla_status
+            INNER JOIN automation_sla_policies ON automation_sla_policies.id = conversation_sla_status.policy_id
+            WHERE conversation_sla_status.conversation_id = :conversation_id
+              AND automation_sla_policies.tenant_id = :tenant_id
+            LIMIT 1
+        ");
+        $slaStatusStmt->execute([
+            ':conversation_id' => $conversationId,
+            ':tenant_id' => (int) $conversation['site_tenant_id'],
+        ]);
+        $slaRow = $slaStatusStmt->fetch();
+        if ($slaRow) {
+            $slaRow['policy_id'] = (int) $slaRow['policy_id'];
+            $automationSla = $slaRow;
+        }
+
+        $automationHistoryStmt = $pdo->prepare("
+            SELECT id, rule_id, rule_name, trigger_type, status, duration_ms, error_message, created_at
+            FROM automation_execution_logs
+            WHERE conversation_id = :conversation_id AND tenant_id = :tenant_id
+            ORDER BY id DESC
+            LIMIT 8
+        ");
+        $automationHistoryStmt->execute([
+            ':conversation_id' => $conversationId,
+            ':tenant_id' => (int) $conversation['site_tenant_id'],
+        ]);
+        $automationHistory = array_map(static fn(array $row): array => [
+            'id' => (int) $row['id'],
+            'rule_id' => $row['rule_id'] !== null ? (int) $row['rule_id'] : null,
+            'rule_name' => $row['rule_name'],
+            'trigger_type' => $row['trigger_type'],
+            'status' => $row['status'],
+            'duration_ms' => (int) $row['duration_ms'],
+            'error_message' => $row['error_message'],
+            'created_at' => $row['created_at'],
+        ], $automationHistoryStmt->fetchAll());
+    }
+
     json_response([
         'success' => true,
         'conversation' => [
@@ -236,6 +300,9 @@ try {
                 'is_online' => visitor_is_recently_online($conversation['visitor_last_seen_at']),
             ],
             'assignment_history' => $assignmentHistory,
+            'tags' => $automationTags,
+            'sla' => $automationSla,
+            'automation_history' => $automationHistory,
             'messages' => $presentedMessages,
             'first_unread_message_id' => $firstUnreadMessageId,
             'pagination' => [

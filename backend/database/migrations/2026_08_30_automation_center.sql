@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS `automation_sla_policies` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` int(10) unsigned NOT NULL,
   `site_id` int(10) unsigned DEFAULT NULL,
+  `effective_from` datetime NOT NULL DEFAULT current_timestamp(),
   `name` varchar(190) NOT NULL,
   `first_response_minutes` int(10) unsigned NOT NULL DEFAULT 15,
   `resolution_minutes` int(10) unsigned NOT NULL DEFAULT 1440,
@@ -156,4 +157,3 @@ CREATE TABLE IF NOT EXISTS `conversation_tag_assignments` (
   CONSTRAINT `fk_conversation_tag_assignments_tag` FOREIGN KEY (`tag_id`) REFERENCES `conversation_tags` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_conversation_tag_assignments_actor` FOREIGN KEY (`assigned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-

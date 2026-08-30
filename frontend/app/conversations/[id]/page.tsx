@@ -156,6 +156,18 @@ type ConversationDetail = {
         from_agent_name: string | null; to_agent_name: string | null; actor_name: string | null;
         note: string | null; created_at: string;
     }[];
+    tags: { id: number; name: string; color: string }[];
+    sla: {
+        policy_id: number; policy_name: string; state: "tracking" | "warning" | "breached" | "met" | "resolved";
+        first_response_due_at: string; resolution_due_at: string; first_response_at: string | null;
+        warning_sent_at: string | null; first_response_breached_at: string | null;
+        resolution_breached_at: string | null; last_checked_at: string | null;
+    } | null;
+    automation_history: {
+        id: number; rule_id: number | null; rule_name: string; trigger_type: string;
+        status: "success" | "failed" | "skipped"; duration_ms: number;
+        error_message: string | null; created_at: string;
+    }[];
     messages: Message[];
     first_unread_message_id: number | null;
     pagination: {
@@ -215,6 +227,14 @@ const statusLabels: Record<string, string> = {
     follow_up: "نیاز به پیگیری",
     pending: "در انتظار",
     closed: "بسته‌شده",
+};
+
+const slaStatusLabels: Record<string, string> = {
+    tracking: "در حال پایش",
+    warning: "نزدیک سررسید",
+    breached: "نقض‌شده",
+    met: "رعایت‌شده",
+    resolved: "پایان‌یافته",
 };
 
 const quickEmojis = ["😀", "😂", "😍", "🙏", "👍", "❤️", "🎉", "🔥", "✅", "🤝"];
@@ -2149,6 +2169,30 @@ export default function ConversationShowPage() {
                                     />
                                 </div>
 
+                                <div className="conversation-automation-insight">
+                                    <div className="conversation-automation-title">
+                                        <div><span>Automation</span><strong>اتوماسیون و SLA</strong></div>
+                                        {conversation.sla && <b className={`sla-${conversation.sla.state}`}>{slaStatusLabels[conversation.sla.state] || conversation.sla.state}</b>}
+                                    </div>
+
+                                    {conversation.tags.length > 0 && <div className="conversation-tag-list">
+                                        {conversation.tags.map((tag) => <span key={tag.id} style={{ borderColor: tag.color, color: tag.color }}><i style={{ backgroundColor: tag.color }} />{tag.name}</span>)}
+                                    </div>}
+
+                                    {conversation.sla ? <div className="conversation-sla-summary">
+                                        <strong>{conversation.sla.policy_name}</strong>
+                                        <div><span>پاسخ اولیه<small>{conversation.sla.first_response_at ? `ثبت‌شده در ${formatConversationDate(conversation.sla.first_response_at)}` : formatConversationDate(conversation.sla.first_response_due_at)}</small></span><span>حل گفتگو<small>{formatConversationDate(conversation.sla.resolution_due_at)}</small></span></div>
+                                    </div> : <p className="conversation-automation-empty">برای این گفتگو سیاست SLA فعالی ثبت نشده است.</p>}
+
+                                    {conversation.automation_history.length > 0 && <div className="conversation-automation-history">
+                                        <strong>آخرین اجراها</strong>
+                                        {conversation.automation_history.slice(0, 5).map((item) => <article key={item.id}>
+                                            <i className={`status-${item.status}`} />
+                                            <div><b>{item.rule_name}</b><small>{formatConversationDate(item.created_at)} · {item.duration_ms} ms</small>{item.error_message && <em>{item.error_message}</em>}</div>
+                                        </article>)}
+                                    </div>}
+                                </div>
+
                                 {conversation.source_page_url && (
                                     <a
                                         className="btn secondary conversation-full-btn"
@@ -2597,4 +2641,12 @@ function formatFileSize(size: number) {
     }
 
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatConversationDate(value: string) {
+    try {
+        return new Intl.DateTimeFormat("fa-IR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value.replace(" ", "T")));
+    } catch {
+        return value;
+    }
 }
