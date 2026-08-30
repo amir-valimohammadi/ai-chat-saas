@@ -1303,110 +1303,117 @@ export default function ConversationShowPage() {
                 <div className={`conversation-workspace-pro ${isInspectorOpen ? "inspector-open" : "inspector-closed"}`}>
                     <section className="conversation-chat-pro">
                         <header className="conversation-chat-head-pro">
-                            <div className="conversation-person-block">
-                                <button
-                                    className="conversation-back-btn"
-                                    type="button"
-                                    onClick={() => router.push("/conversations")}
-                                    title="بازگشت به فهرست گفتگوها"
-                                >
-                                    <ChatIcon name="arrow-right" />
-                                </button>
-                                <div className="conversation-person-avatar-wrap">
-                                    <ConversationAvatar
-                                        name={conversation.visitor.name || "کاربر"}
-                                        tone="visitor"
-                                    />
-                                    <span className={conversation.visitor.is_online ? "conversation-presence-dot online" : "conversation-presence-dot"} />
+                            <div className="conversation-head-primary-row">
+                                <div className="conversation-person-block">
+                                    <button
+                                        className="conversation-back-btn"
+                                        type="button"
+                                        onClick={() => router.push("/conversations")}
+                                        title="بازگشت به فهرست گفتگوها"
+                                    >
+                                        <ChatIcon name="arrow-right" />
+                                    </button>
+                                    <div className="conversation-person-avatar-wrap">
+                                        <ConversationAvatar
+                                            name={conversation.visitor.name || "کاربر"}
+                                            tone="visitor"
+                                        />
+                                        <span className={conversation.visitor.is_online ? "conversation-presence-dot online" : "conversation-presence-dot"} />
+                                    </div>
+
+                                    <div className="conversation-person-copy">
+                                        <div className="conversation-person-title-row">
+                                            <h2>{conversation.visitor.name || "کاربر بدون نام"}</h2>
+                                            <StatusChip status={conversation.status} />
+                                        </div>
+
+                                        <div className="conversation-person-meta">
+                                            <span>{visitorContact}</span>
+                                            <span>{conversation.site.name}</span>
+                                            <span className={conversation.visitor.is_online ? "visitor-online" : "visitor-offline"}>
+                                                {conversation.visitor.is_online
+                                                    ? "آنلاین"
+                                                    : `آخرین فعالیت: ${conversation.visitor.last_seen_at || "نامشخص"}`}
+                                            </span>
+                                            <span>شناسه {conversation.id}</span>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="conversation-person-copy">
-                                    <div className="conversation-person-title-row">
-                                        <h2>{conversation.visitor.name || "کاربر بدون نام"}</h2>
-                                        <StatusChip status={conversation.status} />
-                                    </div>
+                                <div className="conversation-head-priority-actions">
+                                    <button
+                                        className={`conversation-tool-btn conversation-inspector-toggle ${isInspectorOpen ? "is-active" : ""}`}
+                                        type="button"
+                                        onClick={() => setIsInspectorOpen((value) => !value)}
+                                        title="پنل اطلاعات گفتگو"
+                                    >
+                                        <ChatIcon name="panel" />
+                                        <span>جزئیات</span>
+                                    </button>
 
-                                    <div className="conversation-person-meta">
-                                        <span>{visitorContact}</span>
-                                        <span>{conversation.site.name}</span>
-                                        <span className={conversation.visitor.is_online ? "visitor-online" : "visitor-offline"}>
-                                            {conversation.visitor.is_online
-                                                ? "آنلاین"
-                                                : `آخرین فعالیت: ${conversation.visitor.last_seen_at || "نامشخص"}`}
-                                        </span>
-                                        <span>شناسه {conversation.id}</span>
-                                    </div>
+                                    <button
+                                        className="conversation-tool-btn is-primary"
+                                        type="button"
+                                        onClick={handleGenerateAiSuggestion}
+                                        disabled={generatingAi || isClosed}
+                                    >
+                                        <ChatIcon name="sparkles" />
+                                        <span>{generatingAi ? "در حال تولید" : "پیشنهاد هوشمند"}</span>
+                                    </button>
+
+                                    {!isClosed && (
+                                        <button
+                                            className="conversation-tool-btn is-danger"
+                                            type="button"
+                                            onClick={() => handleUpdateStatus("closed")}
+                                            disabled={changingStatus}
+                                        >
+                                            <ChatIcon name="close" />
+                                            <span>{changingStatus ? "در حال بستن" : "بستن گفتگو"}</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="conversation-head-actions">
-                                <button
-                                    className={`conversation-tool-btn ${messageNotifications.preferences.sound_enabled ? "is-active" : ""}`}
-                                    type="button"
-                                    onClick={() => messageNotifications.toggleSound()}
-                                    title="صدای پیام جدید"
-                                >
-                                    <ChatIcon name="sound" />
-                                    <span>صدا</span>
-                                </button>
-                                <button
-                                    className={`conversation-tool-btn ${messageNotifications.preferences.browser_notifications_enabled ? "is-active" : ""}`}
-                                    type="button"
-                                    onClick={() => messageNotifications.enableBrowserNotifications()}
-                                    title="اعلان مرورگر"
-                                >
-                                    <ChatIcon name="notification" />
-                                    <span>اعلان</span>
-                                </button>
-                                <button
-                                    className={`conversation-tool-btn ${showMessageSearch ? "is-active" : ""}`}
-                                    type="button"
-                                    onClick={() => setShowMessageSearch((value) => !value)}
-                                >
-                                    <ChatIcon name="search" />
-                                    <span>{showMessageSearch ? "بستن جست‌وجو" : "جست‌وجو"}</span>
-                                </button>
-
-                                <button
-                                    className="conversation-tool-btn"
-                                    type="button"
-                                    onClick={() => loadConversation(true)}
-                                >
-                                    <ChatIcon name="refresh" />
-                                    <span>بروزرسانی</span>
-                                </button>
-
-                                <button
-                                    className={`conversation-tool-btn ${isInspectorOpen ? "is-active" : ""}`}
-                                    type="button"
-                                    onClick={() => setIsInspectorOpen((value) => !value)}
-                                    title="پنل اطلاعات گفتگو"
-                                >
-                                    <ChatIcon name="panel" />
-                                    <span>اطلاعات</span>
-                                </button>
-
-                                {!isClosed && (
+                            <div className="conversation-head-toolbar">
+                                <span className="conversation-toolbar-label">ابزارهای گفتگو</span>
+                                <div className="conversation-head-actions">
                                     <button
-                                        className="conversation-tool-btn is-danger"
+                                        className={`conversation-tool-btn ${messageNotifications.preferences.sound_enabled ? "is-active" : ""}`}
                                         type="button"
-                                        onClick={() => handleUpdateStatus("closed")}
-                                        disabled={changingStatus}
+                                        onClick={() => messageNotifications.toggleSound()}
+                                        title="صدای پیام جدید"
                                     >
-                                        <ChatIcon name="close" />
-                                        <span>{changingStatus ? "در حال بستن" : "بستن"}</span>
+                                        <ChatIcon name="sound" />
+                                        <span>صدا</span>
                                     </button>
-                                )}
+                                    <button
+                                        className={`conversation-tool-btn ${messageNotifications.preferences.browser_notifications_enabled ? "is-active" : ""}`}
+                                        type="button"
+                                        onClick={() => messageNotifications.enableBrowserNotifications()}
+                                        title="اعلان مرورگر"
+                                    >
+                                        <ChatIcon name="notification" />
+                                        <span>اعلان</span>
+                                    </button>
+                                    <button
+                                        className={`conversation-tool-btn ${showMessageSearch ? "is-active" : ""}`}
+                                        type="button"
+                                        onClick={() => setShowMessageSearch((value) => !value)}
+                                    >
+                                        <ChatIcon name="search" />
+                                        <span>{showMessageSearch ? "بستن جست‌وجو" : "جست‌وجو"}</span>
+                                    </button>
 
-                                <button
-                                    className="conversation-tool-btn is-primary"
-                                    type="button"
-                                    onClick={handleGenerateAiSuggestion}
-                                    disabled={generatingAi || isClosed}
-                                >
-                                    <ChatIcon name="sparkles" />
-                                    <span>{generatingAi ? "در حال تولید" : "پیشنهاد هوشمند"}</span>
-                                </button>
+                                    <button
+                                        className="conversation-tool-btn"
+                                        type="button"
+                                        onClick={() => loadConversation(true)}
+                                    >
+                                        <ChatIcon name="refresh" />
+                                        <span>بروزرسانی</span>
+                                    </button>
+                                </div>
                             </div>
                         </header>
 

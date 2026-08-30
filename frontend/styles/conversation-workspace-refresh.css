@@ -1,0 +1,760 @@
+/*
+ * Conversation workspace refresh
+ * آخرین لایه‌ی اختصاصی صفحه گفتگو؛ مستقل از globals.css و بعد از استایل‌های عمومی بارگذاری می‌شود.
+ */
+
+/* کنترل سایدبار روی همه صفحات، به‌ویژه workspace تمام‌صفحه */
+.sidebar-desktop-collapse {
+    position: absolute;
+    z-index: 12;
+    top: 29px;
+    left: -13px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    color: #65728a;
+    border: 1px solid #dce3ee;
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 7px 18px rgba(15, 23, 42, .13);
+    transition: color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.sidebar-desktop-collapse:hover {
+    color: var(--primary);
+    border-color: color-mix(in srgb, var(--primary) 30%, #dce3ee);
+    transform: translateX(-1px);
+}
+
+.sidebar-desktop-collapse svg {
+    width: 14px;
+    height: 14px;
+}
+
+.app-shell-workspace {
+    --sidebar-width: 250px;
+    gap: 10px;
+    padding: 10px;
+}
+
+.app-shell-workspace > .sidebar {
+    top: 10px;
+    height: calc(100dvh - 20px);
+    border-radius: 22px;
+}
+
+.app-shell-workspace .main-area-workspace {
+    padding: 0;
+}
+
+.app-shell-workspace .page-content-workspace {
+    min-height: calc(100dvh - 20px);
+}
+
+/* قاب اصلی گفتگو */
+.conversation-detail-shell {
+    min-height: 0;
+}
+
+.conversation-workspace-pro,
+.conversation-workspace-pro.inspector-closed {
+    height: calc(100dvh - 20px);
+    min-height: 640px;
+    grid-template-columns: minmax(0, 1fr) 312px;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid #dce4ef;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 22px 65px rgba(23, 32, 51, .11);
+}
+
+.conversation-workspace-pro.inspector-closed {
+    grid-template-columns: minmax(0, 1fr) 0;
+}
+
+.conversation-chat-pro {
+    min-height: 0;
+    grid-template-rows: auto auto minmax(300px, 1fr) auto;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: #f7f9fc;
+    box-shadow: none;
+}
+
+/* سربرگ دو ردیفه؛ عنوان و عملیات اصلی از ابزارهای کمکی جدا شده‌اند */
+.conversation-chat-head-pro {
+    min-height: 0;
+    display: grid;
+    gap: 0;
+    padding: 0;
+    color: #172033;
+    background: rgba(255, 255, 255, .97);
+    border-bottom: 1px solid #e6ebf2;
+    backdrop-filter: blur(18px);
+}
+
+.conversation-head-primary-row {
+    min-width: 0;
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 11px 14px;
+}
+
+.conversation-person-block {
+    flex: 1 1 auto;
+    gap: 10px;
+}
+
+.conversation-back-btn {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    color: #4b5870;
+    border-color: #e0e6ef;
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
+.conversation-person-avatar-wrap .conversation-avatar-pro {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 14px;
+    box-shadow: 0 8px 20px rgba(50, 71, 127, .12);
+}
+
+.conversation-person-title-row h2 {
+    max-width: 330px;
+    color: #172033;
+    font-size: 15px;
+}
+
+.conversation-person-meta {
+    color: #77849a;
+    font-size: 10px;
+}
+
+.conversation-head-priority-actions,
+.conversation-head-actions {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.conversation-head-priority-actions {
+    flex: 0 0 auto;
+}
+
+.conversation-head-priority-actions .conversation-tool-btn {
+    min-height: 37px;
+    padding-inline: 11px;
+}
+
+.conversation-head-priority-actions .conversation-tool-btn.is-primary {
+    color: #fff;
+    border-color: transparent;
+    background: linear-gradient(135deg, #5a5bd6, #397fd7 64%, #21a0bc);
+    box-shadow: 0 8px 20px rgba(70, 87, 202, .2);
+}
+
+.conversation-head-priority-actions .conversation-tool-btn.is-danger {
+    color: #c2414d;
+    border-color: #f1cfd3;
+    background: #fff7f8;
+}
+
+.conversation-head-toolbar {
+    min-width: 0;
+    min-height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 14px;
+    background: linear-gradient(180deg, #fafbfe, #f6f8fb);
+    border-top: 1px solid #edf0f5;
+}
+
+.conversation-toolbar-label {
+    flex: 0 0 auto;
+    color: #8894a7;
+    font-size: 9.5px;
+    font-weight: 900;
+}
+
+.conversation-head-actions {
+    max-width: none;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.conversation-head-actions::-webkit-scrollbar {
+    display: none;
+}
+
+.conversation-head-actions .conversation-tool-btn {
+    min-height: 32px;
+    padding-inline: 9px;
+    flex: 0 0 auto;
+    color: #536077;
+    border-color: #dfe5ee;
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 3px 9px rgba(23, 32, 51, .025);
+    font-size: 9.5px;
+}
+
+.conversation-head-actions .conversation-tool-btn.is-active {
+    color: #4f5fd4;
+    border-color: #ced4f5;
+    background: #f0f1ff;
+}
+
+/* خلاصه وضعیت */
+.conversation-context-strip {
+    min-height: 56px;
+    gap: 7px;
+    padding: 8px 12px;
+    background: #fff;
+    border-bottom: 1px solid #e6ebf2;
+}
+
+.conversation-info-pill-pro {
+    min-width: 0;
+    min-height: 38px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: center;
+    gap: 3px 8px;
+    padding: 6px 10px;
+    border: 1px solid #e6ebf2;
+    border-radius: 11px;
+    background: #f8fafc;
+}
+
+.conversation-info-pill-pro:last-child {
+    border-left: 1px solid #e6ebf2;
+}
+
+.conversation-info-pill-pro span {
+    color: #96a1b2;
+    font-size: 8.5px;
+}
+
+.conversation-info-pill-pro strong {
+    color: #344158;
+    font-size: 9.5px;
+}
+
+/* بوم پیام‌ها */
+.conversation-message-stage-pro {
+    min-height: 300px;
+    gap: 10px;
+    padding: 20px clamp(18px, 3vw, 42px) 26px;
+    background:
+        linear-gradient(rgba(247, 249, 252, .94), rgba(247, 249, 252, .94)),
+        radial-gradient(circle at 1px 1px, #cfd7e6 1px, transparent 1px);
+    background-size: auto, 22px 22px;
+}
+
+.conversation-day-divider span,
+.conversation-new-messages-divider span {
+    padding: 5px 11px;
+    color: #6d7a8f;
+    border-color: #dfe5ee;
+    background: rgba(255, 255, 255, .9);
+    box-shadow: 0 3px 10px rgba(23, 32, 51, .035);
+}
+
+.message-row-pro {
+    gap: 9px;
+}
+
+.message-stack-pro {
+    max-width: min(72%, 720px);
+}
+
+.message-bubble-pro {
+    padding: 11px 14px;
+    border-radius: 17px;
+    box-shadow: 0 9px 26px rgba(23, 32, 51, .07);
+}
+
+.message-bubble-pro.agent {
+    background: linear-gradient(135deg, #5d60db, #4b7fdb 62%, #2da0c5);
+    box-shadow: 0 12px 30px rgba(65, 91, 205, .18);
+}
+
+.message-bubble-pro.visitor {
+    border-color: #dce3ed;
+    background: #fff;
+}
+
+.message-author-pro {
+    color: #718096;
+}
+
+.message-actions-pro {
+    border-color: #e0e6ef;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .92);
+    box-shadow: 0 7px 18px rgba(23, 32, 51, .07);
+}
+
+/* کادر نوشتن پاسخ */
+.conversation-composer-pro {
+    padding: 10px 12px 12px;
+    border-top: 1px solid #e1e7f0;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 -14px 36px rgba(23, 32, 51, .045);
+}
+
+.conversation-composer-shell {
+    gap: 7px;
+    padding: 8px;
+    border-color: #dce4ef;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(23, 32, 51, .055);
+}
+
+.conversation-composer-mode-group {
+    justify-content: space-between;
+}
+
+.conversation-composer-tabs {
+    padding: 3px;
+    border: 1px solid #e2e7ef;
+    border-radius: 11px;
+    background: #f4f6fa;
+}
+
+.conversation-composer-tabs button {
+    min-height: 31px;
+    border-radius: 8px;
+}
+
+.conversation-composer-tabs button.active {
+    color: #4b5ccb;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(23, 32, 51, .06);
+}
+
+.conversation-composer-state-chip {
+    min-height: 29px;
+    color: #4b5ccb;
+    border-color: #d7dcf7;
+    background: #f3f4ff;
+}
+
+.conversation-composer-editor {
+    border-color: #e0e6ef;
+    border-radius: 13px;
+    background: #fafbfe;
+}
+
+.conversation-composer-editor:focus-within {
+    border-color: rgba(79, 95, 212, .46);
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(79, 95, 212, .075);
+}
+
+.conversation-composer-input {
+    min-height: 62px;
+    max-height: 150px;
+    padding: 11px 12px 6px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.conversation-composer-input:focus {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.conversation-composer-bottom {
+    padding: 5px 7px 7px;
+    border-top: 1px solid #edf0f5;
+}
+
+.composer-tool-btn {
+    min-height: 31px;
+    border-color: #e0e6ef;
+    border-radius: 9px;
+    background: #fff;
+}
+
+.conversation-send-btn {
+    min-width: 112px;
+    min-height: 34px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #5a5bd6, #3f83d8 65%, #21a0bc);
+    box-shadow: 0 8px 18px rgba(68, 91, 205, .18);
+}
+
+/* پنل جزئیات */
+.conversation-side-pro {
+    width: 312px;
+    gap: 0;
+    padding: 0 0 10px;
+    overflow-y: auto;
+    border-right: 1px solid #dfe5ee;
+    background: #f7f9fc;
+    box-shadow: none;
+}
+
+.conversation-inspector-head {
+    min-height: 66px;
+    padding: 12px 14px;
+    border-bottom-color: #e2e7ef;
+    background: rgba(255, 255, 255, .96);
+}
+
+.conversation-inspector-head strong {
+    color: #172033;
+    font-size: 12.5px;
+}
+
+.conversation-user-card-pro {
+    gap: 10px;
+    margin: 10px 10px 0;
+    padding: 12px;
+    color: #172033;
+    border: 1px solid #e1e7f0;
+    border-radius: 16px;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(79, 95, 212, .1), transparent 36%),
+        #fff;
+    box-shadow: 0 8px 24px rgba(23, 32, 51, .045);
+}
+
+.conversation-user-top strong {
+    color: #172033;
+}
+
+.conversation-user-top span {
+    color: #78859a;
+}
+
+.conversation-user-grid .conversation-info-pill-pro {
+    border-color: #e6ebf2;
+    background: #f8fafc;
+}
+
+.conversation-panel-tabs-pro {
+    top: 66px;
+    gap: 4px;
+    margin: 10px 10px 0;
+    padding: 5px;
+    border: 1px solid #e1e7f0;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 7px 20px rgba(23, 32, 51, .04);
+}
+
+.conversation-panel-tabs-pro button {
+    min-height: 45px;
+    color: #718096;
+    border-radius: 10px;
+}
+
+.conversation-panel-tabs-pro button:hover {
+    color: #4f5fd4;
+    background: #f4f5ff;
+}
+
+.conversation-panel-tabs-pro button.active {
+    color: #fff;
+    border-color: transparent;
+    background: linear-gradient(145deg, #5a5bd6, #3f83d8);
+    box-shadow: 0 7px 17px rgba(68, 85, 196, .2);
+}
+
+.conversation-side-section-pro {
+    gap: 11px;
+    margin: 10px 10px 0;
+    padding: 12px;
+    border: 1px solid #e1e7f0;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(23, 32, 51, .04);
+}
+
+.quick-reply-card-pro,
+.ai-card-pro,
+.manage-card-pro,
+.conversation-note-pro,
+.phase5-routing-card {
+    border-color: #e5eaf2;
+    border-radius: 12px;
+    background: #f8fafc;
+    box-shadow: none;
+}
+
+@media (max-width: 1500px) {
+    .app-shell-workspace {
+        --sidebar-width: 232px;
+    }
+
+    .conversation-head-actions .conversation-tool-btn {
+        width: 33px;
+        padding: 0;
+    }
+
+    .conversation-head-actions .conversation-tool-btn span {
+        display: none;
+    }
+}
+
+@media (max-width: 1220px) {
+    .conversation-head-priority-actions .conversation-tool-btn {
+        width: 36px;
+        padding: 0;
+    }
+
+    .conversation-head-priority-actions .conversation-tool-btn span {
+        display: none;
+    }
+
+    .conversation-person-title-row h2 {
+        max-width: 210px;
+    }
+
+    .conversation-context-strip {
+        grid-template-columns: repeat(4, minmax(125px, 1fr));
+        overflow-x: auto;
+    }
+
+    .conversation-info-pill-pro:nth-child(-n+2) {
+        border-bottom: 1px solid #e6ebf2;
+    }
+}
+
+@media (max-width: 1180px) {
+    .conversation-workspace-pro,
+    .conversation-workspace-pro.inspector-closed {
+        height: calc(100dvh - 16px);
+        min-height: 600px;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .conversation-side-pro {
+        position: fixed;
+        z-index: 310;
+        inset: 8px auto 8px 8px;
+        width: min(340px, calc(100vw - 16px));
+        padding-bottom: 10px;
+        border: 1px solid #dce3ed;
+        border-radius: 20px;
+        box-shadow: 0 28px 90px rgba(15, 23, 42, .25);
+    }
+}
+
+@media (max-width: 980px) {
+    .sidebar-desktop-collapse {
+        display: none;
+    }
+
+    .app-shell-workspace {
+        padding: 7px;
+    }
+
+    .app-shell-workspace .main-area-workspace {
+        padding: 0;
+    }
+
+    .app-shell-workspace .page-content-workspace {
+        min-height: calc(100dvh - 14px);
+    }
+
+    .conversation-workspace-pro,
+    .conversation-workspace-pro.inspector-closed {
+        height: calc(100dvh - 14px);
+    }
+}
+
+@media (max-width: 720px) {
+    .conversation-workspace-pro,
+    .conversation-workspace-pro.inspector-closed {
+        min-height: 560px;
+        border-radius: 15px;
+    }
+
+    .conversation-head-primary-row {
+        min-height: 64px;
+        gap: 8px;
+        padding: 9px;
+    }
+
+    .conversation-person-block {
+        gap: 7px;
+    }
+
+    .conversation-back-btn {
+        width: 33px;
+        height: 33px;
+        flex-basis: 33px;
+    }
+
+    .conversation-person-avatar-wrap .conversation-avatar-pro {
+        width: 35px;
+        height: 35px;
+        flex-basis: 35px;
+        border-radius: 11px;
+    }
+
+    .conversation-person-title-row h2 {
+        max-width: 125px;
+        font-size: 12.5px;
+    }
+
+    .conversation-person-meta {
+        max-width: 150px;
+    }
+
+    .conversation-person-meta > span:nth-child(n+2) {
+        display: none;
+    }
+
+    .conversation-head-priority-actions {
+        gap: 4px;
+    }
+
+    .conversation-head-priority-actions .conversation-tool-btn {
+        width: 32px;
+        min-height: 32px;
+        display: inline-flex;
+        border-radius: 9px;
+    }
+
+    .conversation-head-priority-actions .conversation-tool-btn.is-danger {
+        display: none;
+    }
+
+    .conversation-head-toolbar {
+        min-height: 42px;
+        padding: 5px 9px;
+    }
+
+    .conversation-toolbar-label {
+        display: none;
+    }
+
+    .conversation-head-actions {
+        width: 100%;
+        max-width: none;
+        justify-content: flex-start;
+    }
+
+    .conversation-head-actions .conversation-tool-btn {
+        display: inline-flex;
+    }
+
+    .conversation-context-strip {
+        display: flex;
+        min-height: 51px;
+        gap: 6px;
+        padding: 6px 8px;
+        overflow-x: auto;
+    }
+
+    .conversation-info-pill-pro {
+        min-width: 128px;
+        min-height: 36px;
+        flex: 0 0 auto;
+        border: 1px solid #e6ebf2 !important;
+    }
+
+    .conversation-message-stage-pro {
+        min-height: 260px;
+        padding: 15px 11px 20px;
+    }
+
+    .message-stack-pro {
+        max-width: 88%;
+    }
+
+    .conversation-composer-pro {
+        padding: 7px;
+    }
+
+    .conversation-composer-shell {
+        padding: 7px;
+        border-radius: 14px;
+    }
+
+    .conversation-composer-mode-group {
+        align-items: stretch;
+    }
+
+    .conversation-composer-state-chip {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .conversation-composer-input {
+        min-height: 56px;
+    }
+
+    .conversation-composer-bottom {
+        align-items: flex-end;
+    }
+
+    .conversation-side-pro {
+        inset: 6px;
+        width: auto;
+        border-radius: 17px;
+    }
+}
+
+@media (max-width: 430px) {
+    .conversation-person-avatar-wrap {
+        display: none;
+    }
+
+    .conversation-person-title-row h2 {
+        max-width: 104px;
+    }
+
+    .conversation-head-primary-row {
+        gap: 5px;
+    }
+
+    .conversation-head-priority-actions .conversation-inspector-toggle,
+    .conversation-head-priority-actions .conversation-tool-btn.is-primary {
+        width: 31px;
+    }
+
+    .conversation-context-strip {
+        min-height: 48px;
+    }
+
+    .message-stack-pro {
+        max-width: 91%;
+    }
+
+    .conversation-composer-state-chip {
+        font-size: 8.5px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-desktop-collapse,
+    .conversation-tool-btn,
+    .message-bubble-pro {
+        transition: none;
+    }
+}

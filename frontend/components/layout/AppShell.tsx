@@ -80,6 +80,11 @@ export default function AppShell({
     const [maintenance, setMaintenance] =
         useState<MaintenanceModeDetails | null>(null);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+    useEffect(() => {
+        setSidebarCollapsed(window.localStorage.getItem("panel_sidebar_collapsed") === "1");
+    }, []);
 
     useEffect(() => {
         setMobileNavOpen(false);
@@ -561,6 +566,14 @@ export default function AppShell({
         router.push("/login");
     }
 
+    function toggleSidebar() {
+        setSidebarCollapsed((current) => {
+            const next = !current;
+            window.localStorage.setItem("panel_sidebar_collapsed", next ? "1" : "0");
+            return next;
+        });
+    }
+
     function isActiveLink(href: string) {
         if (pathname === href) {
             return true;
@@ -592,7 +605,7 @@ export default function AppShell({
     const shellRoleClass = user.role === "super_admin" ? "app-shell--super" : "app-shell--customer";
 
     return (
-        <div className={`app-shell app-shell-pro ${shellRoleClass} ${user.is_impersonating ? "has-impersonation" : ""} ${variant === "workspace" ? "app-shell-workspace" : ""}`}>
+        <div className={`app-shell app-shell-pro ${shellRoleClass} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${user.is_impersonating ? "has-impersonation" : ""} ${variant === "workspace" ? "app-shell-workspace" : ""}`}>
             {user.is_impersonating && (
                 <ImpersonationBanner
                     impersonatorName={user.impersonator_name}
@@ -652,6 +665,17 @@ export default function AppShell({
                     >
                         ×
                     </button>
+
+                    <button
+                        type="button"
+                        className="sidebar-desktop-collapse"
+                        aria-label={sidebarCollapsed ? "باز کردن نوار کناری" : "جمع کردن نوار کناری"}
+                        aria-pressed={sidebarCollapsed}
+                        title={sidebarCollapsed ? "باز کردن منو" : "جمع کردن منو"}
+                        onClick={toggleSidebar}
+                    >
+                        <ShellIcon name="panel-left" />
+                    </button>
                 </div>
 
                 <div className="sidebar-role-card">
@@ -688,6 +712,7 @@ export default function AppShell({
                                                 active ? "page" : undefined
                                             }
                                             onClick={() => setMobileNavOpen(false)}
+                                            title={sidebarCollapsed ? link.label : undefined}
                                         >
                                             <span className="sidebar-link-icon">
                                                 <ShellIcon name={link.icon} />
@@ -735,39 +760,82 @@ export default function AppShell({
                     <button
                         className="btn secondary shell-logout-btn"
                         onClick={handleLogout}
+                        aria-label="خروج از حساب"
                     >
-                        خروج از حساب
+                        <ShellIcon name="logout" />
+                        <span>خروج از حساب</span>
                     </button>
                 </div>
             </aside>
 
             <main className={`main-area main-area-pro ${variant === "workspace" ? "main-area-workspace" : ""}`}>
                 {variant !== "workspace" && (
-                    <header className="page-header page-header-pro">
-                        <div className="page-header-copy">
-                            {kicker && (
-                                <div className="page-kicker">{kicker}</div>
-                            )}
-                            <h1 className="page-title">{title}</h1>
-                            {description && (
-                                <p className="muted page-description">
-                                    {description}
-                                </p>
-                            )}
+                    <>
+                        <div className="shell-utility-bar">
+                            <div className="shell-breadcrumbs">
+                                <button
+                                    type="button"
+                                    className="shell-sidebar-toggle"
+                                    onClick={toggleSidebar}
+                                    aria-label={sidebarCollapsed ? "باز کردن نوار کناری" : "جمع کردن نوار کناری"}
+                                    aria-pressed={sidebarCollapsed}
+                                >
+                                    <ShellIcon name="panel-left" />
+                                </button>
+                                <span>{user.role === "super_admin" ? "مدیریت پلتفرم" : "فضای کاری"}</span>
+                                <b>/</b>
+                                <strong>{title}</strong>
+                            </div>
+
+                            <div className="shell-utility-actions">
+                                <Link
+                                    className="shell-quick-access"
+                                    href={user.role === "super_admin" ? "/super-admin/search" : "/conversations"}
+                                >
+                                    <ShellIcon name={user.role === "super_admin" ? "search" : "conversations"} />
+                                    <span>{user.role === "super_admin" ? "جست‌وجوی سراسری" : "رفتن به گفتگوها"}</span>
+                                </Link>
+
+                                {user.role === "super_admin" && newRequestCount > 0 && (
+                                    <Link className="shell-notification" href="/super-admin/contact-requests" aria-label={`${newRequestCount} درخواست جدید`}>
+                                        <ShellIcon name="announcements" />
+                                        <b>{newRequestCount > 99 ? "99+" : newRequestCount}</b>
+                                    </Link>
+                                )}
+
+                                <div className="shell-user-compact">
+                                    <span>{user.name?.slice(0, 1) || "U"}</span>
+                                    <div><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="page-header-tools">
-                            <div className="shell-context-chip">
-                                <span />
-                                {user.role === "super_admin" && user.admin_role_name
-                                    ? user.admin_role_name
-                                    : roleLabels[user.role]}
+                        <header className="page-header page-header-pro">
+                            <div className="page-header-copy">
+                                {kicker && (
+                                    <div className="page-kicker">{kicker}</div>
+                                )}
+                                <h1 className="page-title">{title}</h1>
+                                {description && (
+                                    <p className="muted page-description">
+                                        {description}
+                                    </p>
+                                )}
                             </div>
-                            {actions && (
-                                <div className="page-actions">{actions}</div>
-                            )}
-                        </div>
-                    </header>
+
+                            <div className="page-header-tools">
+                                <div className="shell-context-chip">
+                                    <span />
+                                    {user.role === "super_admin" && user.admin_role_name
+                                        ? user.admin_role_name
+                                        : roleLabels[user.role]}
+                                </div>
+                                {actions && (
+                                    <div className="page-actions">{actions}</div>
+                                )}
+                            </div>
+                        </header>
+                    </>
                 )}
 
                 <div className={`page-content-pro ${variant === "workspace" ? "page-content-workspace" : ""}`}>{children}</div>
@@ -811,6 +879,8 @@ const shellIconPaths: Record<string, string[]> = {
     "external-link": ["M14 4h6v6", "m20 4-9 9", "M18 14v6H4V6h6"],
     team: ["M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M2 21v-2a6 6 0 0 1 12 0v2", "M16 4a4 4 0 0 1 0 7", "M16 15a6 6 0 0 1 6 6"],
     departments: ["M12 4v6", "M6 10h12", "M6 10v4", "M18 10v4", "M6 18h.01", "M12 14v4", "M12 18h.01", "M18 18h.01"],
+    logout: ["M10 5H5v14h5", "M14 8l4 4-4 4", "M18 12H9"],
+    "panel-left": ["M4 4h16v16H4z", "M9 4v16", "m13 9 3 3-3 3"],
 };
 
 function ShellIcon({ name }: { name: string }) {

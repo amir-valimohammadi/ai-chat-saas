@@ -9,6 +9,7 @@ import { useApiEventStream } from "@/hooks/useApiEventStream";
 
 type StatusFilter = "" | "new" | "open" | "in_progress" | "waiting_customer" | "follow_up" | "pending" | "closed";
 type Priority = "" | "low" | "normal" | "high" | "urgent";
+type QuickView = "all" | "unread" | "unassigned" | "urgent";
 
 type Conversation = {
     id: number;
@@ -258,6 +259,16 @@ export default function ConversationsPage() {
         setFilters((current) => ({ ...current, [key]: value }));
     }
 
+    function applyQuickView(view: QuickView) {
+        const next: Filters = { ...initialFilters };
+        if (view === "unread") next.unread = true;
+        if (view === "unassigned") next.unassigned = true;
+        if (view === "urgent") next.priority = "urgent";
+        setPage(1);
+        setShowAdvanced(false);
+        setFilters(next);
+    }
+
     async function updateManagement(conversationId: number, payload: Record<string, unknown>) {
         try {
             setError("");
@@ -315,6 +326,17 @@ export default function ConversationsPage() {
             if (typeof value === "boolean") return count + (value ? 1 : 0);
             return count + (value ? 1 : 0);
         }, 0);
+    }, [filters]);
+
+    const activeQuickView: QuickView | "custom" = useMemo(() => {
+        const normalized = { ...filters, q: "", status: "" as StatusFilter };
+        const base = { ...initialFilters, q: "", status: "" as StatusFilter };
+        const matches = (candidate: Filters) => JSON.stringify(normalized) === JSON.stringify(candidate);
+        if (matches({ ...base, unread: true })) return "unread";
+        if (matches({ ...base, unassigned: true })) return "unassigned";
+        if (matches({ ...base, priority: "urgent" })) return "urgent";
+        if (matches(base) && !filters.q && !filters.status) return "all";
+        return "custom";
     }, [filters]);
 
     const allSelected = conversations.length > 0 && conversations.every((item) => selectedIds.includes(item.id));
@@ -414,6 +436,22 @@ export default function ConversationsPage() {
                             <span>{pagination.total} نتیجه</span>
                             {activeFilterCount > 0 && <b>{activeFilterCount} فیلتر فعال</b>}
                         </div>
+                    </div>
+
+                    <div className="conversations-smart-queues" aria-label="صف‌های هوشمند گفتگو">
+                        <span className="conversations-smart-label">نمای سریع</span>
+                        <button type="button" className={activeQuickView === "all" ? "active" : ""} aria-pressed={activeQuickView === "all"} onClick={() => applyQuickView("all")}>
+                            <ConversationIcon name="inbox" /> همه فعال‌ها
+                        </button>
+                        <button type="button" className={activeQuickView === "unread" ? "active" : ""} aria-pressed={activeQuickView === "unread"} onClick={() => applyQuickView("unread")}>
+                            <ConversationIcon name="unread" /> خوانده‌نشده
+                        </button>
+                        <button type="button" className={activeQuickView === "unassigned" ? "active" : ""} aria-pressed={activeQuickView === "unassigned"} onClick={() => applyQuickView("unassigned")}>
+                            <ConversationIcon name="userMinus" /> بدون مسئول
+                        </button>
+                        <button type="button" className={activeQuickView === "urgent" ? "active" : ""} aria-pressed={activeQuickView === "urgent"} onClick={() => applyQuickView("urgent")}>
+                            <ConversationIcon name="urgent" /> فوری
+                        </button>
                     </div>
 
                     <div className="phase4-search-row">

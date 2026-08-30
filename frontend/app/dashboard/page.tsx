@@ -4,7 +4,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
@@ -201,54 +201,62 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    <div className="dashboard-health-card">
-                        <div className="dashboard-health-header">
-                            <span className="dashboard-live-dot" />
-                            <strong>وضعیت کاری</strong>
+                    <div className="dashboard-focus-card">
+                        <div className="dashboard-focus-head">
+                            <span><i /> اولویت پاسخ‌گویی</span>
+                            <b>{roleLabels[user.role]}</b>
                         </div>
 
-                        <DashboardHealthRow label="حساب" value={roleLabels[user.role]} />
-                        <DashboardHealthRow
-                            label="گفتگوهای فعال"
-                            value={loading ? "..." : stats.active}
-                        />
-                        <DashboardHealthRow
-                            label="گفتگوهای دارای پیام جدید"
-                            value={loading ? "..." : stats.unreadConversations}
-                        />
-                        <DashboardHealthRow
-                            label="پیام‌های خوانده‌نشده"
-                            value={loading ? "..." : stats.unreadMessages}
-                            highlight={stats.unreadMessages > 0}
-                        />
+                        <div className="dashboard-focus-body">
+                            <div className={stats.unreadConversations > 0 ? "dashboard-focus-orbit has-work" : "dashboard-focus-orbit"}>
+                                <strong>{loading ? "..." : stats.unreadConversations}</strong>
+                                <span>گفتگو با پیام جدید</span>
+                            </div>
+
+                            <div className="dashboard-focus-metrics">
+                                <span><b>{loading ? "..." : stats.unreadMessages}</b> پیام تازه</span>
+                                <span><b>{loading ? "..." : stats.followUp}</b> نیازمند پیگیری</span>
+                                <span><b>{loading ? "..." : stats.active}</b> گفتگوی فعال</span>
+                            </div>
+                        </div>
+
+                        <Link className="dashboard-focus-link" href="/conversations">
+                            شروع رسیدگی به پیام‌ها
+                            <DashboardIcon name="arrow" />
+                        </Link>
                     </div>
                 </section>
 
                 <section className="dashboard-kpi-strip">
                     <DashboardKpiCard
+                        icon="messages"
                         label="کل گفتگوها"
                         value={loading ? "..." : stats.total}
                         hint="همه گفتگوهای قابل دسترسی"
                     />
                     <DashboardKpiCard
+                        icon="activity"
                         label="فعال"
                         value={loading ? "..." : stats.active}
                         hint="باز، جدید، در حال انجام یا pending"
                         tone="primary"
                     />
                     <DashboardKpiCard
+                        icon="unread"
                         label="پیام جدید"
                         value={loading ? "..." : stats.unreadMessages}
                         hint="مجموع پیام‌های خوانده‌نشده"
                         tone={stats.unreadMessages > 0 ? "danger" : "default"}
                     />
                     <DashboardKpiCard
+                        icon="follow"
                         label="نیاز به پیگیری"
                         value={loading ? "..." : stats.followUp}
                         hint="گفتگوهای follow_up"
                         tone={stats.followUp > 0 ? "warning" : "default"}
                     />
                     <DashboardKpiCard
+                        icon="check"
                         label="بسته‌شده"
                         value={loading ? "..." : stats.closed}
                         hint="گفتگوهای تکمیل‌شده"
@@ -290,6 +298,10 @@ export default function DashboardPage() {
                                             conversation.has_unread ? "unread" : ""
                                         }`}
                                     >
+                                        <div className="dashboard-inbox-avatar" aria-hidden="true">
+                                            <DashboardIcon name="messages" />
+                                        </div>
+
                                         <div className="dashboard-inbox-main">
                                             <div className="dashboard-inbox-title-row">
                                                 <strong>گفتگو #{conversation.id}</strong>
@@ -304,7 +316,7 @@ export default function DashboardPage() {
                                             </p>
 
                                             <span>
-                                                آخرین پیام: {conversation.last_message_at || "ثبت نشده"}
+                                                آخرین پیام: {formatDateTime(conversation.last_message_at)}
                                             </span>
                                         </div>
 
@@ -314,6 +326,7 @@ export default function DashboardPage() {
                                             ) : (
                                                 <span>بدون پیام جدید</span>
                                             )}
+                                            <DashboardIcon name="arrow" />
                                         </div>
                                     </Link>
                                 ))}
@@ -331,15 +344,15 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="dashboard-shortcut-list-pro">
-                                <DashboardShortcut href="/conversations" label="مدیریت گفتگوها" meta="Inbox و پاسخ‌گویی" />
-                                <DashboardShortcut href="/announcements" label="اعلان‌ها" meta="پیام‌های سیستم" />
+                                <DashboardShortcut icon="messages" href="/conversations" label="مدیریت گفتگوها" meta="Inbox و پاسخ‌گویی" />
+                                <DashboardShortcut icon="bell" href="/announcements" label="اعلان‌ها" meta="پیام‌های سیستم" />
 
                                 {user.role === "customer_admin" && (
                                     <>
-                                        <DashboardShortcut href="/ai-center" label="مرکز AI" meta="دانش، خزش و تست" />
-                                        <DashboardShortcut href="/widget-settings" label="تنظیمات ویجت" meta="ظاهر و رفتار ویجت" />
-                                        <DashboardShortcut href="/quick-replies" label="پاسخ‌های آماده" meta="متن‌های پرتکرار" />
-                                        <DashboardShortcut href="/team" label="تیم پشتیبانی" meta="کاربران و دسترسی‌ها" />
+                                        <DashboardShortcut icon="spark" href="/ai-center" label="مرکز AI" meta="دانش، خزش و تست" />
+                                        <DashboardShortcut icon="widget" href="/widget-settings" label="تنظیمات ویجت" meta="ظاهر و رفتار ویجت" />
+                                        <DashboardShortcut icon="quick" href="/quick-replies" label="پاسخ‌های آماده" meta="متن‌های پرتکرار" />
+                                        <DashboardShortcut icon="users" href="/team" label="تیم پشتیبانی" meta="کاربران و دسترسی‌ها" />
                                     </>
                                 )}
                             </div>
@@ -380,11 +393,13 @@ export default function DashboardPage() {
 }
 
 function DashboardKpiCard({
+                              icon,
                               value,
                               label,
                               hint,
                               tone = "default",
                           }: {
+    icon: DashboardIconName;
     value: string | number;
     label: string;
     hint: string;
@@ -392,46 +407,35 @@ function DashboardKpiCard({
 }) {
     return (
         <article className={`dashboard-kpi-card tone-${tone}`}>
-            <div className="dashboard-kpi-value">{value}</div>
+            <div className="dashboard-kpi-topline">
+                <span><DashboardIcon name={icon} /></span>
+                <div className="dashboard-kpi-value">{value}</div>
+            </div>
             <div className="dashboard-kpi-label">{label}</div>
             <p>{hint}</p>
         </article>
     );
 }
 
-function DashboardHealthRow({
-                                label,
-                                value,
-                                highlight = false,
-                            }: {
-    label: string;
-    value: string | number;
-    highlight?: boolean;
-}) {
-    return (
-        <div className={`dashboard-health-row ${highlight ? "highlight" : ""}`}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-        </div>
-    );
-}
-
 function DashboardShortcut({
+                               icon,
                                href,
                                label,
                                meta,
                            }: {
+    icon: DashboardIconName;
     href: string;
     label: string;
     meta: string;
 }) {
     return (
         <Link className="dashboard-shortcut-pro" href={href}>
+            <span className="dashboard-shortcut-icon"><DashboardIcon name={icon} /></span>
             <div>
                 <strong>{label}</strong>
                 <span>{meta}</span>
             </div>
-            <b>‹</b>
+            <b><DashboardIcon name="arrow" /></b>
         </Link>
     );
 }
@@ -467,4 +471,51 @@ function truncateText(text: string, maxLength: number) {
     }
 
     return `${text.slice(0, maxLength).trim()}...`;
+}
+
+function formatDateTime(value: string | null) {
+    if (!value) return "ثبت نشده";
+    const date = new Date(value.includes("T") ? value : value.replace(" ", "T"));
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("fa-IR", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(date);
+}
+
+type DashboardIconName =
+    | "activity"
+    | "arrow"
+    | "bell"
+    | "check"
+    | "follow"
+    | "messages"
+    | "quick"
+    | "spark"
+    | "unread"
+    | "users"
+    | "widget";
+
+function DashboardIcon({ name }: { name: DashboardIconName }) {
+    const paths: Record<DashboardIconName, ReactNode> = {
+        activity: <><path d="M4 13h4l2.2-6 3.2 11 2.1-5H20"/><path d="M4 4v16h16"/></>,
+        arrow: <><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></>,
+        bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
+        check: <><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></>,
+        follow: <><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8"/><path d="M4 4v4h4"/><path d="M12 8v5l3 2"/></>,
+        messages: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></>,
+        quick: <><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></>,
+        spark: <><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></>,
+        unread: <><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/><circle cx="18" cy="6" r="3"/></>,
+        users: <><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4.5a4 4 0 0 1 0 7.5M18 14a6 6 0 0 1 4 6"/></>,
+        widget: <><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 9v12"/></>,
+    };
+
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {paths[name]}
+        </svg>
+    );
 }
