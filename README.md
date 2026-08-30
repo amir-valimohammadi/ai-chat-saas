@@ -39,7 +39,7 @@
 
 4. دیتابیس `ai_chat_saas` را با Collation مبتنی بر `utf8mb4` ایجاد کنید.
 
-5. برای نصب تازه فقط `backend/database/schema.sql` را import کنید. این فایل شامل ساختار نهایی همه migrationها تا `2026_08_29_database_baseline_fixes.sql` است و هیچ داده کاربر، نشست، پیام یا Secret ندارد. migrationهای قدیمی را بعد از این schema دوباره اجرا نکنید.
+5. برای نصب تازه فقط `backend/database/schema.sql` را import کنید. این فایل شامل ساختار نهایی همه migrationها تا `2026_08_30_automation_center.sql` است و هیچ داده کاربر، نشست، پیام یا Secret ندارد. migrationهای قدیمی را بعد از این schema دوباره اجرا نکنید.
 
    ```powershell
    Get-Content backend\database\schema.sql -Raw |
@@ -93,6 +93,28 @@ REALTIME_POLL_INTERVAL_MS=750
 
 در Production، فشرده‌سازی و buffering مسیرهای `*/conversation-stream.php` و `*/inbox-stream.php` باید در Reverse Proxy غیرفعال باشد. هر اتصال SSE یک درخواست نسبتاً طولانی نگه می‌دارد؛ بنابراین تعداد Workerهای PHP/Apache باید متناسب با تعداد اپراتورها و گفتگوهای هم‌زمان تنظیم شود.
 
+## مرکز اتوماسیون
+
+مرکز اتوماسیون شامل قوانین رویدادمحور، شرط‌ها و اقدام‌های قابل ترکیب، سیاست‌های SLA، هشدارهای عملیاتی و تاریخچه اجرا است. رویدادهای شروع گفتگو، پیام مشتری، پاسخ پشتیبان، تغییر وضعیت و تخصیص به موتور متصل‌اند.
+
+برای بررسی قوانین زمان‌بندی‌شده و سررسیدهای SLA، این Worker باید هر دقیقه با Task Scheduler ویندوز یا Cron اجرا شود. در ویندوز برای جلوگیری از بازشدن پنجره CMD، برنامه Task را روی `php-win.exe` قرار دهید:
+
+```powershell
+C:\xampp\php\php-win.exe C:\xampp\htdocs\ai-chat-saas\backend\cron\automation-worker.php
+```
+
+روی دیتابیس‌های موجود ابتدا migration زیر را فقط یک بار اجرا کنید:
+
+```text
+backend/database/migrations/2026_08_30_automation_center.sql
+```
+
+برای افزودن یا به‌روزرسانی سه قانون پیشنهادی یک حساب مشتری، اسکریپت زیر idempotent است و قانون تکراری نمی‌سازد:
+
+```powershell
+php backend\cli\seed-automation-defaults.php TENANT_ID CUSTOMER_ADMIN_USER_ID
+```
+
 ## بررسی کیفیت
 
 فرانت‌اند:
@@ -108,6 +130,8 @@ npm run build
 ```powershell
 php backend\cli\pass2-runtime-check.php
 php backend\cli\pass2-database-check.php
+php backend\cli\automation-smoke-test.php
+php backend\cli\automation-api-smoke-test.php
 php backend\cli\auth-cookie-smoke-test.php
 
 $files = rg --files backend -g '*.php'

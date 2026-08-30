@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../includes/rate-limit.php';
 require_once __DIR__ . '/../../includes/hosted-support.php';
 require_once __DIR__ . '/../../includes/subscription.php';
 require_once __DIR__ . '/../../includes/routing.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['success' => false, 'message' => 'Method not allowed'], 405);
@@ -114,6 +115,7 @@ try {
 
     $conversation = $findConversation();
     $routingResult = null;
+    $createdConversation = false;
 
     if ($conversation) {
         $conversationId = (int) $conversation['id'];
@@ -144,8 +146,20 @@ try {
             ]);
             $conversationId = (int) $pdo->lastInsertId();
             $routingResult = routing_route_conversation($pdo, $conversationId, $department);
+            $createdConversation = true;
         }
         $pdo->commit();
+    }
+
+    if ($createdConversation) {
+        automation_dispatch_event_safe(
+            $pdo,
+            'conversation_created',
+            $conversationId,
+            ['source_page_url' => $sourcePageUrl, 'source_page_title' => $sourcePageTitle],
+            null,
+            'conversation:' . $conversationId
+        );
     }
 
     $resultStmt = $pdo->prepare("\n        SELECT conversations.id, conversations.department_id, conversations.assigned_agent_id,\n               conversations.queue_status, conversations.queue_position, conversations.queued_at,\n               departments.name AS department_name, departments.color AS department_color,\n               departments.queue_message, users.name AS assigned_agent_name\n        FROM conversations\n        LEFT JOIN departments ON departments.id = conversations.department_id\n        LEFT JOIN users ON users.id = conversations.assigned_agent_id\n        WHERE conversations.id = :id LIMIT 1\n    ");

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
 require_once __DIR__ . '/../../includes/routing.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 $user = require_auth($pdo);
@@ -66,6 +67,14 @@ try {
     );
     if ($conversation['department_id'] !== null) routing_reindex_queue($pdo, (int) $conversation['department_id']);
     $pdo->commit();
+
+    automation_dispatch_event_safe(
+        $pdo,
+        'assignment_changed',
+        $conversationId,
+        ['previous_agent_id' => $oldAgentId, 'new_agent_id' => $agentId, 'change_type' => 'agent'],
+        (int) $user['id']
+    );
 
     json_response([
         'success' => true,

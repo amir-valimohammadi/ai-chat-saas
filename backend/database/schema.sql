@@ -1698,6 +1698,165 @@ CREATE TABLE `visitors` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+-- Automation Center v1: rules, SLA tracking, alerts, tags and execution history.
+-- Additive migration; existing conversations and routing data are preserved.
+
+CREATE TABLE `automation_rules` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(10) unsigned NOT NULL,
+  `site_id` int(10) unsigned DEFAULT NULL,
+  `name` varchar(190) NOT NULL,
+  `description` text DEFAULT NULL,
+  `trigger_type` varchar(50) NOT NULL,
+  `match_type` enum('all','any') NOT NULL DEFAULT 'all',
+  `conditions_json` longtext NOT NULL,
+  `actions_json` longtext NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `priority` smallint(5) unsigned NOT NULL DEFAULT 100,
+  `cooldown_seconds` int(10) unsigned NOT NULL DEFAULT 0,
+  `stop_processing` tinyint(1) NOT NULL DEFAULT 0,
+  `last_run_at` datetime DEFAULT NULL,
+  `run_count` int(10) unsigned NOT NULL DEFAULT 0,
+  `success_count` int(10) unsigned NOT NULL DEFAULT 0,
+  `failure_count` int(10) unsigned NOT NULL DEFAULT 0,
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `updated_by` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_automation_rules_scope` (`tenant_id`,`site_id`,`is_active`,`trigger_type`,`priority`),
+  KEY `fk_automation_rules_created_by` (`created_by`),
+  KEY `fk_automation_rules_updated_by` (`updated_by`),
+  CONSTRAINT `fk_automation_rules_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_automation_rules_site` FOREIGN KEY (`site_id`) REFERENCES `sites` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_automation_rules_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_rules_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `automation_sla_policies` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(10) unsigned NOT NULL,
+  `site_id` int(10) unsigned DEFAULT NULL,
+  `name` varchar(190) NOT NULL,
+  `first_response_minutes` int(10) unsigned NOT NULL DEFAULT 15,
+  `resolution_minutes` int(10) unsigned NOT NULL DEFAULT 1440,
+  `warning_before_minutes` int(10) unsigned NOT NULL DEFAULT 5,
+  `breach_priority` enum('low','normal','high','urgent') NOT NULL DEFAULT 'urgent',
+  `breach_department_id` int(10) unsigned DEFAULT NULL,
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_by` int(10) unsigned DEFAULT NULL,
+  `updated_by` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_automation_sla_scope` (`tenant_id`,`site_id`,`is_active`,`is_default`),
+  KEY `fk_automation_sla_department` (`breach_department_id`),
+  KEY `fk_automation_sla_created_by` (`created_by`),
+  KEY `fk_automation_sla_updated_by` (`updated_by`),
+  CONSTRAINT `fk_automation_sla_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_automation_sla_site` FOREIGN KEY (`site_id`) REFERENCES `sites` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_automation_sla_department` FOREIGN KEY (`breach_department_id`) REFERENCES `departments` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_sla_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_sla_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `conversation_sla_status` (
+  `conversation_id` int(10) unsigned NOT NULL,
+  `policy_id` int(10) unsigned NOT NULL,
+  `state` enum('tracking','warning','breached','met','resolved') NOT NULL DEFAULT 'tracking',
+  `first_response_due_at` datetime NOT NULL,
+  `resolution_due_at` datetime NOT NULL,
+  `first_response_at` datetime DEFAULT NULL,
+  `warning_sent_at` datetime DEFAULT NULL,
+  `first_response_breached_at` datetime DEFAULT NULL,
+  `resolution_breached_at` datetime DEFAULT NULL,
+  `last_checked_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp(),
+  PRIMARY KEY (`conversation_id`),
+  KEY `idx_conversation_sla_due` (`state`,`first_response_due_at`,`resolution_due_at`),
+  KEY `idx_conversation_sla_policy` (`policy_id`),
+  CONSTRAINT `fk_conversation_sla_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_conversation_sla_policy` FOREIGN KEY (`policy_id`) REFERENCES `automation_sla_policies` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `automation_execution_logs` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `rule_id` int(10) unsigned DEFAULT NULL,
+  `tenant_id` int(10) unsigned NOT NULL,
+  `site_id` int(10) unsigned DEFAULT NULL,
+  `conversation_id` int(10) unsigned DEFAULT NULL,
+  `rule_name` varchar(190) NOT NULL,
+  `trigger_type` varchar(50) NOT NULL,
+  `event_key` varchar(190) DEFAULT NULL,
+  `status` enum('success','failed','skipped') NOT NULL,
+  `duration_ms` int(10) unsigned NOT NULL DEFAULT 0,
+  `condition_context_json` longtext DEFAULT NULL,
+  `action_results_json` longtext DEFAULT NULL,
+  `error_message` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_automation_rule_event` (`rule_id`,`event_key`),
+  KEY `idx_automation_logs_tenant` (`tenant_id`,`created_at`),
+  KEY `idx_automation_logs_conversation` (`conversation_id`,`created_at`),
+  KEY `idx_automation_logs_status` (`tenant_id`,`status`,`created_at`),
+  CONSTRAINT `fk_automation_logs_rule` FOREIGN KEY (`rule_id`) REFERENCES `automation_rules` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_logs_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_automation_logs_site` FOREIGN KEY (`site_id`) REFERENCES `sites` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_logs_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `automation_alerts` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(10) unsigned NOT NULL,
+  `site_id` int(10) unsigned DEFAULT NULL,
+  `rule_id` int(10) unsigned DEFAULT NULL,
+  `conversation_id` int(10) unsigned DEFAULT NULL,
+  `recipient_user_id` int(10) unsigned DEFAULT NULL,
+  `severity` enum('info','warning','high','critical') NOT NULL DEFAULT 'warning',
+  `title` varchar(190) NOT NULL,
+  `message` text NOT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT 0,
+  `read_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_automation_alerts_inbox` (`tenant_id`,`recipient_user_id`,`is_read`,`created_at`),
+  KEY `idx_automation_alerts_conversation` (`conversation_id`,`created_at`),
+  CONSTRAINT `fk_automation_alerts_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_automation_alerts_site` FOREIGN KEY (`site_id`) REFERENCES `sites` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_alerts_rule` FOREIGN KEY (`rule_id`) REFERENCES `automation_rules` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_alerts_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_automation_alerts_recipient` FOREIGN KEY (`recipient_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `conversation_tags` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` int(10) unsigned NOT NULL,
+  `site_id` int(10) unsigned DEFAULT NULL,
+  `name` varchar(100) NOT NULL,
+  `color` varchar(20) NOT NULL DEFAULT '#64748b',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_conversation_tags_scope_name` (`tenant_id`,`site_id`,`name`),
+  KEY `idx_conversation_tags_tenant` (`tenant_id`,`name`),
+  CONSTRAINT `fk_conversation_tags_tenant` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_conversation_tags_site` FOREIGN KEY (`site_id`) REFERENCES `sites` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `conversation_tag_assignments` (
+  `conversation_id` int(10) unsigned NOT NULL,
+  `tag_id` int(10) unsigned NOT NULL,
+  `assigned_by` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`conversation_id`,`tag_id`),
+  KEY `idx_conversation_tag_assignments_tag` (`tag_id`,`created_at`),
+  KEY `fk_conversation_tag_assignments_actor` (`assigned_by`),
+  CONSTRAINT `fk_conversation_tag_assignments_conversation` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_conversation_tag_assignments_tag` FOREIGN KEY (`tag_id`) REFERENCES `conversation_tags` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_conversation_tag_assignments_actor` FOREIGN KEY (`assigned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `widget_events` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `site_id` int(10) unsigned NOT NULL,

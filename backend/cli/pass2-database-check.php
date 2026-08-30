@@ -16,8 +16,9 @@ $expectedTables = [
     'admin_two_factor_recovery_codes','agent_site_access','ai_answer_logs','ai_content_chunks',
     'ai_crawl_queue','ai_crawl_runs','ai_crawl_sources','ai_generated_questions','ai_pages',
     'ai_site_settings','ai_suggestions','ai_terms','ai_unanswered_questions','announcements',
-    'announcement_targets','announcement_user_states','api_rate_limits','auth_sessions',
-    'conversations','conversation_assignment_logs','conversation_typing_status','customer_requests',
+    'announcement_targets','announcement_user_states','api_rate_limits','auth_sessions','automation_alerts',
+    'automation_execution_logs','automation_rules','automation_sla_policies','conversations',
+    'conversation_assignment_logs','conversation_sla_status','conversation_tags','conversation_tag_assignments','conversation_typing_status','customer_requests',
     'customer_request_events','departments','department_members','hosted_support_pages',
     'knowledge_sources','messages','message_attachments','message_mentions','message_reactions',
     'message_revisions','plans','qa_browser_fixtures','qa_findings','qa_test_artifacts',
@@ -41,6 +42,10 @@ $criticalColumns = [
     'api_rate_limits' => ['id','rate_key','hits','window_start','expires_at'],
     'auth_sessions' => ['id','user_id','jti_hash','expires_at','revoked_at'],
     'system_error_logs' => ['id','fingerprint','level','message','status_code','occurrences'],
+    'automation_rules' => ['id','tenant_id','site_id','trigger_type','conditions_json','actions_json','is_active'],
+    'automation_sla_policies' => ['id','tenant_id','site_id','first_response_minutes','resolution_minutes','warning_before_minutes'],
+    'conversation_sla_status' => ['conversation_id','policy_id','state','first_response_due_at','resolution_due_at'],
+    'automation_execution_logs' => ['id','rule_id','tenant_id','conversation_id','trigger_type','status','created_at'],
 ];
 
 $checks = [];

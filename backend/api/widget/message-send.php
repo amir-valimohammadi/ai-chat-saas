@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
 require_once __DIR__ . '/../../includes/hosted-support.php';
 require_once __DIR__ . '/../../includes/message-helpers.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -165,6 +166,15 @@ try {
     ]);
 
     $pdo->commit();
+
+    automation_dispatch_event_safe(
+        $pdo,
+        'visitor_message',
+        $conversationId,
+        ['message_id' => $messageId, 'message_text' => $content, 'message_type' => 'text'],
+        null,
+        'message:' . $messageId
+    );
 
     json_response([
         'success' => true,

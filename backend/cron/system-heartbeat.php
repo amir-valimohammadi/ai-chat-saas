@@ -15,6 +15,7 @@ $labels = [
     'scheduler' => 'Cron / Task Scheduler',
     'crawl_worker' => 'Crawler Worker',
     'notification_worker' => 'Notification Worker',
+    'automation_worker' => 'Automation Worker',
 ];
 $serviceLabel = $labels[$serviceKey] ?? $serviceKey;
 

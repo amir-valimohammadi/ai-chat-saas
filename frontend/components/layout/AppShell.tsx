@@ -537,6 +537,12 @@ export default function AppShell({
                         icon: "departments",
                         description: "صف و توزیع خودکار",
                     },
+                    {
+                        href: "/automations",
+                        label: "مرکز اتوماسیون",
+                        icon: "automation",
+                        description: "قوانین، SLA و هشدارها",
+                    },
                 ],
             },
             {
@@ -879,6 +885,7 @@ const shellIconPaths: Record<string, string[]> = {
     "external-link": ["M14 4h6v6", "m20 4-9 9", "M18 14v6H4V6h6"],
     team: ["M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M2 21v-2a6 6 0 0 1 12 0v2", "M16 4a4 4 0 0 1 0 7", "M16 15a6 6 0 0 1 6 6"],
     departments: ["M12 4v6", "M6 10h12", "M6 10v4", "M18 10v4", "M6 18h.01", "M12 14v4", "M12 18h.01", "M18 18h.01"],
+    automation: ["M12 3v4", "M12 17v4", "M3 12h4", "M17 12h4", "m5.6 5.6 2.8 2.8", "m15.6 15.6 2.8 2.8", "m18.4 5.6-2.8 2.8", "m8.4 15.6-2.8 2.8", "M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0"],
     logout: ["M10 5H5v14h5", "M14 8l4 4-4 4", "M18 12H9"],
     "panel-left": ["M4 4h16v16H4z", "M9 4v16", "m13 9 3 3-3 3"],
 };

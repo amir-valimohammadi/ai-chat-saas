@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
 require_once __DIR__ . '/../../includes/routing.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -118,6 +119,14 @@ try {
             $queueResult = routing_process_department_queue($pdo, $department, 1, (int) $user['id']);
         }
     }
+
+    automation_dispatch_event_safe(
+        $pdo,
+        'status_changed',
+        $conversationId,
+        ['previous_status' => $conversation['status'], 'new_status' => $status],
+        (int) $user['id']
+    );
 
     json_response([
         'success' => true,
