@@ -57,6 +57,16 @@ function safeHost(url?: string | null) {
   try { return new URL(url).hostname || url; } catch { return url; }
 }
 
+function VisitorsEmptyIcon() {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <path d="M18 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm28 2a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z" />
+      <path d="M4 48c0-10 6-17 14-17s14 7 14 17M34 48c0-8 5-14 12-14s12 6 12 14" />
+      <path d="M9 54h46" />
+    </svg>
+  );
+}
+
 export default function VisitorsPage() {
   const router = useRouter();
   const [visitors, setVisitors] = useState<Visitor[]>([]);
@@ -83,6 +93,12 @@ export default function VisitorsPage() {
     if (filters.device) params.set("device", filters.device);
     return params.toString();
   }, [filters, page]);
+
+  const hasActiveFilters = Boolean(filters.q || filters.site_id || filters.device || filters.status !== "online");
+
+  function clearFilters() {
+    setFilters({ q: "", status: "online", site_id: "", device: "" });
+  }
 
   async function loadVisitors(silent = false) {
     try {
@@ -135,38 +151,79 @@ export default function VisitorsPage() {
   }, [query]);
 
   return (
-    <AppShell title="بازدیدکنندگان سایت" kicker="Live Visitors" description="مشاهده حضور زنده، مسیر بازدید و آغاز گفتگو توسط پشتیبان" actions={<button className="button button-secondary" onClick={() => loadVisitors(true)} disabled={refreshing}>{refreshing ? "در حال بروزرسانی…" : "بروزرسانی"}</button>}>
+    <AppShell title="بازدیدکنندگان سایت" kicker="حضور زنده" description="رفتار کاربران را ببینید و در بهترین لحظه گفتگو را آغاز کنید" actions={<button className="button button-secondary" onClick={() => loadVisitors(true)} disabled={refreshing}>{refreshing ? "در حال بروزرسانی…" : "بروزرسانی زنده"}</button>}>
       <div className="visitors-page">
         {error && <div className="alert alert-danger">{error}</div>}
         {notice && <div className="alert alert-success">{notice}</div>}
 
-        <section className="visitor-stats-grid">
-          <button className={`visitor-stat-card online ${filters.status === "online" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "online" }))}><strong>{stats.online}</strong><span>آنلاین</span></button>
-          <button className={`visitor-stat-card idle ${filters.status === "idle" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "idle" }))}><strong>{stats.idle}</strong><span>غیرفعال</span></button>
-          <button className={`visitor-stat-card offline ${filters.status === "offline" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "offline" }))}><strong>{stats.offline}</strong><span>آفلاین</span></button>
-          <button className={`visitor-stat-card all ${filters.status === "all" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "all" }))}><strong>{stats.online + stats.idle + stats.offline}</strong><span>همه بازدیدکنندگان</span></button>
+        <section className="visitor-command-card">
+          <div className="visitor-command-copy">
+            <span className="visitor-command-live"><i /> پایش لحظه‌ای فعال است</span>
+            <h2>چه کسانی همین حالا در سایت شما هستند؟</h2>
+            <p>وضعیت حضور، صفحه فعلی و مسیر هر بازدیدکننده را بررسی کنید و بدون جابه‌جایی بین چند ابزار، گفتگو را شروع کنید.</p>
+          </div>
+          <div className="visitor-command-total">
+            <span>حاضر در سایت</span>
+            <strong>{stats.online + stats.idle}</strong>
+            <small>{stats.online} نفر آنلاین</small>
+          </div>
         </section>
 
-        <section className="panel visitor-filters">
-          <input className="input" placeholder="نام، تلفن، ایمیل یا صفحه…" value={filters.q} onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))} />
-          <select className="select" value={filters.site_id} onChange={(e) => setFilters((f) => ({ ...f, site_id: e.target.value }))}><option value="">همه سایت‌ها</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select>
-          <select className="select" value={filters.device} onChange={(e) => setFilters((f) => ({ ...f, device: e.target.value }))}><option value="">همه دستگاه‌ها</option><option value="desktop">دسکتاپ</option><option value="mobile">موبایل</option><option value="tablet">تبلت</option><option value="bot">ربات</option></select>
+        <section className="visitor-stats-grid" aria-label="فیلتر وضعیت بازدیدکنندگان">
+          <button className={`visitor-stat-card online ${filters.status === "online" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "online" }))}>
+            <span className="visitor-stat-copy"><i /><b>آنلاین</b><small>فعال در همین لحظه</small></span><strong>{stats.online}</strong>
+          </button>
+          <button className={`visitor-stat-card idle ${filters.status === "idle" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "idle" }))}>
+            <span className="visitor-stat-copy"><i /><b>غیرفعال</b><small>بدون تعامل اخیر</small></span><strong>{stats.idle}</strong>
+          </button>
+          <button className={`visitor-stat-card offline ${filters.status === "offline" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "offline" }))}>
+            <span className="visitor-stat-copy"><i /><b>آفلاین</b><small>بازدیدهای قبلی</small></span><strong>{stats.offline}</strong>
+          </button>
+          <button className={`visitor-stat-card all ${filters.status === "all" ? "active" : ""}`} onClick={() => setFilters((f) => ({ ...f, status: "all" }))}>
+            <span className="visitor-stat-copy"><i /><b>همه</b><small>نمای کامل مخاطبان</small></span><strong>{stats.online + stats.idle + stats.offline}</strong>
+          </button>
         </section>
 
-        <section className="panel visitor-table-panel">
-          {loading ? <div className="empty-state">در حال دریافت بازدیدکنندگان…</div> : visitors.length === 0 ? <div className="empty-state">بازدیدکننده‌ای با این فیلتر پیدا نشد.</div> : (
+        <section className="visitor-filters-card">
+          <header className="visitor-section-heading">
+            <div><span>جست‌وجو و تفکیک</span><h2>فیلتر بازدیدکنندگان</h2></div>
+            {hasActiveFilters && <button className="visitor-clear-filters" onClick={clearFilters}>پاک‌کردن فیلترها</button>}
+          </header>
+          <div className="visitor-filters">
+            <label className="visitor-search-field"><span>جست‌وجو</span><input className="input" placeholder="نام، تلفن، ایمیل یا صفحه…" value={filters.q} onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))} /></label>
+            <label><span>سایت</span><select className="select" value={filters.site_id} onChange={(e) => setFilters((f) => ({ ...f, site_id: e.target.value }))}><option value="">همه سایت‌ها</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+            <label><span>دستگاه</span><select className="select" value={filters.device} onChange={(e) => setFilters((f) => ({ ...f, device: e.target.value }))}><option value="">همه دستگاه‌ها</option><option value="desktop">دسکتاپ</option><option value="mobile">موبایل</option><option value="tablet">تبلت</option><option value="bot">ربات</option></select></label>
+          </div>
+        </section>
+
+        <section className="visitor-table-panel">
+          <header className="visitor-table-head">
+            <div><span>فهرست مخاطبان</span><h2>{filters.status === "all" ? "همه بازدیدکنندگان" : `بازدیدکنندگان ${filters.status === "online" ? "آنلاین" : filters.status === "idle" ? "غیرفعال" : "آفلاین"}`}</h2></div>
+            <b>{pagination.total} نفر</b>
+          </header>
+
+          {loading ? (
+            <div className="visitor-loading-state"><span /><span /><span /></div>
+          ) : visitors.length === 0 ? (
+            <div className="visitor-empty-state">
+              <span className="visitor-empty-visual"><VisitorsEmptyIcon /></span>
+              <div><span>نتیجه‌ای پیدا نشد</span><h3>بازدیدکننده‌ای با این فیلتر وجود ندارد</h3><p>فیلترها را تغییر دهید یا کمی بعد دوباره بررسی کنید؛ فهرست هر ۱۵ ثانیه به‌صورت خودکار بروزرسانی می‌شود.</p></div>
+              <div className="visitor-empty-actions"><button className="button button-primary" onClick={clearFilters}>نمایش افراد آنلاین</button><button className="button button-secondary" onClick={() => loadVisitors(true)}>بررسی دوباره</button></div>
+            </div>
+          ) : (
             <div className="visitor-table-wrap"><table className="visitor-table"><thead><tr><th>بازدیدکننده</th><th>وضعیت</th><th>صفحه فعلی</th><th>دستگاه</th><th>جلسه</th><th>عملیات</th></tr></thead><tbody>
               {visitors.map((item) => <tr key={item.id} className={item.presence_status === "online" ? "live-row" : ""}>
                 <td><div className="visitor-identity"><span className={`presence-dot ${item.presence_status}`} /><div><strong>{item.name || `بازدیدکننده #${item.id}`}</strong><small>{item.phone || item.email || item.site.name}</small></div></div></td>
                 <td><span className={`presence-badge ${item.presence_status}`}>{statusLabels[item.presence_status]}</span><small className="visitor-muted">{formatDate(item.last_seen_at)}</small></td>
-                <td><strong>{item.current_page_title || "بدون عنوان"}</strong><a href={item.current_page_url || "#"} target="_blank" rel="noreferrer">{item.current_page_url ? safeHost(item.current_page_url) : "—"}</a></td>
+                <td><strong>{item.current_page_title || "بدون عنوان"}</strong>{item.current_page_url ? <a href={item.current_page_url} target="_blank" rel="noreferrer">{safeHost(item.current_page_url)}</a> : <small>آدرس ثبت نشده</small>}</td>
                 <td><span>{deviceLabels[item.device_type] || item.device_type}</span><small>{item.browser_name || "—"} · {item.operating_system || "—"}</small></td>
                 <td><span>{item.session?.page_view_count || 0} صفحه</span><small>{formatDuration(item.session?.total_active_seconds || 0)}</small></td>
                 <td><div className="visitor-row-actions"><button className="button button-secondary button-sm" onClick={() => openVisitor(item.id)}>جزئیات</button>{item.active_conversation_id ? <button className="button button-primary button-sm" onClick={() => router.push(`/conversations/${item.active_conversation_id}`)}>گفتگو</button> : <button className="button button-primary button-sm" disabled={item.presence_status === "offline"} onClick={async () => { await openVisitor(item.id); setInviteOpen(true); }}>شروع گفتگو</button>}</div></td>
               </tr>)}
             </tbody></table></div>
           )}
-          <div className="visitor-pagination"><span>{pagination.total} بازدیدکننده</span><div><button className="button button-secondary button-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>قبلی</button><span>صفحه {pagination.page} از {pagination.pages}</span><button className="button button-secondary button-sm" disabled={page >= pagination.pages} onClick={() => setPage((p) => p + 1)}>بعدی</button></div></div>
+
+          {!loading && visitors.length > 0 && <div className="visitor-pagination"><span>نمایش {visitors.length} از {pagination.total} بازدیدکننده</span><div><button className="visitor-page-button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>قبلی</button><span>صفحه <b>{pagination.page}</b> از {pagination.pages}</span><button className="visitor-page-button" disabled={page >= pagination.pages} onClick={() => setPage((p) => p + 1)}>بعدی</button></div></div>}
         </section>
       </div>
 

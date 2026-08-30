@@ -88,7 +88,11 @@
 /* سربرگ دو ردیفه؛ عنوان و عملیات اصلی از ابزارهای کمکی جدا شده‌اند */
 .conversation-chat-head-pro {
     min-height: 0;
+    width: 100%;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-content: stretch;
     gap: 0;
     padding: 0;
     color: #172033;
@@ -99,12 +103,13 @@
 
 .conversation-head-primary-row {
     min-width: 0;
-    min-height: 72px;
-    display: flex;
+    min-height: 64px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 11px 14px;
+    gap: 13px;
+    padding: 8px 12px;
 }
 
 .conversation-person-block {
@@ -156,8 +161,8 @@
 }
 
 .conversation-head-priority-actions .conversation-tool-btn {
-    min-height: 37px;
-    padding-inline: 11px;
+    min-height: 34px;
+    padding-inline: 10px;
 }
 
 .conversation-head-priority-actions .conversation-tool-btn.is-primary {
@@ -175,25 +180,29 @@
 
 .conversation-head-toolbar {
     min-width: 0;
-    min-height: 45px;
+    min-height: 39px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 6px 14px;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 4px 12px;
     background: linear-gradient(180deg, #fafbfe, #f6f8fb);
     border-top: 1px solid #edf0f5;
 }
 
 .conversation-toolbar-label {
     flex: 0 0 auto;
-    color: #8894a7;
-    font-size: 9.5px;
+    padding-left: 9px;
+    color: #7d899c;
+    border-left: 1px solid #dfe5ee;
+    font-size: 9px;
     font-weight: 900;
 }
 
 .conversation-head-actions {
+    flex: 1 1 auto;
     max-width: none;
+    justify-content: flex-start;
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -203,8 +212,8 @@
 }
 
 .conversation-head-actions .conversation-tool-btn {
-    min-height: 32px;
-    padding-inline: 9px;
+    min-height: 30px;
+    padding-inline: 8px;
     flex: 0 0 auto;
     color: #536077;
     border-color: #dfe5ee;
@@ -222,24 +231,24 @@
 
 /* خلاصه وضعیت */
 .conversation-context-strip {
-    min-height: 56px;
-    gap: 7px;
-    padding: 8px 12px;
-    background: #fff;
+    min-height: 47px;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #fbfcfe;
     border-bottom: 1px solid #e6ebf2;
 }
 
 .conversation-info-pill-pro {
     min-width: 0;
-    min-height: 38px;
+    min-height: 34px;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-content: center;
     gap: 3px 8px;
-    padding: 6px 10px;
+    padding: 5px 9px;
     border: 1px solid #e6ebf2;
     border-radius: 11px;
-    background: #f8fafc;
+    background: #fff;
 }
 
 .conversation-info-pill-pro:last-child {

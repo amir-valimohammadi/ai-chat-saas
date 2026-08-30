@@ -14,6 +14,7 @@ import "../styles/widget-settings.css";
 import "../styles/team.css";
 import "../styles/departments.css";
 import "../styles/visitors.css";
+import "../styles/announcements.css";
 import "../styles/reports.css";
 import "../styles/subscription.css";
 import "../styles/sites.css";
