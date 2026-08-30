@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import MaintenanceOverlay from "@/components/system/MaintenanceOverlay";
 import ImpersonationBanner from "@/components/auth/ImpersonationBanner";
+import AutomationAlertCenter from "@/components/automation/AutomationAlertCenter";
 import {
     apiRequest,
     getAuthUser,
@@ -618,6 +619,8 @@ export default function AppShell({
                     expiresAt={user.impersonation_expires_at}
                 />
             )}
+
+            {user.role !== "super_admin" && <AutomationAlertCenter />}
 
             <div className="shell-mobile-bar">
                 <div className="shell-mobile-brand">

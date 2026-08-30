@@ -128,8 +128,29 @@ $update = $pdo->prepare("
         stop_processing = 0, updated_by = :updated_by
     WHERE id = :id AND tenant_id = :tenant_id
 ");
+$slaName = 'پاسخ‌گویی استاندارد';
+$findSla = $pdo->prepare("SELECT id FROM automation_sla_policies WHERE tenant_id = :tenant_id AND site_id IS NULL AND name = :name ORDER BY id LIMIT 1");
+$insertSla = $pdo->prepare("
+    INSERT INTO automation_sla_policies (
+        tenant_id, site_id, name, first_response_minutes, resolution_minutes,
+        warning_before_minutes, breach_priority, breach_department_id,
+        is_default, is_active, created_by, updated_by
+    ) VALUES (
+        :tenant_id, NULL, :name, 15, 1440, 5, 'urgent', NULL, 1, 1,
+        :created_by, :updated_by
+    )
+");
+$updateSla = $pdo->prepare("
+    UPDATE automation_sla_policies SET
+        first_response_minutes = 15, resolution_minutes = 1440,
+        warning_before_minutes = 5, breach_priority = 'urgent',
+        breach_department_id = NULL, is_default = 1, is_active = 1,
+        updated_by = :updated_by
+    WHERE id = :id AND tenant_id = :tenant_id
+");
 
 $result = [];
+$slaResult = [];
 try {
     $pdo->beginTransaction();
     foreach ($presets as $preset) {
@@ -161,6 +182,37 @@ try {
         }
         $result[] = ['id' => $ruleId, 'name' => $preset['name'], 'operation' => $operation, 'active' => true];
     }
+
+    $findSla->execute([':tenant_id' => $tenantId, ':name' => $slaName]);
+    $slaPolicyId = (int) ($findSla->fetchColumn() ?: 0);
+    if ($slaPolicyId > 0) {
+        $updateSla->execute([
+            ':updated_by' => $actorUserId > 0 ? $actorUserId : null,
+            ':id' => $slaPolicyId,
+            ':tenant_id' => $tenantId,
+        ]);
+        $slaOperation = 'updated';
+    } else {
+        $insertSla->execute([
+            ':tenant_id' => $tenantId,
+            ':name' => $slaName,
+            ':created_by' => $actorUserId > 0 ? $actorUserId : null,
+            ':updated_by' => $actorUserId > 0 ? $actorUserId : null,
+        ]);
+        $slaPolicyId = (int) $pdo->lastInsertId();
+        $slaOperation = 'created';
+    }
+    $pdo->prepare("UPDATE automation_sla_policies SET is_default = CASE WHEN id = :selected_id THEN 1 ELSE 0 END WHERE tenant_id = :tenant_id AND site_id IS NULL")
+        ->execute([':selected_id' => $slaPolicyId, ':tenant_id' => $tenantId]);
+    $slaResult = [
+        'id' => $slaPolicyId,
+        'name' => $slaName,
+        'operation' => $slaOperation,
+        'active' => true,
+        'first_response_minutes' => 15,
+        'resolution_minutes' => 1440,
+        'warning_before_minutes' => 5,
+    ];
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
@@ -173,5 +225,5 @@ echo json_encode([
     'tenant_id' => $tenantId,
     'tenant_name' => $tenant['name'],
     'rules' => $result,
+    'sla_policy' => $slaResult,
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
-

@@ -44,6 +44,7 @@ $marker = 'Automation API smoke ' . bin2hex(random_bytes(5));
 $session = null;
 $ruleId = 0;
 $policyId = 0;
+$alertId = 0;
 $apiBase = rtrim((string) app_config('api_url', 'http://localhost/ai-chat-saas/backend/api'), '/');
 
 $request = static function (string $path, string $token, ?array $payload = null) use ($apiBase): array {
@@ -80,10 +81,55 @@ $request = static function (string $path, string $token, ?array $payload = null)
     return $json;
 };
 
+$requestStream = static function (string $path, string $token) use ($apiBase): string {
+    $handle = curl_init($apiBase . $path);
+    $body = '';
+    curl_setopt_array($handle, [
+        CURLOPT_TIMEOUT_MS => 2500,
+        CURLOPT_HTTPHEADER => [
+            'Accept: text/event-stream',
+            'Authorization: Bearer ' . $token,
+            'Origin: http://localhost:3000',
+        ],
+        CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body): int {
+            $body .= $chunk;
+            return strlen($chunk);
+        },
+    ]);
+    curl_exec($handle);
+    $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+    curl_close($handle);
+    if ($status !== 200) throw new RuntimeException("{$path} stream returned HTTP {$status}.");
+    return $body;
+};
+
 try {
     $session = auth_issue_session($pdo, $user);
     $token = (string) $session['token'];
     $overview = $request('/customer/automation-overview.php', $token);
+
+    $alertStmt = $pdo->prepare("
+        INSERT INTO automation_alerts (tenant_id, recipient_user_id, severity, title, message)
+        VALUES (:tenant_id, :recipient_user_id, 'info', :title, :message)
+    ");
+    $alertStmt->execute([
+        ':tenant_id' => (int) $user['tenant_id'],
+        ':recipient_user_id' => (int) $user['id'],
+        ':title' => $marker,
+        ':message' => 'Temporary realtime alert smoke test',
+    ]);
+    $alertId = (int) $pdo->lastInsertId();
+    $alertList = $request('/agent/automation-alerts.php', $token);
+    $listedAlertIds = array_map(static fn(array $alert): int => (int) ($alert['id'] ?? 0), $alertList['alerts'] ?? []);
+    if (!in_array($alertId, $listedAlertIds, true)) throw new RuntimeException('Realtime alert was not returned by the alerts API.');
+    $streamBody = $requestStream('/agent/automation-alert-stream.php', $token);
+    if (!str_contains($streamBody, 'event: automation.alerts') || !str_contains($streamBody, $marker)) {
+        throw new RuntimeException('Automation alert stream did not deliver the temporary alert.');
+    }
+    $request('/agent/automation-alert-read.php', $token, ['alert_id' => $alertId]);
+    $readStmt = $pdo->prepare("SELECT is_read FROM automation_alerts WHERE id = :id AND recipient_user_id = :recipient_user_id");
+    $readStmt->execute([':id' => $alertId, ':recipient_user_id' => (int) $user['id']]);
+    if ((int) $readStmt->fetchColumn() !== 1) throw new RuntimeException('Automation alert was not marked as read.');
 
     $rule = $request('/customer/automation-rule-save.php', $token, [
         'name' => $marker,
@@ -142,6 +188,9 @@ try {
         'rule_crud' => 'passed',
         'rule_preview' => $conversationId > 0 ? 'passed' : 'skipped',
         'sla_crud' => 'passed',
+        'alert_list' => 'passed',
+        'alert_stream' => 'passed',
+        'alert_read' => 'passed',
         'initial_rule_count' => count($overview['rules'] ?? []),
         'temporary_data' => 'removed',
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
@@ -149,6 +198,10 @@ try {
     fwrite(STDERR, 'Automation API smoke test failed: ' . $e->getMessage() . PHP_EOL);
     $exitCode = 1;
 } finally {
+    if ($alertId > 0) {
+        $pdo->prepare("DELETE FROM automation_alerts WHERE id = :id AND tenant_id = :tenant_id")
+            ->execute([':id' => $alertId, ':tenant_id' => (int) $user['tenant_id']]);
+    }
     if ($policyId > 0) {
         $pdo->prepare("DELETE FROM automation_sla_policies WHERE id = :id AND tenant_id = :tenant_id")
             ->execute([':id' => $policyId, ':tenant_id' => (int) $user['tenant_id']]);

@@ -14,6 +14,7 @@ import "../styles/widget-settings.css";
 import "../styles/team.css";
 import "../styles/departments.css";
 import "../styles/automations.css";
+import "../styles/automation-alert-center.css";
 import "../styles/visitors.css";
 import "../styles/announcements.css";
 import "../styles/reports.css";
