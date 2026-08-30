@@ -1,0 +1,249 @@
+/*
+ * Customer panel visual system
+ * هماهنگ‌سازی صفحات مشتری و پشتیبان؛ همه selectorها زیر AppShell مشتری scope شده‌اند.
+ */
+
+.app-shell--customer {
+    --customer-ink: #172033;
+    --customer-muted: #718096;
+    --customer-border: #e3e8f1;
+    --customer-border-strong: #d5ddea;
+    --customer-surface: rgba(255, 255, 255, .96);
+    --customer-surface-soft: #f7f9fc;
+    --customer-brand: #4f5fd4;
+    --customer-accent: #0d94a8;
+    --customer-shadow: 0 11px 32px rgba(23, 32, 51, .06);
+    --customer-shadow-hover: 0 17px 42px rgba(23, 32, 51, .09);
+}
+
+.app-shell--customer .sidebar {
+    background:
+        radial-gradient(circle at 88% -7%, rgba(79, 95, 212, .36), transparent 32%),
+        radial-gradient(circle at 8% 106%, rgba(13, 148, 168, .21), transparent 36%),
+        linear-gradient(180deg, #172033 0%, #101827 57%, #0c1421 100%);
+}
+
+.app-shell--customer .sidebar-link.active {
+    background: linear-gradient(90deg, rgba(79, 95, 212, .32), rgba(13, 148, 168, .14));
+    border-color: rgba(130, 144, 238, .18);
+    box-shadow: inset -3px 0 0 #8190ee, 0 9px 20px rgba(6, 10, 24, .16);
+}
+
+.app-shell--customer .sidebar-link.active .sidebar-link-icon {
+    background: linear-gradient(135deg, #5d6cda, #178fa9);
+}
+
+.app-shell--customer :where(h1, h2, h3, h4, p) {
+    text-wrap: pretty;
+}
+
+.app-shell--customer :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    color: var(--customer-ink);
+    border-color: var(--customer-border-strong);
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.app-shell--customer :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+    border-color: color-mix(in srgb, var(--customer-brand) 56%, white);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--customer-brand) 9%, transparent);
+    outline: none;
+}
+
+.app-shell--customer :where(input, textarea)::placeholder {
+    color: #9aa6b8;
+}
+
+.app-shell--customer :is(
+    .card,
+    .card-solid,
+    .dashboard-panel,
+    .conversations-inbox-card,
+    .ai-center-card,
+    .customer-sites-list-panel,
+    .customer-sites-capacity-card,
+    .department-form-card,
+    .department-list-card,
+    .hosted-settings-card,
+    .reports-card,
+    .reports-filter-card,
+    .subscription-card,
+    .team-create-panel,
+    .team-members-panel,
+    .team-plan-card,
+    .visitor-table-panel,
+    .visitor-filters,
+    .widget-panel,
+    .security-main-card,
+    .security-side-card
+) {
+    border-color: var(--customer-border);
+    border-radius: 20px;
+    background-color: var(--customer-surface);
+    box-shadow: var(--customer-shadow);
+}
+
+.app-shell--customer :is(
+    .dashboard-kpi-card,
+    .conversations-kpi,
+    .reports-kpi-card,
+    .team-stat-card,
+    .visitor-stat-card,
+    .widget-summary-card,
+    .subscription-mini-tile,
+    .stat-card,
+    .metric-compact
+) {
+    border-color: var(--customer-border);
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(23, 32, 51, .05);
+    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.app-shell--customer :is(
+    .dashboard-kpi-card,
+    .conversations-kpi,
+    .reports-kpi-card,
+    .team-stat-card,
+    .visitor-stat-card,
+    .widget-summary-card,
+    .subscription-mini-tile,
+    .stat-card,
+    .metric-compact
+):hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--customer-brand) 17%, var(--customer-border));
+    box-shadow: var(--customer-shadow-hover);
+}
+
+.app-shell--customer :is(
+    .dashboard-command-card,
+    .conversations-command-card,
+    .team-hero-card,
+    .reports-hero-card,
+    .subscription-hero,
+    .hosted-settings-hero-card
+) {
+    overflow: hidden;
+    border-radius: 25px;
+    box-shadow: 0 20px 52px rgba(18, 29, 50, .14);
+}
+
+.app-shell--customer :is(
+    .dashboard-command-card,
+    .conversations-command-card
+) {
+    background:
+        radial-gradient(circle at 90% -4%, rgba(93, 108, 218, .42), transparent 31%),
+        radial-gradient(circle at 4% 105%, rgba(13, 148, 168, .25), transparent 35%),
+        linear-gradient(135deg, #18243c 0%, #121c30 55%, #0e1727 100%);
+}
+
+.app-shell--customer :is(
+    .reports-filter-card,
+    .team-toolbar,
+    .visitor-filters,
+    .customer-sites-form,
+    .widget-form,
+    .hosted-settings-form,
+    .security-form
+) {
+    border-color: var(--customer-border);
+}
+
+.app-shell--customer :is(
+    .list-item,
+    .dashboard-inbox-item,
+    .dashboard-shortcut-pro,
+    .team-member-card,
+    .department-item,
+    .reports-recent-row,
+    .customer-sites-card,
+    .subscription-payment-row
+) {
+    transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease, background 170ms ease;
+}
+
+.app-shell--customer :is(
+    .list-item,
+    .dashboard-inbox-item,
+    .dashboard-shortcut-pro,
+    .team-member-card,
+    .department-item,
+    .reports-recent-row,
+    .customer-sites-card,
+    .subscription-payment-row
+):hover {
+    transform: translateY(-1px);
+    border-color: #d2d9e6;
+    box-shadow: 0 10px 27px rgba(23, 32, 51, .06);
+}
+
+.app-shell--customer :where(table th) {
+    color: #67748a;
+    background: var(--customer-surface-soft);
+    border-color: #edf0f5;
+}
+
+.app-shell--customer :where(table td) {
+    border-color: #edf0f5;
+}
+
+.app-shell--customer :where(table tbody tr:hover td) {
+    background: #fafbfe;
+}
+
+.app-shell--customer :is(.button-primary, .widget-button.primary) {
+    color: #fff;
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--customer-brand), var(--customer-accent));
+    box-shadow: 0 9px 22px rgba(79, 95, 212, .2);
+}
+
+.app-shell--customer :is(.button-secondary, .widget-button.secondary) {
+    color: var(--customer-ink);
+    border-color: var(--customer-border-strong);
+    background: #fff;
+}
+
+.app-shell--customer :where(.error, .success, .alert, [role="alert"]) {
+    border-radius: 14px;
+}
+
+@media (max-width: 720px) {
+    .app-shell--customer :is(
+        .dashboard-command-card,
+        .conversations-command-card,
+        .team-hero-card,
+        .reports-hero-card,
+        .subscription-hero,
+        .hosted-settings-hero-card
+    ) {
+        border-radius: 19px;
+    }
+
+    .app-shell--customer :is(
+        .dashboard-panel,
+        .conversations-inbox-card,
+        .customer-sites-list-panel,
+        .department-form-card,
+        .department-list-card,
+        .hosted-settings-card,
+        .reports-card,
+        .subscription-card,
+        .team-create-panel,
+        .team-members-panel,
+        .visitor-table-panel,
+        .widget-panel,
+        .security-main-card,
+        .security-side-card
+    ) {
+        border-radius: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-shell--customer * {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+    }
+}

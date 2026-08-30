@@ -1,0 +1,269 @@
+/*
+ * Super Admin visual system
+ * لایه نهایی مشترک برای هماهنگی صفحات مدیریتی، بدون ورود به globals.css.
+ */
+
+.super-admin-route {
+    --sa-ink: #172033;
+    --sa-muted: #718096;
+    --sa-border: #e3e8f1;
+    --sa-border-strong: #d5ddea;
+    --sa-surface: rgba(255, 255, 255, .96);
+    --sa-surface-soft: #f7f9fc;
+    --sa-brand: #6857e5;
+    --sa-brand-soft: #f0edff;
+    --sa-blue: #2888d8;
+    --sa-shadow: 0 12px 34px rgba(23, 32, 51, .065);
+    --sa-shadow-hover: 0 18px 42px rgba(23, 32, 51, .095);
+}
+
+.app-shell--super .sidebar {
+    background:
+        radial-gradient(circle at 86% -4%, rgba(118, 92, 232, .38), transparent 31%),
+        radial-gradient(circle at 8% 106%, rgba(40, 136, 216, .2), transparent 35%),
+        linear-gradient(180deg, #171b34 0%, #111629 56%, #0c1120 100%);
+}
+
+.app-shell--super .sidebar-link.active {
+    background: linear-gradient(90deg, rgba(115, 87, 229, .34), rgba(40, 136, 216, .14));
+    border-color: rgba(159, 141, 244, .18);
+    box-shadow: inset -3px 0 0 #9888f2, 0 9px 20px rgba(6, 10, 24, .18);
+}
+
+.app-shell--super .sidebar-link.active .sidebar-link-icon {
+    background: linear-gradient(135deg, #7662e5, #3e87dc);
+}
+
+.super-admin-route :where(h1, h2, h3, h4, p) {
+    text-wrap: pretty;
+}
+
+.super-admin-route :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    color: var(--sa-ink);
+    border-color: var(--sa-border-strong);
+    background-color: #fff;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.super-admin-route :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+    border-color: color-mix(in srgb, var(--sa-brand) 58%, white);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--sa-brand) 9%, transparent);
+    background-color: #fff;
+    outline: none;
+}
+
+.super-admin-route :where(input, textarea)::placeholder {
+    color: #9aa6b8;
+}
+
+.super-admin-route :where(table) {
+    color: var(--sa-ink);
+}
+
+.super-admin-route :where(table th) {
+    color: #67748a;
+    background: var(--sa-surface-soft);
+    border-color: #edf0f5;
+    letter-spacing: -.05px;
+}
+
+.super-admin-route :where(table td) {
+    border-color: #edf0f5;
+}
+
+.super-admin-route :where(table tbody tr) {
+    transition: background 150ms ease;
+}
+
+.super-admin-route :where(table tbody tr:hover td) {
+    background: #fafbfe;
+}
+
+.super-admin-route :is(
+    .admin-access-card,
+    .admin-form-card,
+    .admin-clean-card,
+    .admin-side-card,
+    .ann-form-card,
+    .ann-list-card,
+    .customer360-card,
+    .customer360-health-card,
+    .ops-panel,
+    .ops-table-panel,
+    .qa-card,
+    .qa-run-panel,
+    .qa-result-card,
+    .request-filter-card,
+    .request-list-card,
+    .request-detail-card,
+    .request-manage-card,
+    .sa-ai-monitoring-card,
+    .sa-ai-monitoring-trend-card,
+    .sa-audit-filter-card,
+    .sa-audit-list-card,
+    .sa-customer-detail-panel,
+    .sa-customer-detail-side-card,
+    .sa-customers-card,
+    .sa-dashboard-panel,
+    .sa-plans-editor-card,
+    .sa-plans-catalog,
+    .sa-sites-filter-card,
+    .sa-sites-install-panel,
+    .security-list-card,
+    .security-two-factor-card,
+    .subscription-catalog-card,
+    .subscription-panel
+) {
+    border-color: var(--sa-border);
+    border-radius: 21px;
+    background: var(--sa-surface);
+    box-shadow: var(--sa-shadow);
+}
+
+.super-admin-route :is(
+    .sa-dashboard-metric,
+    .sa-customers-metric,
+    .sa-customer-detail-metric-card,
+    .sa-sites-summary-card,
+    .sa-plans-summary-card,
+    .sa-ai-monitoring-summary-card,
+    .sa-audit-summary-card,
+    .subscription-stat,
+    .customer360-metric,
+    .qa-summary-grid article,
+    .qa-security-summary-grid article
+) {
+    border-color: var(--sa-border);
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(23, 32, 51, .05);
+    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.super-admin-route :is(
+    .sa-dashboard-metric,
+    .sa-customers-metric,
+    .sa-customer-detail-metric-card,
+    .sa-sites-summary-card,
+    .sa-plans-summary-card,
+    .sa-ai-monitoring-summary-card,
+    .sa-audit-summary-card,
+    .subscription-stat,
+    .customer360-metric
+):hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--sa-brand) 18%, var(--sa-border));
+    box-shadow: var(--sa-shadow-hover);
+}
+
+.super-admin-route :is(
+    .sa-dashboard-overview,
+    .sa-customer-detail-hero,
+    .ops-hero,
+    .qa-hero,
+    .qa-run-hero,
+    .admin-hero,
+    .ann-admin-hero
+) {
+    overflow: hidden;
+    border-radius: 26px;
+    box-shadow: 0 20px 54px rgba(20, 25, 50, .14);
+}
+
+.super-admin-route .sa-dashboard-overview {
+    background:
+        radial-gradient(circle at 88% -5%, rgba(125, 96, 235, .42), transparent 31%),
+        radial-gradient(circle at 5% 105%, rgba(40, 136, 216, .24), transparent 36%),
+        linear-gradient(135deg, #1b203d 0%, #151a31 56%, #101629 100%);
+}
+
+.super-admin-route :is(
+    .sa-customers-filter-card,
+    .sa-sites-filter-card,
+    .sa-plans-toolbar,
+    .sa-ai-monitoring-filters,
+    .sa-audit-filter-card,
+    .qa-findings-filter-bar,
+    .admin-access-toolbar,
+    .global-search-box
+) {
+    border-color: var(--sa-border);
+    border-radius: 19px;
+    background: rgba(255, 255, 255, .95);
+    box-shadow: 0 8px 26px rgba(23, 32, 51, .05);
+}
+
+.super-admin-route :is(
+    .admin-access-tabs,
+    .security-center-tabs
+) {
+    padding: 5px;
+    border-color: var(--sa-border);
+    border-radius: 15px;
+    background: #fff;
+    box-shadow: 0 7px 22px rgba(23, 32, 51, .05);
+}
+
+.super-admin-route :is(
+    .admin-access-tabs button.active,
+    .security-center-tabs button.active
+) {
+    color: #fff;
+    background: linear-gradient(135deg, var(--sa-brand), var(--sa-blue));
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--sa-brand) 22%, transparent);
+}
+
+.super-admin-route :where(.btn, button) {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.super-admin-route :where(.error, .success, [role="alert"]) {
+    border-radius: 14px;
+}
+
+.super-admin-route :where(code) {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+@media (max-width: 760px) {
+    .super-admin-route :is(
+        .sa-dashboard-overview,
+        .sa-customer-detail-hero,
+        .ops-hero,
+        .qa-hero,
+        .qa-run-hero,
+        .admin-hero,
+        .ann-admin-hero
+    ) {
+        border-radius: 20px;
+    }
+
+    .super-admin-route :is(
+        .admin-access-card,
+        .admin-form-card,
+        .admin-clean-card,
+        .ann-form-card,
+        .ann-list-card,
+        .customer360-card,
+        .ops-panel,
+        .ops-table-panel,
+        .qa-card,
+        .qa-run-panel,
+        .request-filter-card,
+        .request-list-card,
+        .request-detail-card,
+        .sa-dashboard-panel,
+        .sa-plans-editor-card,
+        .sa-sites-filter-card,
+        .security-list-card,
+        .subscription-panel
+    ) {
+        border-radius: 17px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .super-admin-route * {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+    }
+}

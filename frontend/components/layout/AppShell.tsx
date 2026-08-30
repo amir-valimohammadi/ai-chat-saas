@@ -79,6 +79,28 @@ export default function AppShell({
     const [newRequestCount, setNewRequestCount] = useState(0);
     const [maintenance, setMaintenance] =
         useState<MaintenanceModeDetails | null>(null);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+    useEffect(() => {
+        setMobileNavOpen(false);
+    }, [pathname]);
+
+    useEffect(() => {
+        if (!mobileNavOpen) return;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+
+        function closeOnEscape(event: KeyboardEvent) {
+            if (event.key === "Escape") setMobileNavOpen(false);
+        }
+
+        window.addEventListener("keydown", closeOnEscape);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [mobileNavOpen]);
 
     useEffect(() => {
         let active = true;
@@ -239,7 +261,7 @@ export default function AppShell({
             {
                 href: "/security",
                 label: "امنیت حساب",
-                icon: "🔐",
+                icon: "security",
                 description: "رمز عبور و نشست‌ها",
             },
         ];
@@ -247,124 +269,144 @@ export default function AppShell({
         if (user.role === "super_admin") {
             return [
                 {
-                    title: "مدیریت پلتفرم",
+                    title: "مرکز فرماندهی",
                     links: [
                         {
                             href: "/super-admin/dashboard",
                             label: "داشبورد",
-                            icon: "⌂",
+                            icon: "dashboard",
                             description: "نمای کلی سیستم",
                             permission: "dashboard.view",
                         },
                         {
                             href: "/super-admin/contact-requests",
                             label: "درخواست‌ها",
-                            icon: "✉",
+                            icon: "requests",
                             description: "مشاوره، خرید و راه‌اندازی",
                             permission: "requests.view",
                         },
                         {
-                            href: "/super-admin/customers",
-                            label: "مشتری‌ها",
-                            icon: "👥",
-                            description: "حساب‌های مشتریان",
-                            permission: "customers.view",
-                        },
-                        {
                             href: "/super-admin/search",
                             label: "جست‌وجوی سراسری",
-                            icon: "⌕",
-                            description: "مشتری، سایت، کاربر و گفتگو",
+                            icon: "search",
+                            description: "جست‌وجو در کل پلتفرم",
+                            permission: "customers.view",
+                        },
+                    ].filter((link) => can(link.permission)),
+                },
+                {
+                    title: "کسب‌وکار و مشتریان",
+                    links: [
+                        {
+                            href: "/super-admin/customers",
+                            label: "مشتری‌ها",
+                            icon: "customers",
+                            description: "حساب‌های مشتریان",
                             permission: "customers.view",
                         },
                         {
                             href: "/super-admin/customers/create",
                             label: "ایجاد مشتری",
-                            icon: "+",
+                            icon: "add-user",
                             description: "ساخت حساب جدید",
                             permission: "customers.manage",
                         },
                         {
                             href: "/super-admin/sites",
                             label: "سایت‌ها",
-                            icon: "◎",
+                            icon: "sites",
                             description: "سایت‌های ثبت‌شده",
                             permission: "sites.view",
                         },
                         {
                             href: "/super-admin/plans",
                             label: "پلن‌ها",
-                            icon: "◆",
+                            icon: "plans",
                             description: "مدیریت پلن‌ها",
                             permission: "plans.view",
                         },
                         {
                             href: "/super-admin/subscriptions",
                             label: "اشتراک‌ها",
-                            icon: "◷",
+                            icon: "billing",
                             description: "انقضا، تمدید و پرداخت‌ها",
                             permission: "billing.view",
                         },
+                    ].filter((link) => can(link.permission)),
+                },
+                {
+                    title: "عملیات و کیفیت",
+                    links: [
                         {
                             href: "/super-admin/ai-monitoring",
                             label: "نظارت AI",
-                            icon: "AI",
+                            icon: "ai",
                             description: "مصرف و کیفیت پاسخ‌ها",
                             permission: "ai.view",
                         },
                         {
                             href: "/super-admin/system-health",
                             label: "سلامت سیستم",
-                            icon: "SYS",
+                            icon: "activity",
                             description: "سرویس‌ها، خطاها و Jobها",
                             permission: "operations.view",
                         },
                         {
                             href: "/super-admin/test-center",
                             label: "مرکز جامع تست",
-                            icon: "QA",
+                            icon: "tests",
                             description: "تست سلامت، امنیت و یکپارچگی",
                             permission: "tests.view",
                         },
                         {
                             href: "/super-admin/test-center/findings",
                             label: "ایرادات تست",
-                            icon: "!",
+                            icon: "findings",
                             description: "دلایل، اثر و راهکار رفع",
                             permission: "tests.view",
                         },
+                    ].filter((link) => can(link.permission)),
+                },
+                {
+                    title: "امنیت و مدیریت",
+                    links: [
                         {
                             href: "/super-admin/test-center/security",
                             label: "امنیت عمیق",
-                            icon: "🔒",
+                            icon: "shield-check",
                             description: "Risk، OWASP و جداسازی Tenant",
                             permission: "tests.view_security_evidence",
                         },
                         {
                             href: "/super-admin/admins",
                             label: "مدیران و نقش‌ها",
-                            icon: "ADM",
+                            icon: "admins",
                             description: "حساب‌ها، نقش‌ها و مجوزها",
                             permission: "admins.view",
                         },
                         {
                             href: "/super-admin/security-center",
                             label: "مرکز امنیت",
-                            icon: "SEC",
+                            icon: "security",
                             description: "نشست‌ها، ورودها و 2FA",
                             permission: "security.view",
                         },
                         {
                             href: "/super-admin/audit-logs",
                             label: "گزارش فعالیت‌ها",
-                            icon: "LOG",
+                            icon: "audit",
                             description: "تغییرات حساس مدیران",
                             permission: "audit.view",
                         },
+                    ].filter((link) => can(link.permission)),
+                },
+                {
+                    title: "ارتباطات",
+                    links: [
                         {
                             href: "/super-admin/announcements",
                             label: "اعلان‌ها",
-                            icon: "🔔",
+                            icon: "announcements",
                             description: "ارسال پیام به مشتریان",
                             permission: "announcements.view",
                         },
@@ -381,25 +423,25 @@ export default function AppShell({
             {
                 href: "/dashboard",
                 label: "داشبورد",
-                icon: "⌂",
+                icon: "dashboard",
                 description: "مرکز کنترل حساب",
             },
             {
                 href: "/conversations",
                 label: "گفتگوها",
-                icon: "💬",
+                icon: "conversations",
                 description: "پیام‌های کاربران",
             },
             {
                 href: "/visitors",
                 label: "بازدیدکنندگان",
-                icon: "◉",
+                icon: "visitors",
                 description: "حضور زنده و مسیر صفحات",
             },
             {
                 href: "/announcements",
                 label: "اعلان‌ها",
-                icon: "🔔",
+                icon: "announcements",
                 description: "پیام‌های مدیر سیستم",
             },
         ];
@@ -423,66 +465,71 @@ export default function AppShell({
                 links: mainLinks,
             },
             {
-                title: "مدیریت مشتری",
+                title: "رشد و هوش مصنوعی",
                 links: [
                     {
                         href: "/sites",
                         label: "سایت‌ها",
-                        icon: "◎",
+                        icon: "sites",
                         description: "دامنه‌ها و کد نصب",
                     },
                     {
                         href: "/reports",
                         label: "گزارش‌ها",
-                        icon: "📊",
+                        icon: "reports",
                         description: "روند و عملکرد",
                     },
                     {
                         href: "/subscription",
                         label: "پلن و مصرف",
-                        icon: "◌",
+                        icon: "billing",
                         description: "محدودیت‌ها و مصرف",
                     },
                     {
                         href: "/knowledge",
                         label: "دانش AI",
-                        icon: "AI",
+                        icon: "knowledge",
                         description: "منبع پاسخ هوشمند",
                     },
                     {
                         href: "/ai-center",
                         label: "مرکز AI",
-                        icon: "✦",
+                        icon: "ai",
                         description: "خزش، تست و پاسخ خودکار",
                     },
+                ],
+            },
+            {
+                title: "تنظیمات پشتیبانی",
+                links: [
                     {
                         href: "/quick-replies",
                         label: "پاسخ‌های آماده",
-                        icon: "✎",
+                        icon: "quick-replies",
                         description: "متن‌های پرتکرار",
                     },
                     {
                         href: "/widget-settings",
                         label: "تنظیمات ویجت",
-                        icon: "◈",
+                        icon: "widget",
                         description: "ظاهر و رفتار ویجت",
                     },
                     {
                         href: "/hosted-support",
                         label: "صفحه پشتیبانی",
-                        icon: "↗",
+                        icon: "external-link",
                         description: "لینک اختصاصی و ساعت کاری",
                     },
                     {
                         href: "/team",
                         label: "تیم پشتیبانی",
-                        icon: "☰",
+                        icon: "team",
                         description: "کاربران و دسترسی‌ها",
                     },
                     {
                         href: "/departments",
                         label: "دپارتمان‌ها",
-                        icon: "⇄",
+                        icon: "departments",
                         description: "صف و توزیع خودکار",
                     },
                 ],
@@ -542,26 +589,69 @@ export default function AppShell({
         );
     }
 
+    const shellRoleClass = user.role === "super_admin" ? "app-shell--super" : "app-shell--customer";
+
     return (
-        <div className={`app-shell app-shell-pro ${user.is_impersonating ? "has-impersonation" : ""} ${variant === "workspace" ? "app-shell-workspace" : ""}`}>
+        <div className={`app-shell app-shell-pro ${shellRoleClass} ${user.is_impersonating ? "has-impersonation" : ""} ${variant === "workspace" ? "app-shell-workspace" : ""}`}>
             {user.is_impersonating && (
                 <ImpersonationBanner
                     impersonatorName={user.impersonator_name}
                     expiresAt={user.impersonation_expires_at}
                 />
             )}
-            <aside className="sidebar sidebar-pro">
-                <div className="sidebar-brand sidebar-brand-pro">
-                    <div className="sidebar-logo">AI</div>
 
+            <div className="shell-mobile-bar">
+                <div className="shell-mobile-brand">
+                    <span className="shell-mobile-logo">AI</span>
                     <div>
+                        <strong>AI Chat SaaS</strong>
+                        <small>{roleLabels[user.role]}</small>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    className="shell-mobile-menu-button"
+                    aria-label="باز کردن منوی اصلی"
+                    aria-expanded={mobileNavOpen}
+                    aria-controls="app-primary-navigation"
+                    onClick={() => setMobileNavOpen(true)}
+                >
+                    <span /><span /><span />
+                </button>
+            </div>
+
+            <button
+                type="button"
+                className={`shell-sidebar-backdrop ${mobileNavOpen ? "is-visible" : ""}`}
+                aria-label="بستن منوی اصلی"
+                tabIndex={mobileNavOpen ? 0 : -1}
+                onClick={() => setMobileNavOpen(false)}
+            />
+
+            <aside
+                id="app-primary-navigation"
+                className={`sidebar sidebar-pro ${mobileNavOpen ? "is-open" : ""}`}
+            >
+                <div className="sidebar-brand sidebar-brand-pro">
+                    <div className="sidebar-logo"><span>AI</span><i /></div>
+
+                    <div className="sidebar-brand-copy">
                         <div className="sidebar-title">AI Chat SaaS</div>
                         <div className="sidebar-subtitle">
                             {user.role === "super_admin"
-                                ? "Platform Command Center"
-                                : "Customer Support Panel"}
+                                ? "فرماندهی و پایش پلتفرم"
+                                : "فضای کار پشتیبانی هوشمند"}
                         </div>
                     </div>
+
+                    <button
+                        type="button"
+                        className="sidebar-mobile-close"
+                        aria-label="بستن منو"
+                        onClick={() => setMobileNavOpen(false)}
+                    >
+                        ×
+                    </button>
                 </div>
 
                 <div className="sidebar-role-card">
@@ -597,9 +687,10 @@ export default function AppShell({
                                             aria-current={
                                                 active ? "page" : undefined
                                             }
+                                            onClick={() => setMobileNavOpen(false)}
                                         >
                                             <span className="sidebar-link-icon">
-                                                {link.icon}
+                                                <ShellIcon name={link.icon} />
                                             </span>
 
                                             <span className="sidebar-link-content">
@@ -653,7 +744,7 @@ export default function AppShell({
             <main className={`main-area main-area-pro ${variant === "workspace" ? "main-area-workspace" : ""}`}>
                 {variant !== "workspace" && (
                     <header className="page-header page-header-pro">
-                        <div>
+                        <div className="page-header-copy">
                             {kicker && (
                                 <div className="page-kicker">{kicker}</div>
                             )}
@@ -665,9 +756,17 @@ export default function AppShell({
                             )}
                         </div>
 
-                        {actions && (
-                            <div className="page-actions">{actions}</div>
-                        )}
+                        <div className="page-header-tools">
+                            <div className="shell-context-chip">
+                                <span />
+                                {user.role === "super_admin" && user.admin_role_name
+                                    ? user.admin_role_name
+                                    : roleLabels[user.role]}
+                            </div>
+                            {actions && (
+                                <div className="page-actions">{actions}</div>
+                            )}
+                        </div>
                     </header>
                 )}
 
@@ -682,5 +781,43 @@ export default function AppShell({
                 />
             )}
         </div>
+    );
+}
+
+const shellIconPaths: Record<string, string[]> = {
+    dashboard: ["M4 4h6v6H4z", "M14 4h6v9h-6z", "M4 14h6v6H4z", "M14 17h6v3h-6z"],
+    requests: ["M4 6h16v12H4z", "m4 8 4 4 4-4"],
+    search: ["M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14", "m16 16 4 4"],
+    customers: ["M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M3 21v-2a6 6 0 0 1 12 0v2", "M17 4a4 4 0 0 1 0 7", "M17 15a5 5 0 0 1 4 4v2"],
+    "add-user": ["M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M3 21v-2a6 6 0 0 1 12 0v2", "M19 8v6", "M16 11h6"],
+    sites: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18", "M3 12h18", "M12 3c3 3 3 15 0 18", "M12 3c-3 3-3 15 0 18"],
+    plans: ["m12 3 9 5-9 5-9-5z", "m3 12 9 5 9-5", "m3 16 9 5 9-5"],
+    billing: ["M4 5h16v14H4z", "M4 9h16", "M8 15h3"],
+    ai: ["m12 3 1.3 4.2L17 9l-3.7 1.8L12 15l-1.3-4.2L7 9l3.7-1.8z", "M5 15l.8 2.2L8 18l-2.2.8L5 21l-.8-2.2L2 18l2.2-.8z", "M19 14l.7 1.8 1.8.7-1.8.7L19 19l-.7-1.8-1.8-.7 1.8-.7z"],
+    activity: ["M3 12h4l2-7 4 14 2-7h6"],
+    tests: ["M9 3h6", "M10 3v5l-5 10a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3L14 8V3", "M8 15h8"],
+    findings: ["m12 3 10 18H2z", "M12 9v5", "M12 18h.01"],
+    "shield-check": ["M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6z", "m9 12 2 2 4-5"],
+    admins: ["M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M3 21v-2a6 6 0 0 1 9-5.2", "M18 14v6", "M15 17h6"],
+    security: ["M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6z", "M9 12h6", "M12 9v6"],
+    audit: ["M6 3h12v18H6z", "M9 8h6", "M9 12h6", "M9 16h4"],
+    announcements: ["M5 14V9a7 7 0 0 1 14 0v5l2 3H3z", "M9 20h6"],
+    conversations: ["M4 5h16v12H9l-5 4z", "M8 9h8", "M8 13h5"],
+    visitors: ["M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M3 21v-2a7 7 0 0 1 14 0v2", "M19 8v6", "M16 11h6"],
+    reports: ["M4 20V10", "M10 20V4", "M16 20v-7", "M3 20h18"],
+    knowledge: ["M4 5a4 4 0 0 1 4-2h4v17H8a4 4 0 0 0-4 2z", "M20 5a4 4 0 0 0-4-2h-4v17h4a4 4 0 0 1 4 2z"],
+    "quick-replies": ["M5 4h14v16H5z", "M8 8h8", "M8 12h8", "M8 16h5"],
+    widget: ["M4 5h16v14H4z", "M8 9h8", "M8 13h5", "M17 16h.01"],
+    "external-link": ["M14 4h6v6", "m20 4-9 9", "M18 14v6H4V6h6"],
+    team: ["M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8", "M2 21v-2a6 6 0 0 1 12 0v2", "M16 4a4 4 0 0 1 0 7", "M16 15a6 6 0 0 1 6 6"],
+    departments: ["M12 4v6", "M6 10h12", "M6 10v4", "M18 10v4", "M6 18h.01", "M12 14v4", "M12 18h.01", "M18 18h.01"],
+};
+
+function ShellIcon({ name }: { name: string }) {
+    const paths = shellIconPaths[name] || shellIconPaths.dashboard;
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {paths.map((path, index) => <path d={path} key={`${name}-${index}`} />)}
+        </svg>
     );
 }

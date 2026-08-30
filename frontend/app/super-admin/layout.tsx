@@ -20,6 +20,7 @@ import "../../styles/super-admin/test-run-detail.css";
 import "../../styles/super-admin/test-findings.css";
 import "../../styles/super-admin/browser-tests.css";
 import "../../styles/super-admin/security-tests.css";
+import "../../styles/super-admin/panel-refresh.css";
 
 export default function SuperAdminLayout({
     children,
