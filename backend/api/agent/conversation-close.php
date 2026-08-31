@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/site-access.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -33,7 +34,7 @@ if ($conversationId <= 0) {
 
 try {
     $conversationStmt = $pdo->prepare("
-        SELECT id, site_id
+        SELECT id, site_id, status
         FROM conversations
         WHERE id = :id
         LIMIT 1
@@ -65,6 +66,14 @@ try {
     $stmt->execute([
         ':id' => $conversationId
     ]);
+
+    automation_dispatch_event_safe(
+        $pdo,
+        'status_changed',
+        $conversationId,
+        ['previous_status' => $conversation['status'], 'new_status' => 'closed'],
+        (int) $user['id']
+    );
 
     json_response([
         'success' => true,

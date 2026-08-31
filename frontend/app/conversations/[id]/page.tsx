@@ -157,12 +157,7 @@ type ConversationDetail = {
         note: string | null; created_at: string;
     }[];
     tags: { id: number; name: string; color: string }[];
-    sla: {
-        policy_id: number; policy_name: string; state: "tracking" | "warning" | "breached" | "met" | "resolved";
-        first_response_due_at: string; resolution_due_at: string; first_response_at: string | null;
-        warning_sent_at: string | null; first_response_breached_at: string | null;
-        resolution_breached_at: string | null; last_checked_at: string | null;
-    } | null;
+    sla: ConversationSla | null;
     automation_history: {
         id: number; rule_id: number | null; rule_name: string; trigger_type: string;
         status: "success" | "failed" | "skipped"; duration_ms: number;
@@ -218,6 +213,34 @@ type AssignableAgent = {
 };
 
 type DepartmentOption = { id: number; name: string; description: string | null; color: string; routing_strategy: string; queue_enabled: boolean; member_count: number; waiting_count: number };
+
+type ConversationSla = {
+    policy_id: number;
+    policy_name: string;
+    state: "tracking" | "warning" | "breached" | "met" | "resolved";
+    phase: "first_response" | "resolution" | "completed";
+    remaining_seconds: number;
+    snapshot_epoch: number;
+    clock_running: boolean;
+    pause_reason: "waiting_customer" | "outside_business_hours" | "holiday" | null;
+    next_open_at: string | null;
+    next_transition_at: string | null;
+    use_business_hours: boolean;
+    timezone: string;
+    paused_at: string | null;
+    paused_status: string | null;
+    pause_statuses: string[];
+    total_paused_seconds: number;
+    first_response_due_at: string;
+    resolution_due_at: string;
+    first_response_at: string | null;
+    warning_sent_at: string | null;
+    resolution_warning_sent_at: string | null;
+    first_response_breached_at: string | null;
+    resolution_breached_at: string | null;
+    resolved_at: string | null;
+    last_checked_at: string | null;
+};
 
 const statusLabels: Record<string, string> = {
     new: "جدید",
@@ -343,6 +366,7 @@ export default function ConversationShowPage() {
     const [attachmentSearch, setAttachmentSearch] = useState("");
     const [loadingAttachments, setLoadingAttachments] = useState(false);
     const [managementLoading, setManagementLoading] = useState(false);
+    const [slaElapsedSeconds, setSlaElapsedSeconds] = useState(0);
 
     const messagesRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -366,6 +390,40 @@ export default function ConversationShowPage() {
         : "";
 
     const isClosed = conversation?.status === "closed";
+
+    useEffect(() => {
+        setSlaElapsedSeconds(0);
+        if (!conversation?.sla?.clock_running) return;
+        const startedAt = performance.now();
+        const timer = window.setInterval(() => {
+            setSlaElapsedSeconds(Math.floor((performance.now() - startedAt) / 1000));
+        }, 1000);
+        return () => window.clearInterval(timer);
+    }, [conversation?.sla?.clock_running, conversation?.sla?.snapshot_epoch]);
+
+    useEffect(() => {
+        const transitionAt = conversation?.sla?.next_transition_at;
+        if (!transitionAt) return;
+
+        const transitionMs = Date.parse(transitionAt);
+        if (!Number.isFinite(transitionMs)) return;
+
+        // Refresh just after the business calendar boundary so an open page
+        // freezes/resumes its SLA clock even when no chat event is received.
+        const transitionEpoch = Math.floor(transitionMs / 1000);
+        const delayMs = Math.min(
+            Math.max((transitionEpoch - conversation.sla.snapshot_epoch) * 1000 + 500, 500),
+            2_147_000_000
+        );
+        const timer = window.setTimeout(() => void loadConversation(true), delayMs);
+        return () => window.clearTimeout(timer);
+    }, [conversationId, conversation?.sla?.next_transition_at, conversation?.sla?.snapshot_epoch]);
+
+    const visibleSlaRemaining = useMemo(() => {
+        const sla = conversation?.sla;
+        if (!sla) return null;
+        return sla.remaining_seconds - (sla.clock_running ? slaElapsedSeconds : 0);
+    }, [conversation?.sla, slaElapsedSeconds]);
 
     const visitorContact = conversation
         ? conversation.visitor.phone ||
@@ -1442,6 +1500,7 @@ export default function ConversationShowPage() {
                             <InfoPill label="دپارتمان" value={conversation.department?.name || "بدون دپارتمان"} />
                             <InfoPill label="اولویت" value={priorityLabel(conversation.priority)} />
                             <InfoPill label="پیام‌ها" value={conversation.messages.length} />
+                            {conversation.sla && visibleSlaRemaining !== null && <SlaClockPill sla={conversation.sla} remainingSeconds={visibleSlaRemaining} />}
                         </div>
 
                         {showMessageSearch && (
@@ -2180,8 +2239,13 @@ export default function ConversationShowPage() {
                                     </div>}
 
                                     {conversation.sla ? <div className="conversation-sla-summary">
-                                        <strong>{conversation.sla.policy_name}</strong>
+                                        <div className="conversation-sla-summary-head"><strong>{conversation.sla.policy_name}</strong><span>{conversation.sla.use_business_hours ? "تقویم کاری" : "۲۴/۷"}</span></div>
+                                        {visibleSlaRemaining !== null && <div className={`conversation-sla-live ${visibleSlaRemaining <= 0 && conversation.sla.phase !== "completed" ? "is-overdue" : ""} ${!conversation.sla.clock_running && conversation.sla.phase !== "completed" ? "is-paused" : ""} ${conversation.sla.phase === "completed" ? "is-completed" : ""} ${conversation.sla.state === "warning" ? "is-warning" : ""}`}>
+                                            <div><small>{conversation.sla.phase === "first_response" ? "زمان پاسخ اولیه" : conversation.sla.phase === "resolution" ? "زمان حل گفتگو" : "SLA پایان یافته"}</small><strong>{formatSlaDuration(visibleSlaRemaining)}</strong></div>
+                                            <span>{slaClockDescription(conversation.sla)}</span>
+                                        </div>}
                                         <div><span>پاسخ اولیه<small>{conversation.sla.first_response_at ? `ثبت‌شده در ${formatConversationDate(conversation.sla.first_response_at)}` : formatConversationDate(conversation.sla.first_response_due_at)}</small></span><span>حل گفتگو<small>{formatConversationDate(conversation.sla.resolution_due_at)}</small></span></div>
+                                        {conversation.sla.next_open_at && !conversation.sla.clock_running && <p>شروع دوباره محاسبه: {formatConversationDate(conversation.sla.next_open_at)}</p>}
                                     </div> : <p className="conversation-automation-empty">برای این گفتگو سیاست SLA فعالی ثبت نشده است.</p>}
 
                                     {conversation.automation_history.length > 0 && <div className="conversation-automation-history">
@@ -2481,6 +2545,16 @@ function InfoPill({ label, value }: { label: string; value: string | number }) {
     );
 }
 
+function SlaClockPill({ sla, remainingSeconds }: { sla: ConversationSla; remainingSeconds: number }) {
+    const phaseLabel = sla.phase === "first_response" ? "SLA پاسخ" : sla.phase === "resolution" ? "SLA حل" : "SLA";
+    const completed = sla.phase === "completed";
+    return <div className={`conversation-sla-clock-pill sla-${sla.state} ${!sla.clock_running && !completed ? "is-paused" : ""} ${remainingSeconds <= 0 && !completed ? "is-overdue" : ""} ${completed ? "is-completed" : ""}`} title={slaClockDescription(sla)}>
+        <span><i />{phaseLabel}</span>
+        <strong>{formatSlaDuration(remainingSeconds)}</strong>
+        {!sla.clock_running && sla.phase !== "completed" && <small>متوقف</small>}
+    </div>;
+}
+
 function SectionHead({
                          title,
                          subtitle,
@@ -2649,4 +2723,25 @@ function formatConversationDate(value: string) {
     } catch {
         return value;
     }
+}
+
+function formatSlaDuration(value: number) {
+    const overdue = value < 0;
+    const total = Math.max(0, Math.abs(Math.trunc(value)));
+    const days = Math.floor(total / 86400);
+    const hours = Math.floor((total % 86400) / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    const number = (part: number) => part.toLocaleString("fa-IR", { minimumIntegerDigits: 2, useGrouping: false });
+    const clock = `${number(hours)}:${number(minutes)}:${number(seconds)}`;
+    const duration = days > 0 ? `${days.toLocaleString("fa-IR")} روز و ${clock}` : clock;
+    return overdue ? `گذشته ${duration}` : duration;
+}
+
+function slaClockDescription(sla: ConversationSla) {
+    if (sla.phase === "completed") return "پایش SLA این گفتگو پایان یافته است.";
+    if (sla.pause_reason === "waiting_customer") return "زمان حل تا دریافت پاسخ مشتری متوقف است.";
+    if (sla.pause_reason === "holiday") return "امروز در تقویم سایت تعطیل است؛ ساعت SLA متوقف مانده است.";
+    if (sla.pause_reason === "outside_business_hours") return "خارج از ساعت کاری هستیم؛ محاسبه در شروع شیفت بعدی ادامه پیدا می‌کند.";
+    return sla.use_business_hours ? "ساعت SLA اکنون در بازه کاری در حال محاسبه است." : "ساعت SLA به‌صورت ۲۴ ساعته در حال محاسبه است.";
 }

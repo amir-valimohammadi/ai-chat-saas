@@ -129,20 +129,24 @@ $update = $pdo->prepare("
     WHERE id = :id AND tenant_id = :tenant_id
 ");
 $slaName = 'پاسخ‌گویی استاندارد';
+$slaPauseStatuses = ['waiting_customer'];
+$slaPauseStatusesJson = automation_json($slaPauseStatuses);
 $findSla = $pdo->prepare("SELECT id FROM automation_sla_policies WHERE tenant_id = :tenant_id AND site_id IS NULL AND name = :name ORDER BY id LIMIT 1");
 $insertSla = $pdo->prepare("
     INSERT INTO automation_sla_policies (
         tenant_id, site_id, name, first_response_minutes, resolution_minutes,
+        use_business_hours, pause_statuses_json,
         warning_before_minutes, breach_priority, breach_department_id,
         is_default, is_active, created_by, updated_by
     ) VALUES (
-        :tenant_id, NULL, :name, 15, 1440, 5, 'urgent', NULL, 1, 1,
+        :tenant_id, NULL, :name, 15, 1440, 1, :pause_statuses_json, 5, 'urgent', NULL, 1, 1,
         :created_by, :updated_by
     )
 ");
 $updateSla = $pdo->prepare("
     UPDATE automation_sla_policies SET
         first_response_minutes = 15, resolution_minutes = 1440,
+        use_business_hours = 1, pause_statuses_json = :pause_statuses_json,
         warning_before_minutes = 5, breach_priority = 'urgent',
         breach_department_id = NULL, is_default = 1, is_active = 1,
         updated_by = :updated_by
@@ -187,6 +191,7 @@ try {
     $slaPolicyId = (int) ($findSla->fetchColumn() ?: 0);
     if ($slaPolicyId > 0) {
         $updateSla->execute([
+            ':pause_statuses_json' => $slaPauseStatusesJson,
             ':updated_by' => $actorUserId > 0 ? $actorUserId : null,
             ':id' => $slaPolicyId,
             ':tenant_id' => $tenantId,
@@ -196,6 +201,7 @@ try {
         $insertSla->execute([
             ':tenant_id' => $tenantId,
             ':name' => $slaName,
+            ':pause_statuses_json' => $slaPauseStatusesJson,
             ':created_by' => $actorUserId > 0 ? $actorUserId : null,
             ':updated_by' => $actorUserId > 0 ? $actorUserId : null,
         ]);
@@ -212,6 +218,8 @@ try {
         'first_response_minutes' => 15,
         'resolution_minutes' => 1440,
         'warning_before_minutes' => 5,
+        'use_business_hours' => true,
+        'pause_statuses' => $slaPauseStatuses,
     ];
     $pdo->commit();
 } catch (Throwable $e) {

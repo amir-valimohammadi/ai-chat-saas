@@ -463,6 +463,7 @@ function automation_execute_action(PDO $pdo, array $rule, array &$context, array
 
     if ($type === 'set_status') {
         if (!in_array($value, ['new', 'open', 'in_progress', 'waiting_customer', 'follow_up', 'pending', 'closed'], true)) throw new RuntimeException('وضعیت اقدام معتبر نیست.');
+        $previousStatus = (string) ($context['conversation']['status'] ?? '');
         $pdo->prepare("
             UPDATE conversations SET
                 status = :status,
@@ -481,9 +482,8 @@ function automation_execute_action(PDO $pdo, array $rule, array &$context, array
         ]);
         if ($value === 'closed' && !empty($context['conversation']['department_id'])) {
             routing_reindex_queue($pdo, (int) $context['conversation']['department_id']);
-            $pdo->prepare("UPDATE conversation_sla_status SET state = 'resolved', last_checked_at = NOW() WHERE conversation_id = :id")
-                ->execute([':id' => $conversationId]);
         }
+        if ($previousStatus !== $value) automation_sync_sla_status($pdo, $conversationId, $value);
         $context['conversation']['status'] = $value;
         return ['type' => $type, 'value' => $value, 'success' => true];
     }
@@ -641,9 +641,8 @@ function automation_dispatch_event(
     if ($triggerType === 'agent_message' && ($event['message_type'] ?? 'text') !== 'internal_note') {
         automation_mark_first_response($pdo, $conversationId);
     }
-    if ($triggerType === 'status_changed' && ($event['new_status'] ?? '') === 'closed') {
-        $pdo->prepare("UPDATE conversation_sla_status SET state = 'resolved', last_checked_at = NOW() WHERE conversation_id = :id")
-            ->execute([':id' => $conversationId]);
+    if ($triggerType === 'status_changed' && isset($event['new_status'])) {
+        automation_sync_sla_status($pdo, $conversationId, (string) $event['new_status']);
     }
 
     $context = automation_get_conversation_context($pdo, $conversationId, $event);
@@ -679,7 +678,11 @@ function automation_dispatch_event(
         if (!$match['matched']) continue;
         $summary['matched']++;
 
-        $derivedKey = $eventKey ? mb_substr($triggerType . ':' . $eventKey, 0, 190, 'UTF-8') : null;
+        // Event keys are unique per rule in the database, so the conversation
+        // identity must be part of the derived key as well as the event token.
+        $derivedKey = $eventKey
+            ? mb_substr($triggerType . ':conversation:' . $conversationId . ':' . $eventKey, 0, 190, 'UTF-8')
+            : null;
         $logId = automation_claim_execution($pdo, $rule, $context, $triggerType, $derivedKey, $match['results']);
         if ($logId <= 0) continue;
 
@@ -732,6 +735,388 @@ function automation_dispatch_event_safe(
     }
 }
 
+function automation_sla_timezone(?string $timezone = null): DateTimeZone
+{
+    $fallback = (string) app_config('timezone', 'Asia/Tehran');
+    try {
+        return new DateTimeZone(trim((string) $timezone) !== '' ? (string) $timezone : $fallback);
+    } catch (Throwable) {
+        return new DateTimeZone($fallback ?: 'Asia/Tehran');
+    }
+}
+
+function automation_sla_storage_timezone(): DateTimeZone
+{
+    return automation_sla_timezone((string) app_config('timezone', 'Asia/Tehran'));
+}
+
+function automation_sla_parse_storage(string $value, ?string $targetTimezone = null): DateTimeImmutable
+{
+    $date = new DateTimeImmutable($value, automation_sla_storage_timezone());
+    return $targetTimezone !== null ? $date->setTimezone(automation_sla_timezone($targetTimezone)) : $date;
+}
+
+function automation_sla_format_storage(DateTimeImmutable $value): string
+{
+    return $value->setTimezone(automation_sla_storage_timezone())->format('Y-m-d H:i:s');
+}
+
+/** Return the effective working interval for one local calendar date. */
+function automation_sla_day_window(PDO $pdo, int $siteId, DateTimeImmutable $date): array
+{
+    static $cache = [];
+    $key = spl_object_id($pdo) . ':' . $siteId . ':' . $date->format('Y-m-dP');
+    if (isset($cache[$key])) return $cache[$key];
+
+    $schedule = hosted_support_schedule_for_date($pdo, $siteId, $date);
+    $open = null;
+    $close = null;
+    if (!empty($schedule['is_open'])) {
+        $open = hosted_support_datetime_at($date, $schedule['open_time'] ?? null);
+        $close = hosted_support_datetime_at($date, $schedule['close_time'] ?? null);
+        if (!$open || !$close || $close <= $open) {
+            $open = null;
+            $close = null;
+        }
+    }
+
+    return $cache[$key] = [
+        'open' => $open,
+        'close' => $close,
+        'source' => (string) ($schedule['source'] ?? 'none'),
+        'title' => $schedule['title'] ?? null,
+    ];
+}
+
+function automation_sla_calendar_has_opening(PDO $pdo, int $siteId, DateTimeImmutable $from): bool
+{
+    $weeklyStmt = $pdo->prepare("
+        SELECT 1 FROM site_business_hours
+        WHERE site_id = :site_id AND is_open = 1
+          AND open_time IS NOT NULL AND close_time IS NOT NULL AND open_time < close_time
+        LIMIT 1
+    ");
+    $weeklyStmt->execute([':site_id' => $siteId]);
+    if ($weeklyStmt->fetchColumn()) return true;
+
+    $exceptionStmt = $pdo->prepare("
+        SELECT 1 FROM site_schedule_exceptions
+        WHERE site_id = :site_id AND exception_date >= :from_date AND is_closed = 0
+          AND open_time IS NOT NULL AND close_time IS NOT NULL AND open_time < close_time
+        LIMIT 1
+    ");
+    $exceptionStmt->execute([':site_id' => $siteId, ':from_date' => $from->format('Y-m-d')]);
+    return (bool) $exceptionStmt->fetchColumn();
+}
+
+function automation_sla_add_business_seconds(
+    PDO $pdo,
+    int $siteId,
+    DateTimeImmutable $start,
+    int $seconds,
+    string $timezone
+): DateTimeImmutable {
+    $remaining = max(0, $seconds);
+    $cursor = $start->setTimezone(automation_sla_timezone($timezone));
+    if ($remaining === 0) return $cursor;
+    if (!automation_sla_calendar_has_opening($pdo, $siteId, $cursor)) {
+        throw new RuntimeException('تقویم سایت هیچ بازه کاری بازی ندارد.');
+    }
+
+    for ($days = 0; $days < 3700; $days++) {
+        $window = automation_sla_day_window($pdo, $siteId, $cursor);
+        $open = $window['open'];
+        $close = $window['close'];
+
+        if ($open && $close && $cursor < $close) {
+            $segmentStart = $cursor > $open ? $cursor : $open;
+            $available = max(0, $close->getTimestamp() - $segmentStart->getTimestamp());
+            if ($available > 0 && $remaining <= $available) {
+                return $segmentStart->setTimestamp($segmentStart->getTimestamp() + $remaining);
+            }
+            $remaining -= $available;
+        }
+
+        $cursor = $cursor->modify('+1 day')->setTime(0, 0, 0);
+    }
+
+    throw new RuntimeException('برای محاسبه SLA هیچ بازه کاری معتبری در تقویم سایت پیدا نشد.');
+}
+
+function automation_sla_business_seconds_between(
+    PDO $pdo,
+    int $siteId,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    string $timezone
+): int {
+    if ($from->getTimestamp() === $to->getTimestamp()) return 0;
+    if ($from > $to) {
+        return -automation_sla_business_seconds_between($pdo, $siteId, $to, $from, $timezone);
+    }
+
+    $tz = automation_sla_timezone($timezone);
+    $start = $from->setTimezone($tz);
+    $end = $to->setTimezone($tz);
+    $day = $start->setTime(0, 0, 0);
+    $endDay = $end->setTime(0, 0, 0);
+    $seconds = 0;
+
+    for ($days = 0; $day <= $endDay && $days < 3700; $days++) {
+        $window = automation_sla_day_window($pdo, $siteId, $day);
+        if ($window['open'] && $window['close']) {
+            $segmentStart = $window['open'] > $start ? $window['open'] : $start;
+            $segmentEnd = $window['close'] < $end ? $window['close'] : $end;
+            if ($segmentEnd > $segmentStart) {
+                $seconds += $segmentEnd->getTimestamp() - $segmentStart->getTimestamp();
+            }
+        }
+        $day = $day->modify('+1 day')->setTime(0, 0, 0);
+    }
+
+    if ($day <= $endDay) {
+        throw new RuntimeException('بازه زمانی SLA از محدوده امن محاسبه تقویم کاری بزرگ‌تر است.');
+    }
+    return $seconds;
+}
+
+function automation_sla_clock_state(
+    PDO $pdo,
+    int $siteId,
+    DateTimeImmutable $at,
+    string $timezone
+): array {
+    $local = $at->setTimezone(automation_sla_timezone($timezone));
+    $today = automation_sla_day_window($pdo, $siteId, $local);
+    if ($today['open'] && $today['close'] && $local >= $today['open'] && $local < $today['close']) {
+        return [
+            'running' => true,
+            'reason' => null,
+            'next_open_at' => null,
+            'next_transition_at' => $today['close'],
+        ];
+    }
+
+    $reason = $today['source'] === 'exception' && !$today['open'] ? 'holiday' : 'outside_business_hours';
+    if (!automation_sla_calendar_has_opening($pdo, $siteId, $local)) {
+        return ['running' => false, 'reason' => $reason, 'next_open_at' => null, 'next_transition_at' => null];
+    }
+    $cursor = $local->setTime(0, 0, 0);
+    for ($days = 0; $days < 3700; $days++) {
+        $window = automation_sla_day_window($pdo, $siteId, $cursor);
+        if ($window['open'] && $window['open'] > $local) {
+            return [
+                'running' => false,
+                'reason' => $reason,
+                'next_open_at' => $window['open'],
+                'next_transition_at' => $window['open'],
+            ];
+        }
+        $cursor = $cursor->modify('+1 day')->setTime(0, 0, 0);
+    }
+
+    return ['running' => false, 'reason' => $reason, 'next_open_at' => null, 'next_transition_at' => null];
+}
+
+function automation_sla_remaining_seconds(PDO $pdo, array $sla, string $dueAt, DateTimeImmutable $at): int
+{
+    $due = automation_sla_parse_storage($dueAt, (string) ($sla['sla_timezone'] ?? 'Asia/Tehran'));
+    if (empty($sla['uses_business_hours'])) return $due->getTimestamp() - $at->getTimestamp();
+
+    return automation_sla_business_seconds_between(
+        $pdo,
+        (int) $sla['site_id'],
+        $at,
+        $due,
+        (string) $sla['sla_timezone']
+    );
+}
+
+function automation_sla_pause_statuses(array $sla): array
+{
+    return array_values(array_filter(
+        automation_decode_list($sla['pause_statuses_json'] ?? null),
+        static fn(mixed $status): bool => is_string($status) && $status !== ''
+    ));
+}
+
+/** Keep the resolution clock in sync with the conversation status. */
+function automation_sync_sla_status(PDO $pdo, int $conversationId, string $status): void
+{
+    if (!automation_tables_ready($pdo)) return;
+    automation_attach_sla($pdo, $conversationId);
+
+    $startedTransaction = !$pdo->inTransaction();
+    try {
+        if ($startedTransaction) $pdo->beginTransaction();
+        $stmt = $pdo->prepare("\n            SELECT conversation_sla_status.*, conversations.site_id,\n                   automation_sla_policies.breach_priority\n            FROM conversation_sla_status\n            INNER JOIN conversations ON conversations.id = conversation_sla_status.conversation_id\n            INNER JOIN automation_sla_policies ON automation_sla_policies.id = conversation_sla_status.policy_id\n            WHERE conversation_sla_status.conversation_id = :conversation_id\n            LIMIT 1 FOR UPDATE\n        ");
+        $stmt->execute([':conversation_id' => $conversationId]);
+        $sla = $stmt->fetch();
+        if (!$sla) {
+            if ($startedTransaction) $pdo->commit();
+            return;
+        }
+
+        $now = new DateTimeImmutable('now', automation_sla_storage_timezone());
+        if ($status === 'closed') {
+            if ((string) $sla['state'] === 'resolved') {
+                if ($startedTransaction) $pdo->commit();
+                return;
+            }
+
+            $firstRemaining = empty($sla['first_response_at'])
+                ? automation_sla_remaining_seconds($pdo, $sla, (string) $sla['first_response_due_at'], $now)
+                : 1;
+            $resolutionRemaining = !empty($sla['paused_at'])
+                ? max(0, (int) ($sla['resolution_remaining_seconds'] ?? 0))
+                : max(0, automation_sla_remaining_seconds($pdo, $sla, (string) $sla['resolution_due_at'], $now));
+            $firstBreachClaimed = empty($sla['first_response_at'])
+                && empty($sla['first_response_breached_at'])
+                && $firstRemaining <= 0;
+            $resolutionBreachClaimed = empty($sla['resolution_breached_at'])
+                && $resolutionRemaining <= 0;
+
+            $closeSla = $pdo->prepare("\n                UPDATE conversation_sla_status SET state = 'resolved', resolved_at = COALESCE(resolved_at, :resolved_at),\n                    first_response_breached_at = CASE WHEN :first_breached = 1 THEN COALESCE(first_response_breached_at, :first_breached_at) ELSE first_response_breached_at END,\n                    resolution_breached_at = CASE WHEN :resolution_breached = 1 THEN COALESCE(resolution_breached_at, :resolution_breached_at) ELSE resolution_breached_at END,\n                    paused_at = NULL, paused_status = NULL, resolution_remaining_seconds = :resolution_remaining, last_checked_at = NOW()\n                WHERE conversation_id = :conversation_id\n            ");
+            $closedAt = automation_sla_format_storage($now);
+            $closeSla->execute([
+                ':resolved_at' => $closedAt,
+                ':first_breached' => $firstBreachClaimed ? 1 : 0,
+                ':first_breached_at' => $closedAt,
+                ':resolution_breached' => $resolutionBreachClaimed ? 1 : 0,
+                ':resolution_breached_at' => $closedAt,
+                ':resolution_remaining' => $resolutionRemaining,
+                ':conversation_id' => $conversationId,
+            ]);
+            if ($firstBreachClaimed || $resolutionBreachClaimed) {
+                $pdo->prepare("UPDATE conversations SET priority = :priority WHERE id = :conversation_id")
+                    ->execute([':priority' => $sla['breach_priority'], ':conversation_id' => $conversationId]);
+            }
+            if ($startedTransaction) $pdo->commit();
+
+            if ($firstBreachClaimed || $resolutionBreachClaimed) {
+                $context = automation_get_conversation_context($pdo, $conversationId);
+                if ($context) {
+                    if ($firstBreachClaimed) {
+                        automation_add_alert($pdo, $context, null, 'critical', 'SLA پاسخ اولیه نقض شد', 'گفتگوی #' . $conversationId . ' پس از پایان مهلت پاسخ اولیه بسته شد.', 'admins');
+                        automation_dispatch_event_safe($pdo, 'sla_breached', $conversationId, ['sla_type' => 'first_response'], null, 'first-response');
+                    }
+                    if ($resolutionBreachClaimed) {
+                        automation_add_alert($pdo, $context, null, 'critical', 'SLA حل گفتگو نقض شد', 'گفتگوی #' . $conversationId . ' پس از پایان مهلت حل بسته شد.', 'admins');
+                        automation_dispatch_event_safe($pdo, 'sla_breached', $conversationId, ['sla_type' => 'resolution'], null, 'resolution');
+                    }
+                }
+            }
+            return;
+        }
+
+        if ((string) $sla['state'] === 'resolved') {
+            $closedAt = !empty($sla['resolved_at'])
+                ? automation_sla_parse_storage((string) $sla['resolved_at'])
+                : $now;
+            $resolutionRemaining = $sla['resolution_remaining_seconds'] !== null
+                ? max(0, (int) $sla['resolution_remaining_seconds'])
+                : max(0, automation_sla_remaining_seconds($pdo, $sla, (string) $sla['resolution_due_at'], $closedAt));
+            $firstRemaining = empty($sla['first_response_at'])
+                ? max(0, automation_sla_remaining_seconds($pdo, $sla, (string) $sla['first_response_due_at'], $closedAt))
+                : null;
+            $calendarFallback = false;
+
+            if (!empty($sla['uses_business_hours'])) {
+                try {
+                    $newResolutionDue = automation_sla_add_business_seconds($pdo, (int) $sla['site_id'], $now, $resolutionRemaining, (string) $sla['sla_timezone']);
+                    $newFirstResponseDue = $firstRemaining !== null
+                        ? automation_sla_add_business_seconds($pdo, (int) $sla['site_id'], $now, $firstRemaining, (string) $sla['sla_timezone'])
+                        : automation_sla_parse_storage((string) $sla['first_response_due_at']);
+                } catch (Throwable $e) {
+                    $calendarFallback = true;
+                    $newResolutionDue = $now->setTimestamp($now->getTimestamp() + $resolutionRemaining);
+                    $newFirstResponseDue = $firstRemaining !== null
+                        ? $now->setTimestamp($now->getTimestamp() + $firstRemaining)
+                        : automation_sla_parse_storage((string) $sla['first_response_due_at']);
+                    if (function_exists('app_log_error')) {
+                        app_log_error($e, ['component' => 'automation_sla_reopen', 'conversation_id' => $conversationId]);
+                    }
+                }
+            } else {
+                $newResolutionDue = $now->setTimestamp($now->getTimestamp() + $resolutionRemaining);
+                $newFirstResponseDue = $firstRemaining !== null
+                    ? $now->setTimestamp($now->getTimestamp() + $firstRemaining)
+                    : automation_sla_parse_storage((string) $sla['first_response_due_at']);
+            }
+
+            $hasBreach = !empty($sla['first_response_breached_at']) || !empty($sla['resolution_breached_at']) || $resolutionRemaining <= 0;
+            $hasWarning = !empty($sla['resolution_warning_sent_at'])
+                || (empty($sla['first_response_at']) && !empty($sla['warning_sent_at']));
+            $reopenedState = $hasBreach ? 'breached' : ($hasWarning ? 'warning' : (!empty($sla['first_response_at']) ? 'met' : 'tracking'));
+            $reopenSla = $pdo->prepare("\n                UPDATE conversation_sla_status SET state = :state, resolved_at = NULL,\n                    first_response_due_at = :first_response_due_at, resolution_due_at = :resolution_due_at,\n                    paused_at = NULL, paused_status = NULL, resolution_remaining_seconds = NULL,\n                    uses_business_hours = CASE WHEN :calendar_fallback = 1 THEN 0 ELSE uses_business_hours END,\n                    last_checked_at = NOW()\n                WHERE conversation_id = :conversation_id AND state = 'resolved'\n            ");
+            $reopenSla->execute([
+                ':state' => $reopenedState,
+                ':first_response_due_at' => automation_sla_format_storage($newFirstResponseDue),
+                ':resolution_due_at' => automation_sla_format_storage($newResolutionDue),
+                ':calendar_fallback' => $calendarFallback ? 1 : 0,
+                ':conversation_id' => $conversationId,
+            ]);
+            $sla['state'] = $reopenedState;
+            $sla['first_response_due_at'] = automation_sla_format_storage($newFirstResponseDue);
+            $sla['resolution_due_at'] = automation_sla_format_storage($newResolutionDue);
+            $sla['resolved_at'] = null;
+            $sla['paused_at'] = null;
+            $sla['paused_status'] = null;
+            $sla['resolution_remaining_seconds'] = null;
+            if ($calendarFallback) $sla['uses_business_hours'] = 0;
+        }
+
+        $shouldPause = in_array($status, automation_sla_pause_statuses($sla), true);
+        if ($shouldPause && empty($sla['paused_at'])) {
+            $remaining = max(0, automation_sla_remaining_seconds($pdo, $sla, (string) $sla['resolution_due_at'], $now));
+            $pdo->prepare("\n                UPDATE conversation_sla_status SET paused_at = :paused_at, paused_status = :paused_status,\n                    resolution_remaining_seconds = :remaining, last_checked_at = NOW()\n                WHERE conversation_id = :conversation_id AND paused_at IS NULL\n            ")->execute([
+                ':paused_at' => automation_sla_format_storage($now),
+                ':paused_status' => $status,
+                ':remaining' => $remaining,
+                ':conversation_id' => $conversationId,
+            ]);
+        } elseif ($shouldPause && (string) $sla['paused_status'] !== $status) {
+            $pdo->prepare("UPDATE conversation_sla_status SET paused_status = :status, last_checked_at = NOW() WHERE conversation_id = :conversation_id")
+                ->execute([':status' => $status, ':conversation_id' => $conversationId]);
+        } elseif (!$shouldPause && !empty($sla['paused_at'])) {
+            $remaining = max(0, (int) ($sla['resolution_remaining_seconds'] ?? 0));
+            $calendarFallback = false;
+            if (!empty($sla['uses_business_hours'])) {
+                try {
+                    $newDue = automation_sla_add_business_seconds($pdo, (int) $sla['site_id'], $now, $remaining, (string) $sla['sla_timezone']);
+                } catch (Throwable $e) {
+                    $calendarFallback = true;
+                    $newDue = $now->setTimestamp($now->getTimestamp() + $remaining);
+                    if (function_exists('app_log_error')) {
+                        app_log_error($e, ['component' => 'automation_sla_resume', 'conversation_id' => $conversationId]);
+                    }
+                }
+            } else {
+                $newDue = $now->setTimestamp($now->getTimestamp() + $remaining);
+            }
+            $pausedAt = automation_sla_parse_storage((string) $sla['paused_at']);
+            $pausedSeconds = max(0, $now->getTimestamp() - $pausedAt->getTimestamp());
+            $pdo->prepare("
+                UPDATE conversation_sla_status SET resolution_due_at = :resolution_due_at,
+                    paused_at = NULL, paused_status = NULL, resolution_remaining_seconds = NULL,
+                    uses_business_hours = CASE WHEN :calendar_fallback = 1 THEN 0 ELSE uses_business_hours END,
+                    total_paused_seconds = total_paused_seconds + :paused_seconds, last_checked_at = NOW()
+                WHERE conversation_id = :conversation_id AND paused_at IS NOT NULL
+            ")->execute([
+                ':resolution_due_at' => automation_sla_format_storage($newDue),
+                ':calendar_fallback' => $calendarFallback ? 1 : 0,
+                ':paused_seconds' => $pausedSeconds,
+                ':conversation_id' => $conversationId,
+            ]);
+        }
+
+        if ($startedTransaction) $pdo->commit();
+    } catch (Throwable $e) {
+        if ($startedTransaction && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
 function automation_attach_sla(PDO $pdo, int $conversationId): ?array
 {
     if (!automation_tables_ready($pdo)) return null;
@@ -765,23 +1150,56 @@ function automation_attach_sla(PDO $pdo, int $conversationId): ?array
     $policy = $policyStmt->fetch();
     if (!$policy) return null;
 
-    $createdAt = new DateTimeImmutable((string) $conversation['created_at']);
-    $firstResponseDueAt = $createdAt
-        ->modify('+' . max(1, (int) $policy['first_response_minutes']) . ' minutes')
-        ->format('Y-m-d H:i:s');
-    $resolutionDueAt = $createdAt
-        ->modify('+' . max(1, (int) $policy['resolution_minutes']) . ' minutes')
-        ->format('Y-m-d H:i:s');
+    $createdAt = automation_sla_parse_storage((string) $conversation['created_at']);
+    $usesBusinessHours = !empty($policy['use_business_hours']);
+    $timezone = hosted_support_site_timezone($pdo, (int) $conversation['site_id']);
+    if ($usesBusinessHours) {
+        try {
+            hosted_support_ensure_defaults($pdo, (int) $conversation['site_id']);
+            $firstResponseDue = automation_sla_add_business_seconds(
+                $pdo,
+                (int) $conversation['site_id'],
+                $createdAt,
+                max(1, (int) $policy['first_response_minutes']) * 60,
+                $timezone
+            );
+            $resolutionDue = automation_sla_add_business_seconds(
+                $pdo,
+                (int) $conversation['site_id'],
+                $createdAt,
+                max(1, (int) $policy['resolution_minutes']) * 60,
+                $timezone
+            );
+        } catch (Throwable $e) {
+            // An all-closed or malformed calendar must not break conversation automations.
+            $usesBusinessHours = false;
+            if (function_exists('app_log_error')) {
+                app_log_error($e, ['component' => 'automation_sla_calendar', 'conversation_id' => $conversationId]);
+            }
+        }
+    }
+    if (!$usesBusinessHours) {
+        $firstResponseDue = $createdAt->setTimestamp($createdAt->getTimestamp() + max(1, (int) $policy['first_response_minutes']) * 60);
+        $resolutionDue = $createdAt->setTimestamp($createdAt->getTimestamp() + max(1, (int) $policy['resolution_minutes']) * 60);
+    }
+    $firstResponseDueAt = automation_sla_format_storage($firstResponseDue);
+    $resolutionDueAt = automation_sla_format_storage($resolutionDue);
+    $pauseStatusesJson = automation_json(automation_sla_pause_statuses($policy));
 
     $stmt = $pdo->prepare("
         INSERT IGNORE INTO conversation_sla_status (
-            conversation_id, policy_id, state, first_response_due_at, resolution_due_at
+            conversation_id, policy_id, uses_business_hours, sla_timezone, pause_statuses_json,
+            state, first_response_due_at, resolution_due_at
         ) VALUES (
-            :conversation_id, :policy_id, 'tracking', :first_response_due_at, :resolution_due_at
+            :conversation_id, :policy_id, :uses_business_hours, :sla_timezone, :pause_statuses_json,
+            'tracking', :first_response_due_at, :resolution_due_at
         )
     ");
     $stmt->bindValue(':conversation_id', $conversationId, PDO::PARAM_INT);
     $stmt->bindValue(':policy_id', (int) $policy['id'], PDO::PARAM_INT);
+    $stmt->bindValue(':uses_business_hours', $usesBusinessHours ? 1 : 0, PDO::PARAM_INT);
+    $stmt->bindValue(':sla_timezone', $timezone);
+    $stmt->bindValue(':pause_statuses_json', $pauseStatusesJson);
     $stmt->bindValue(':first_response_due_at', $firstResponseDueAt);
     $stmt->bindValue(':resolution_due_at', $resolutionDueAt);
     $stmt->execute();
@@ -793,16 +1211,153 @@ function automation_mark_first_response(PDO $pdo, int $conversationId): void
 {
     if (!automation_tables_ready($pdo)) return;
     automation_attach_sla($pdo, $conversationId);
-    $pdo->prepare("
+
+    $firstMessageStmt = $pdo->prepare("
+        SELECT MIN(created_at)
+        FROM messages
+        WHERE conversation_id = :conversation_id
+          AND sender_type = 'agent'
+          AND message_type <> 'internal_note'
+    ");
+    $firstMessageStmt->execute([':conversation_id' => $conversationId]);
+    $firstResponseAt = $firstMessageStmt->fetchColumn() ?: date('Y-m-d H:i:s');
+
+    $slaStmt = $pdo->prepare("
+        SELECT conversation_sla_status.*, conversations.site_id,
+               automation_sla_policies.breach_priority, automation_sla_policies.breach_department_id
+        FROM conversation_sla_status
+        INNER JOIN conversations ON conversations.id = conversation_sla_status.conversation_id
+        INNER JOIN automation_sla_policies ON automation_sla_policies.id = conversation_sla_status.policy_id
+        WHERE conversation_sla_status.conversation_id = :conversation_id
+        LIMIT 1
+    ");
+    $slaStmt->execute([':conversation_id' => $conversationId]);
+    $sla = $slaStmt->fetch();
+    if (!$sla || !empty($sla['first_response_at'])) return;
+
+    $responseTime = automation_sla_parse_storage((string) $firstResponseAt);
+    $late = automation_sla_remaining_seconds($pdo, $sla, (string) $sla['first_response_due_at'], $responseTime) <= 0;
+    $update = $pdo->prepare("
         UPDATE conversation_sla_status
-        SET first_response_at = COALESCE(first_response_at, NOW()),
+        SET first_response_at = COALESCE(first_response_at, :first_response_at),
+            first_response_breached_at = CASE
+                WHEN :late = 1 THEN COALESCE(first_response_breached_at, :breached_at)
+                ELSE first_response_breached_at
+            END,
             state = CASE
-                WHEN state = 'warning' AND first_response_breached_at IS NULL THEN 'tracking'
+                WHEN :late_state = 1 THEN 'breached'
+                WHEN state = 'warning' AND first_response_breached_at IS NULL AND resolution_warning_sent_at IS NULL THEN 'tracking'
                 ELSE state
             END,
             last_checked_at = NOW()
-        WHERE conversation_id = :conversation_id
-    ")->execute([':conversation_id' => $conversationId]);
+        WHERE conversation_id = :conversation_id AND first_response_at IS NULL
+    ");
+    $update->execute([
+        ':first_response_at' => $firstResponseAt,
+        ':late' => $late ? 1 : 0,
+        ':breached_at' => $firstResponseAt,
+        ':late_state' => $late ? 1 : 0,
+        ':conversation_id' => $conversationId,
+    ]);
+
+    if ($late && $update->rowCount() > 0) {
+        $pdo->prepare("UPDATE conversations SET priority = :priority WHERE id = :conversation_id")
+            ->execute([':priority' => $sla['breach_priority'], ':conversation_id' => $conversationId]);
+        $context = automation_get_conversation_context($pdo, $conversationId);
+        if ($context) {
+            automation_add_alert($pdo, $context, null, 'critical', 'SLA پاسخ اولیه نقض شد', 'پاسخ اولیه گفتگوی #' . $conversationId . ' پس از سررسید ارسال شد.', 'admins');
+            automation_dispatch_event($pdo, 'sla_breached', $conversationId, ['sla_type' => 'first_response'], null, 'first-response');
+        }
+    }
+}
+
+function automation_sla_snapshot_from_row(PDO $pdo, array $sla, ?DateTimeImmutable $at = null): array
+{
+    $now = $at ?? new DateTimeImmutable('now', automation_sla_storage_timezone());
+    $slaTimezone = (string) ($sla['sla_timezone'] ?? 'Asia/Tehran');
+    $formatSnapshotDate = static function (mixed $value) use ($slaTimezone): ?string {
+        if ($value === null || trim((string) $value) === '') return null;
+        return automation_sla_parse_storage((string) $value, $slaTimezone)->format(DateTimeInterface::ATOM);
+    };
+    $completed = (string) ($sla['state'] ?? '') === 'resolved'
+        || (string) ($sla['conversation_status'] ?? '') === 'closed';
+    $phase = $completed ? 'completed' : (empty($sla['first_response_at']) ? 'first_response' : 'resolution');
+    $paused = $phase === 'resolution' && !empty($sla['paused_at']);
+    $dueField = $phase === 'first_response' ? 'first_response_due_at' : 'resolution_due_at';
+
+    if ($completed) {
+        $remaining = 0;
+    } elseif ($paused) {
+        $remaining = max(0, (int) ($sla['resolution_remaining_seconds'] ?? 0));
+    } else {
+        $remaining = automation_sla_remaining_seconds($pdo, $sla, (string) $sla[$dueField], $now);
+    }
+
+    $clockRunning = !$completed && !$paused;
+    $pauseReason = $paused ? ((string) ($sla['paused_status'] ?: 'waiting_customer')) : null;
+    $nextOpenAt = null;
+    $nextTransitionAt = null;
+    if ($clockRunning && !empty($sla['uses_business_hours'])) {
+        $clock = automation_sla_clock_state(
+            $pdo,
+            (int) $sla['site_id'],
+            $now,
+            (string) $sla['sla_timezone']
+        );
+        $clockRunning = (bool) $clock['running'];
+        $pauseReason = $clockRunning ? null : $clock['reason'];
+        $nextOpenAt = $clock['next_open_at'] instanceof DateTimeImmutable
+            ? $clock['next_open_at']->format(DateTimeInterface::ATOM)
+            : null;
+        $nextTransitionAt = $clock['next_transition_at'] instanceof DateTimeImmutable
+            ? $clock['next_transition_at']->format(DateTimeInterface::ATOM)
+            : null;
+    }
+
+    return [
+        'policy_id' => (int) $sla['policy_id'],
+        'policy_name' => (string) ($sla['policy_name'] ?? ''),
+        'state' => (string) $sla['state'],
+        'phase' => $phase,
+        'remaining_seconds' => $remaining,
+        'snapshot_epoch' => $now->getTimestamp(),
+        'clock_running' => $clockRunning,
+        'pause_reason' => $pauseReason,
+        'next_open_at' => $nextOpenAt,
+        'next_transition_at' => $nextTransitionAt,
+        'use_business_hours' => !empty($sla['uses_business_hours']),
+        'timezone' => $slaTimezone,
+        'pause_statuses' => automation_sla_pause_statuses($sla),
+        'first_response_due_at' => $formatSnapshotDate($sla['first_response_due_at'] ?? null),
+        'resolution_due_at' => $formatSnapshotDate($sla['resolution_due_at'] ?? null),
+        'first_response_at' => $formatSnapshotDate($sla['first_response_at'] ?? null),
+        'paused_at' => $formatSnapshotDate($sla['paused_at'] ?? null),
+        'paused_status' => $sla['paused_status'] ?? null,
+        'total_paused_seconds' => (int) ($sla['total_paused_seconds'] ?? 0),
+        'warning_sent_at' => $formatSnapshotDate($sla['warning_sent_at'] ?? null),
+        'resolution_warning_sent_at' => $formatSnapshotDate($sla['resolution_warning_sent_at'] ?? null),
+        'first_response_breached_at' => $formatSnapshotDate($sla['first_response_breached_at'] ?? null),
+        'resolution_breached_at' => $formatSnapshotDate($sla['resolution_breached_at'] ?? null),
+        'resolved_at' => $formatSnapshotDate($sla['resolved_at'] ?? null),
+        'last_checked_at' => $formatSnapshotDate($sla['last_checked_at'] ?? null),
+    ];
+}
+
+function automation_get_sla_snapshot(PDO $pdo, int $conversationId): ?array
+{
+    if (!automation_tables_ready($pdo)) return null;
+    $stmt = $pdo->prepare("
+        SELECT conversation_sla_status.*, automation_sla_policies.name AS policy_name,
+               conversations.site_id, conversations.status AS conversation_status
+        FROM conversation_sla_status
+        INNER JOIN automation_sla_policies ON automation_sla_policies.id = conversation_sla_status.policy_id
+        INNER JOIN conversations ON conversations.id = conversation_sla_status.conversation_id
+        WHERE conversation_sla_status.conversation_id = :conversation_id
+        LIMIT 1
+    ");
+    $stmt->execute([':conversation_id' => $conversationId]);
+    $sla = $stmt->fetch();
+    return $sla ? automation_sla_snapshot_from_row($pdo, $sla) : null;
 }
 
 function automation_preview_rule(PDO $pdo, int $tenantId, int $conversationId, array $ruleInput): array
@@ -878,72 +1433,122 @@ function automation_run_scheduled(PDO $pdo, int $limit = 200, ?int $tenantId = n
             conversation_sla_status.*, automation_sla_policies.warning_before_minutes,
             automation_sla_policies.breach_priority, automation_sla_policies.breach_department_id,
             automation_sla_policies.name AS policy_name,
-            conversations.status AS conversation_status
+            conversations.status AS conversation_status, conversations.site_id
         FROM conversation_sla_status
         INNER JOIN automation_sla_policies ON automation_sla_policies.id = conversation_sla_status.policy_id
         INNER JOIN conversations ON conversations.id = conversation_sla_status.conversation_id
         INNER JOIN sites ON sites.id = conversations.site_id
-        WHERE conversations.status <> 'closed'
+        WHERE 1 = 1
           {$slaTenantSql}
-          AND automation_sla_policies.is_active = 1
           AND conversation_sla_status.state <> 'resolved'
-        ORDER BY LEAST(conversation_sla_status.first_response_due_at, conversation_sla_status.resolution_due_at) ASC
+          AND (conversations.status = 'closed' OR conversation_sla_status.resolution_breached_at IS NULL)
+        ORDER BY COALESCE(conversation_sla_status.last_checked_at, '1970-01-01 00:00:00') ASC,
+                 CASE
+                     WHEN conversation_sla_status.first_response_at IS NULL
+                          AND conversation_sla_status.first_response_breached_at IS NULL
+                     THEN conversation_sla_status.first_response_due_at
+                     ELSE conversation_sla_status.resolution_due_at
+                 END ASC,
+                 conversation_sla_status.conversation_id ASC
         LIMIT {$limit}
     ");
     $slaStmt->execute($tenantId !== null ? [':sla_tenant_id' => $tenantId] : []);
 
     foreach ($slaStmt->fetchAll() as $sla) {
         $conversationId = (int) $sla['conversation_id'];
+        if ((string) $sla['conversation_status'] === 'closed') {
+            automation_sync_sla_status($pdo, $conversationId, 'closed');
+            continue;
+        }
+
+        // Repair tracking when a public agent-message endpoint missed the real-time hook.
+        if (empty($sla['first_response_at'])) {
+            $messageStmt = $pdo->prepare("SELECT 1 FROM messages WHERE conversation_id = :conversation_id AND sender_type = 'agent' AND message_type <> 'internal_note' LIMIT 1");
+            $messageStmt->execute([':conversation_id' => $conversationId]);
+            if ($messageStmt->fetchColumn()) automation_mark_first_response($pdo, $conversationId);
+        }
+
+        automation_sync_sla_status($pdo, $conversationId, (string) $sla['conversation_status']);
+        $refreshStmt = $pdo->prepare("SELECT * FROM conversation_sla_status WHERE conversation_id = :conversation_id LIMIT 1");
+        $refreshStmt->execute([':conversation_id' => $conversationId]);
+        $refreshed = $refreshStmt->fetch();
+        if (!$refreshed || (string) $refreshed['state'] === 'resolved') continue;
+        $sla = array_merge($sla, $refreshed);
+
         $context = automation_get_conversation_context($pdo, $conversationId);
         if (!$context) continue;
-        $now = time();
-        $firstDue = strtotime((string) $sla['first_response_due_at']) ?: PHP_INT_MAX;
-        $resolutionDue = strtotime((string) $sla['resolution_due_at']) ?: PHP_INT_MAX;
-        $warningAt = $firstDue - ((int) $sla['warning_before_minutes'] * 60);
+        $now = new DateTimeImmutable('now', automation_sla_storage_timezone());
+        $warningSeconds = max(0, (int) $sla['warning_before_minutes'] * 60);
+        $firstRemaining = automation_sla_remaining_seconds($pdo, $sla, (string) $sla['first_response_due_at'], $now);
 
-        if (!$sla['first_response_at'] && !$sla['warning_sent_at'] && $now >= $warningAt && $now < $firstDue) {
-            $pdo->prepare("UPDATE conversation_sla_status SET warning_sent_at = NOW(), state = 'warning', last_checked_at = NOW() WHERE conversation_id = :id")
-                ->execute([':id' => $conversationId]);
-            automation_add_alert($pdo, $context, null, 'warning', 'SLA در آستانه نقض', 'زمان پاسخ اولیه گفتگوی #' . $conversationId . ' رو به پایان است.', 'assigned_agent');
-            $result = automation_dispatch_event($pdo, 'sla_warning', $conversationId, ['sla_type' => 'first_response'], null, 'first-response');
-            $summary['sla_warnings']++;
-            $summary['executed'] += $result['executed'];
-            $summary['failed'] += $result['failed'];
-        }
-
-        if (!$sla['first_response_at'] && !$sla['first_response_breached_at'] && $now >= $firstDue) {
-            $pdo->prepare("UPDATE conversation_sla_status SET first_response_breached_at = NOW(), state = 'breached', last_checked_at = NOW() WHERE conversation_id = :id")
-                ->execute([':id' => $conversationId]);
-            $pdo->prepare("UPDATE conversations SET priority = :priority WHERE id = :id")
-                ->execute([':priority' => $sla['breach_priority'], ':id' => $conversationId]);
-
-            if (!empty($sla['breach_department_id'])) {
-                $department = routing_department($pdo, (int) $sla['breach_department_id'], (int) $context['tenant_id'], (int) $context['conversation']['site_id'], true);
-                if ($department) {
-                    $pdo->prepare("UPDATE conversations SET department_id = :department_id, assigned_agent_id = NULL, queue_status = 'none', queue_position = NULL, queued_at = NULL, assigned_at = NULL, assignment_method = NULL WHERE id = :id")
-                        ->execute([':department_id' => (int) $department['id'], ':id' => $conversationId]);
-                    routing_route_conversation($pdo, $conversationId, $department);
-                }
+        if (empty($sla['first_response_at']) && empty($sla['warning_sent_at']) && $firstRemaining > 0 && $firstRemaining <= $warningSeconds) {
+            $claimWarning = $pdo->prepare("UPDATE conversation_sla_status SET warning_sent_at = NOW(), state = CASE WHEN state = 'tracking' THEN 'warning' ELSE state END, last_checked_at = NOW() WHERE conversation_id = :id AND warning_sent_at IS NULL");
+            $claimWarning->execute([':id' => $conversationId]);
+            if ($claimWarning->rowCount() > 0) {
+                automation_add_alert($pdo, $context, null, 'warning', 'SLA در آستانه نقض', 'زمان پاسخ اولیه گفتگوی #' . $conversationId . ' رو به پایان است.', 'assigned_agent');
+                $result = automation_dispatch_event($pdo, 'sla_warning', $conversationId, ['sla_type' => 'first_response'], null, 'first-response');
+                $summary['sla_warnings']++;
+                $summary['executed'] += $result['executed'];
+                $summary['failed'] += $result['failed'];
             }
-
-            automation_add_alert($pdo, $context, null, 'critical', 'SLA پاسخ اولیه نقض شد', 'گفتگوی #' . $conversationId . ' در بازه تعیین‌شده پاسخ نگرفت.', 'admins');
-            $result = automation_dispatch_event($pdo, 'sla_breached', $conversationId, ['sla_type' => 'first_response'], null, 'first-response');
-            $summary['sla_breaches']++;
-            $summary['executed'] += $result['executed'];
-            $summary['failed'] += $result['failed'];
         }
 
-        if (!$sla['resolution_breached_at'] && $now >= $resolutionDue) {
-            $pdo->prepare("UPDATE conversation_sla_status SET resolution_breached_at = NOW(), state = 'breached', last_checked_at = NOW() WHERE conversation_id = :id")
-                ->execute([':id' => $conversationId]);
-            $pdo->prepare("UPDATE conversations SET priority = :priority WHERE id = :id")
-                ->execute([':priority' => $sla['breach_priority'], ':id' => $conversationId]);
-            automation_add_alert($pdo, $context, null, 'critical', 'SLA حل گفتگو نقض شد', 'گفتگوی #' . $conversationId . ' هنوز در بازه تعیین‌شده بسته نشده است.', 'admins');
-            $result = automation_dispatch_event($pdo, 'sla_breached', $conversationId, ['sla_type' => 'resolution'], null, 'resolution');
-            $summary['sla_breaches']++;
-            $summary['executed'] += $result['executed'];
-            $summary['failed'] += $result['failed'];
+        if (empty($sla['first_response_at']) && empty($sla['first_response_breached_at']) && $firstRemaining <= 0) {
+            $claimBreach = $pdo->prepare("UPDATE conversation_sla_status SET first_response_breached_at = NOW(), state = 'breached', last_checked_at = NOW() WHERE conversation_id = :id AND first_response_breached_at IS NULL");
+            $claimBreach->execute([':id' => $conversationId]);
+            if ($claimBreach->rowCount() > 0) {
+                $pdo->prepare("UPDATE conversations SET priority = :priority WHERE id = :id")
+                    ->execute([':priority' => $sla['breach_priority'], ':id' => $conversationId]);
+
+                if (!empty($sla['breach_department_id'])) {
+                    $department = routing_department($pdo, (int) $sla['breach_department_id'], (int) $context['tenant_id'], (int) $context['conversation']['site_id'], true);
+                    if ($department) {
+                        $pdo->prepare("UPDATE conversations SET department_id = :department_id, assigned_agent_id = NULL, queue_status = 'none', queue_position = NULL, queued_at = NULL, assigned_at = NULL, assignment_method = NULL WHERE id = :id")
+                            ->execute([':department_id' => (int) $department['id'], ':id' => $conversationId]);
+                        routing_route_conversation($pdo, $conversationId, $department);
+                    }
+                }
+
+                automation_add_alert($pdo, $context, null, 'critical', 'SLA پاسخ اولیه نقض شد', 'گفتگوی #' . $conversationId . ' در بازه تعیین‌شده پاسخ نگرفت.', 'admins');
+                $result = automation_dispatch_event($pdo, 'sla_breached', $conversationId, ['sla_type' => 'first_response'], null, 'first-response');
+                $summary['sla_breaches']++;
+                $summary['executed'] += $result['executed'];
+                $summary['failed'] += $result['failed'];
+            }
         }
+
+        $resolutionRemaining = !empty($sla['paused_at'])
+            ? max(0, (int) ($sla['resolution_remaining_seconds'] ?? 0))
+            : automation_sla_remaining_seconds($pdo, $sla, (string) $sla['resolution_due_at'], $now);
+
+        if (empty($sla['resolution_warning_sent_at']) && $resolutionRemaining > 0 && $resolutionRemaining <= $warningSeconds) {
+            $claimWarning = $pdo->prepare("UPDATE conversation_sla_status SET resolution_warning_sent_at = NOW(), state = CASE WHEN state IN ('tracking','met') THEN 'warning' ELSE state END, last_checked_at = NOW() WHERE conversation_id = :id AND resolution_warning_sent_at IS NULL");
+            $claimWarning->execute([':id' => $conversationId]);
+            if ($claimWarning->rowCount() > 0) {
+                automation_add_alert($pdo, $context, null, 'warning', 'SLA حل گفتگو در آستانه نقض', 'زمان حل گفتگوی #' . $conversationId . ' رو به پایان است.', 'assigned_agent');
+                $result = automation_dispatch_event($pdo, 'sla_warning', $conversationId, ['sla_type' => 'resolution'], null, 'resolution');
+                $summary['sla_warnings']++;
+                $summary['executed'] += $result['executed'];
+                $summary['failed'] += $result['failed'];
+            }
+        }
+
+        if (empty($sla['resolution_breached_at']) && $resolutionRemaining <= 0) {
+            $claimBreach = $pdo->prepare("UPDATE conversation_sla_status SET resolution_breached_at = NOW(), state = 'breached', last_checked_at = NOW() WHERE conversation_id = :id AND resolution_breached_at IS NULL");
+            $claimBreach->execute([':id' => $conversationId]);
+            if ($claimBreach->rowCount() > 0) {
+                $pdo->prepare("UPDATE conversations SET priority = :priority WHERE id = :id")
+                    ->execute([':priority' => $sla['breach_priority'], ':id' => $conversationId]);
+                automation_add_alert($pdo, $context, null, 'critical', 'SLA حل گفتگو نقض شد', 'گفتگوی #' . $conversationId . ' هنوز در بازه تعیین‌شده بسته نشده است.', 'admins');
+                $result = automation_dispatch_event($pdo, 'sla_breached', $conversationId, ['sla_type' => 'resolution'], null, 'resolution');
+                $summary['sla_breaches']++;
+                $summary['executed'] += $result['executed'];
+                $summary['failed'] += $result['failed'];
+            }
+        }
+
+        $pdo->prepare("UPDATE conversation_sla_status SET last_checked_at = NOW() WHERE conversation_id = :id")
+            ->execute([':id' => $conversationId]);
     }
 
     $ruleTenantSql = $tenantId !== null ? ' AND tenant_id = :rule_tenant_id ' : '';

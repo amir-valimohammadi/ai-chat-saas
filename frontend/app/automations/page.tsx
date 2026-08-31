@@ -12,6 +12,7 @@ type Department = { id: number; site_id: number; name: string; color: string };
 type Agent = { id: number; name: string; email: string; role: string };
 type Conversation = { id: number; status: string; priority: string; visitor_name: string | null; site_name: string };
 type Condition = { field: string; operator: string; value: string };
+type SlaPauseStatus = "waiting_customer";
 type AutomationAction = {
     type: string;
     value?: string;
@@ -31,6 +32,7 @@ type SlaPolicy = {
     id: number; site_id: number | null; site_name: string | null; name: string;
     first_response_minutes: number; resolution_minutes: number; warning_before_minutes: number;
     breach_priority: string; breach_department_id: number | null; breach_department_name: string | null;
+    use_business_hours: boolean; pause_statuses: SlaPauseStatus[];
     is_default: boolean; is_active: boolean; tracked_count: number; warning_count: number; breached_count: number;
 };
 type ExecutionLog = {
@@ -70,7 +72,8 @@ const emptyRule = {
 const emptySla = {
     policy_id: 0, site_id: "", name: "پاسخ‌گویی استاندارد", first_response_minutes: 15,
     resolution_minutes: 1440, warning_before_minutes: 5, breach_priority: "urgent",
-    breach_department_id: "", is_default: true, is_active: true,
+    breach_department_id: "", use_business_hours: true,
+    pause_statuses: ["waiting_customer"] as SlaPauseStatus[], is_default: true, is_active: true,
 };
 
 const statusLabels: Dictionary = {
@@ -80,6 +83,9 @@ const statusLabels: Dictionary = {
 const priorityLabels: Dictionary = { low: "کم", normal: "عادی", high: "زیاد", urgent: "فوری" };
 const queueLabels: Dictionary = { none: "بدون صف", waiting: "در صف", assigned: "تخصیص‌یافته" };
 const slaLabels: Dictionary = { tracking: "در حال پایش", warning: "در آستانه نقض", breached: "نقض‌شده", met: "رعایت‌شده", resolved: "حل‌شده" };
+const slaPauseStatusOptions: Array<{ value: SlaPauseStatus; label: string; description: string }> = [
+    { value: "waiting_customer", label: "منتظر مشتری", description: "تا زمان پاسخ دوباره مشتری، ساعت SLA متوقف می‌ماند." },
+];
 
 export default function AutomationsPage() {
     const router = useRouter();
@@ -241,16 +247,20 @@ export default function AutomationsPage() {
     }
 
     function openNewSla() {
+        setError("");
         setSlaForm({ ...emptySla });
         setSlaEditorOpen(true);
     }
 
     function editSla(policy: SlaPolicy) {
+        setError("");
         setSlaForm({
             policy_id: policy.id, site_id: policy.site_id ? String(policy.site_id) : "", name: policy.name,
             first_response_minutes: policy.first_response_minutes, resolution_minutes: policy.resolution_minutes,
             warning_before_minutes: policy.warning_before_minutes, breach_priority: policy.breach_priority,
             breach_department_id: policy.breach_department_id ? String(policy.breach_department_id) : "",
+            use_business_hours: policy.use_business_hours ?? false,
+            pause_statuses: Array.isArray(policy.pause_statuses) ? policy.pause_statuses : [],
             is_default: policy.is_default, is_active: policy.is_active,
         });
         setSlaEditorOpen(true);
@@ -258,6 +268,14 @@ export default function AutomationsPage() {
 
     async function saveSla(event: FormEvent) {
         event.preventDefault();
+        if (slaForm.resolution_minutes < slaForm.first_response_minutes) {
+            setError("زمان حل گفتگو نمی‌تواند کمتر از زمان پاسخ اولیه باشد.");
+            return;
+        }
+        if (slaForm.warning_before_minutes >= slaForm.first_response_minutes) {
+            setError("زمان هشدار باید کمتر از حد پاسخ اولیه باشد.");
+            return;
+        }
         try {
             setBusy(true); setError("");
             await apiRequest("/customer/automation-sla-save.php", {
@@ -273,8 +291,8 @@ export default function AutomationsPage() {
         if (!window.confirm(`سیاست «${policy.name}» حذف شود؟`)) return;
         try {
             setBusy(true); setError("");
-            await apiRequest("/customer/automation-sla-delete.php", { method: "POST", body: JSON.stringify({ policy_id: policy.id }) });
-            await loadData(true); notify("سیاست SLA حذف شد.");
+            const result = await apiRequest("/customer/automation-sla-delete.php", { method: "POST", body: JSON.stringify({ policy_id: policy.id }) });
+            await loadData(true); notify(result.message || "سیاست SLA حذف شد.");
         } catch (err) { setError(err instanceof Error ? err.message : "حذف سیاست ناموفق بود."); }
         finally { setBusy(false); }
     }
@@ -404,6 +422,11 @@ export default function AutomationsPage() {
                                 <div className="automation-sla-grid">{data.sla_policies.map((policy) => <article className={`automation-sla-card ${policy.is_active ? "" : "is-disabled"}`} key={policy.id}>
                                     <header><div><span className="automation-sla-icon">◎</span><div><h3>{policy.name}</h3><p>{policy.site_name || "سیاست سراسری"}</p></div></div><div>{policy.is_default && <b>پیش‌فرض</b>}{!policy.is_active && <b className="disabled">غیرفعال</b>}</div></header>
                                     <div className="automation-sla-times"><div><strong>{formatMinutes(policy.first_response_minutes)}</strong><span>پاسخ اولیه</span></div><i /><div><strong>{formatMinutes(policy.resolution_minutes)}</strong><span>حل گفتگو</span></div></div>
+                                    <div className="automation-sla-policy-meta">
+                                        <span className={policy.use_business_hours ? "is-smart" : ""}>{policy.use_business_hours ? "◷ تقویم کاری سایت" : "۲۴/۷"}</span>
+                                        {policy.use_business_hours && <span>تعطیلات لحاظ می‌شود</span>}
+                                        {policy.pause_statuses.includes("waiting_customer") && <span>توقف در انتظار مشتری</span>}
+                                    </div>
                                     <div className="automation-sla-health"><span><i className="tracking" />{policy.tracked_count} در حال پایش</span><span><i className="warning" />{policy.warning_count} نزدیک سررسید</span><span><i className="breached" />{policy.breached_count} نقض‌شده</span></div>
                                     <p className="automation-sla-escalation">هشدار {policy.warning_before_minutes} دقیقه قبل · تشدید با اولویت {priorityLabels[policy.breach_priority]}{policy.breach_department_name ? ` · ${policy.breach_department_name}` : ""}</p>
                                     <footer><button className="btn secondary" onClick={() => editSla(policy)}>ویرایش</button><button className="btn danger" onClick={() => deleteSla(policy)}>حذف</button></footer>
@@ -456,7 +479,7 @@ export default function AutomationsPage() {
                         </section>
 
                         <section className="automation-help-section automation-help-sla">
-                            <div><span>◎</span><div><h3>SLA یعنی چه؟</h3><p>SLA مدت زمانی است که تیم برای پاسخ اولیه یا حل گفتگو در نظر می‌گیرد. سیستم قبل از پایان زمان هشدار می‌دهد و در صورت عبور از آن می‌تواند اولویت را افزایش دهد.</p></div></div>
+                            <div><span>◎</span><div><h3>SLA یعنی چه؟</h3><p>SLA مدت زمانی است که تیم برای پاسخ اولیه یا حل گفتگو در نظر می‌گیرد. با «تقویم کاری» فقط ساعت‌های باز سایت شمرده می‌شوند، تعطیلات نادیده گرفته می‌شوند و در وضعیت «منتظر مشتری» زمان حل گفتگو متوقف می‌ماند. مثال: اگر ۳۰ دقیقه از SLA مانده باشد و گفتگو منتظر پاسخ مشتری شود، پس از پاسخ او همان ۳۰ دقیقه ادامه پیدا می‌کند.</p></div></div>
                         </section>
                     </div>
                     <footer><button className="btn primary" onClick={() => setHelpOpen(false)}>متوجه شدم</button></footer>
@@ -481,9 +504,83 @@ export default function AutomationsPage() {
                 </section>
             </div>}
 
-            {slaEditorOpen && data && <div className="automation-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setSlaEditorOpen(false); }}><section className="automation-editor automation-sla-editor" role="dialog" aria-modal="true"><header><div><span>SLA Policy</span><h2>{slaForm.policy_id ? "ویرایش سیاست SLA" : "سیاست SLA جدید"}</h2><p>تعهد زمانی تیم و رفتار سیستم هنگام نزدیک‌شدن یا عبور از سررسید.</p></div><button className="automation-close" onClick={() => setSlaEditorOpen(false)} aria-label="بستن">×</button></header><form onSubmit={saveSla}><div className="automation-editor-scroll"><div className="automation-form-grid"><label className="automation-span-2"><span>نام سیاست</span><input className="input" required value={slaForm.name} onChange={(event) => setSlaForm({ ...slaForm, name: event.target.value })} /></label><label><span>محدوده سایت</span><select className="input" value={slaForm.site_id} onChange={(event) => setSlaForm({ ...slaForm, site_id: event.target.value, breach_department_id: "" })}><option value="">همه سایت‌ها</option>{data.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label><label><span>دپارتمان تشدید</span><select className="input" value={slaForm.breach_department_id} onChange={(event) => setSlaForm({ ...slaForm, breach_department_id: event.target.value })}><option value="">بدون انتقال</option>{data.departments.filter((department) => !slaForm.site_id || department.site_id === Number(slaForm.site_id)).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label><span>حد پاسخ اولیه (دقیقه)</span><input className="input" type="number" min={1} required value={slaForm.first_response_minutes} onChange={(event) => setSlaForm({ ...slaForm, first_response_minutes: Number(event.target.value) })} /></label><label><span>حد حل گفتگو (دقیقه)</span><input className="input" type="number" min={1} required value={slaForm.resolution_minutes} onChange={(event) => setSlaForm({ ...slaForm, resolution_minutes: Number(event.target.value) })} /></label><label><span>هشدار چند دقیقه قبل</span><input className="input" type="number" min={0} value={slaForm.warning_before_minutes} onChange={(event) => setSlaForm({ ...slaForm, warning_before_minutes: Number(event.target.value) })} /></label><label><span>اولویت پس از نقض</span><select className="input" value={slaForm.breach_priority} onChange={(event) => setSlaForm({ ...slaForm, breach_priority: event.target.value })}>{Object.entries(priorityLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div><div className="automation-check-row"><label><input type="checkbox" checked={slaForm.is_default} onChange={(event) => setSlaForm({ ...slaForm, is_default: event.target.checked })} /><span><strong>سیاست پیش‌فرض</strong><small>برای گفتگوهای جدید این محدوده</small></span></label><label><input type="checkbox" checked={slaForm.is_active} onChange={(event) => setSlaForm({ ...slaForm, is_active: event.target.checked })} /><span><strong>فعال</strong><small>پایش گفتگوها انجام شود</small></span></label></div></div><footer><button className="btn secondary" type="button" onClick={() => setSlaEditorOpen(false)}>انصراف</button><button className="btn primary" disabled={busy}>{busy ? "در حال ذخیره..." : "ذخیره سیاست"}</button></footer></form></section></div>}
+            {slaEditorOpen && data && <SmartSlaEditor data={data} form={slaForm} setForm={setSlaForm} busy={busy} error={error} onClose={() => { setSlaEditorOpen(false); setError(""); }} onSubmit={saveSla} />}
         </AppShell>
     );
+}
+
+function SmartSlaEditor({
+    data,
+    form,
+    setForm,
+    busy,
+    error,
+    onClose,
+    onSubmit,
+}: {
+    data: OverviewData;
+    form: typeof emptySla;
+    setForm: React.Dispatch<React.SetStateAction<typeof emptySla>>;
+    busy: boolean;
+    error: string;
+    onClose: () => void;
+    onSubmit: (event: FormEvent) => void;
+}) {
+    const togglePauseStatus = (status: SlaPauseStatus, checked: boolean) => {
+        setForm((current) => ({
+            ...current,
+            pause_statuses: checked
+                ? Array.from(new Set([...current.pause_statuses, status]))
+                : current.pause_statuses.filter((item) => item !== status),
+        }));
+    };
+
+    return <div className="automation-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+        <section className="automation-editor automation-sla-editor" role="dialog" aria-modal="true" aria-labelledby="automation-sla-title">
+            <header>
+                <div><span>SLA Policy</span><h2 id="automation-sla-title">{form.policy_id ? "ویرایش سیاست SLA" : "سیاست SLA جدید"}</h2><p>تعهد زمانی تیم، تقویم محاسبه و رفتار ساعت SLA را مشخص کنید.</p></div>
+                <button className="automation-close" onClick={onClose} aria-label="بستن">×</button>
+            </header>
+            <form onSubmit={onSubmit}>
+                <div className="automation-editor-scroll">
+                    {error && <div className="error automation-editor-error" role="alert">{error}</div>}
+                    <div className="automation-form-grid">
+                        <label className="automation-span-2"><span>نام سیاست</span><input className="input" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+                        <label><span>محدوده سایت</span><select className="input" value={form.site_id} onChange={(event) => setForm({ ...form, site_id: event.target.value, breach_department_id: "" })}><option value="">همه سایت‌ها</option>{data.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+                        <label><span>دپارتمان تشدید</span><select className="input" value={form.breach_department_id} onChange={(event) => setForm({ ...form, breach_department_id: event.target.value })}><option value="">بدون انتقال</option>{data.departments.filter((department) => !form.site_id || department.site_id === Number(form.site_id)).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
+                        <label><span>حد پاسخ اولیه (دقیقه)</span><input className="input" type="number" min={1} required value={form.first_response_minutes} onChange={(event) => setForm({ ...form, first_response_minutes: Number(event.target.value) })} /></label>
+                        <label><span>حد حل گفتگو (دقیقه)</span><input className="input" type="number" min={form.first_response_minutes} required value={form.resolution_minutes} onChange={(event) => setForm({ ...form, resolution_minutes: Number(event.target.value) })} /></label>
+                        <label><span>هشدار چند دقیقه قبل</span><input className="input" type="number" min={0} max={Math.max(0, form.first_response_minutes - 1)} value={form.warning_before_minutes} onChange={(event) => setForm({ ...form, warning_before_minutes: Number(event.target.value) })} /></label>
+                        <label><span>اولویت پس از نقض</span><select className="input" value={form.breach_priority} onChange={(event) => setForm({ ...form, breach_priority: event.target.value })}>{Object.entries(priorityLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                    </div>
+
+                    <section className="automation-sla-calculation">
+                        <div className="automation-sla-calculation-head"><div><span>محاسبه هوشمند زمان</span><h3>ساعت SLA چه زمانی جلو برود؟</h3></div><Link href="/hosted-support">تنظیم ساعت کاری و تعطیلات ←</Link></div>
+                        <label className={`automation-sla-option ${form.use_business_hours ? "is-selected" : ""}`}>
+                            <input type="checkbox" checked={form.use_business_hours} onChange={(event) => setForm({ ...form, use_business_hours: event.target.checked })} />
+                            <span className="automation-sla-option-icon">◷</span>
+                            <span><strong>فقط در ساعت کاری سایت</strong><small>شب‌ها، روزهای بسته و تعطیلات ثبت‌شده از زمان SLA کم نمی‌شوند.</small></span>
+                            <b>{form.use_business_hours ? "فعال" : "۲۴/۷"}</b>
+                        </label>
+                        <p className="automation-schedule-source">{form.site_id ? "تقویم همان سایت برای گفتگوهای جدید استفاده می‌شود." : "در سیاست سراسری، هر گفتگو از تقویم سایت خودش استفاده می‌کند."}</p>
+                        <div className="automation-sla-pause-statuses">
+                            <div><strong>توقف زمان حل گفتگو</strong><small>پاسخ اولیه متوقف نمی‌شود؛ فقط زمان حل در وضعیت انتخاب‌شده ثابت می‌ماند.</small></div>
+                            {slaPauseStatusOptions.map((option) => <label className={form.pause_statuses.includes(option.value) ? "is-selected" : ""} key={option.value}>
+                                <input type="checkbox" checked={form.pause_statuses.includes(option.value)} onChange={(event) => togglePauseStatus(option.value, event.target.checked)} />
+                                <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                            </label>)}
+                        </div>
+                    </section>
+
+                    <div className="automation-check-row">
+                        <label><input type="checkbox" checked={form.is_default} onChange={(event) => setForm({ ...form, is_default: event.target.checked })} /><span><strong>سیاست پیش‌فرض</strong><small>برای گفتگوهای جدید این محدوده</small></span></label>
+                        <label><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /><span><strong>فعال</strong><small>پایش گفتگوها انجام شود</small></span></label>
+                    </div>
+                </div>
+                <footer><button className="btn secondary" type="button" onClick={onClose}>انصراف</button><button className="btn primary" disabled={busy}>{busy ? "در حال ذخیره..." : "ذخیره سیاست"}</button></footer>
+            </form>
+        </section>
+    </div>;
 }
 
 function TabButton({ value, current, onClick, label, count }: { value: Tab; current: Tab; onClick: (value: Tab) => void; label: string; count: number }) {

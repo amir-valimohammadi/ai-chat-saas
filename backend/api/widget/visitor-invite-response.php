@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 
@@ -33,12 +34,30 @@ try {
     }
 
     $pdo->beginTransaction();
+    $conversationStatusStmt = $pdo->prepare("SELECT status FROM conversations WHERE id = :id LIMIT 1 FOR UPDATE");
+    $conversationStatusStmt->execute([':id' => (int) $invite['conversation_id']]);
+    $previousStatus = (string) ($conversationStatusStmt->fetchColumn() ?: '');
+    if ($previousStatus === '') throw new RuntimeException('Invite conversation not found');
+
     if ($action === 'accept') {
         $pdo->prepare("UPDATE visitor_operator_invites SET status = 'accepted', responded_at = NOW() WHERE id = :id")
             ->execute([':id' => $inviteId]);
-        $pdo->prepare("UPDATE conversations SET status = CASE WHEN status IN ('new','pending') THEN 'in_progress' ELSE status END WHERE id = :id")
-            ->execute([':id' => (int) $invite['conversation_id']]);
+        $statusChanged = in_array($previousStatus, ['new', 'pending'], true);
+        if ($statusChanged) {
+            $pdo->prepare("UPDATE conversations SET status = 'in_progress' WHERE id = :id AND status = :previous_status")
+                ->execute([':id' => (int) $invite['conversation_id'], ':previous_status' => $previousStatus]);
+        }
         $pdo->commit();
+        if ($statusChanged) {
+            automation_dispatch_event_safe(
+                $pdo,
+                'status_changed',
+                (int) $invite['conversation_id'],
+                ['previous_status' => $previousStatus, 'new_status' => 'in_progress'],
+                null,
+                'invite:' . $inviteId . ':accepted'
+            );
+        }
         json_response([
             'success' => true,
             'action' => 'accepted',
@@ -55,11 +74,23 @@ try {
         ->execute([':id' => $inviteId]);
     $visitorMessageStmt = $pdo->prepare("SELECT COUNT(*) FROM messages WHERE conversation_id = :conversation_id AND sender_type = 'visitor' AND deleted_at IS NULL");
     $visitorMessageStmt->execute([':conversation_id' => (int) $invite['conversation_id']]);
+    $closedConversation = false;
     if ((int) $visitorMessageStmt->fetchColumn() === 0) {
-        $pdo->prepare("UPDATE conversations SET status = 'closed', closed_at = NOW() WHERE id = :id AND status <> 'closed'")
-            ->execute([':id' => (int) $invite['conversation_id']]);
+        $closeStmt = $pdo->prepare("UPDATE conversations SET status = 'closed', closed_at = NOW() WHERE id = :id AND status <> 'closed'");
+        $closeStmt->execute([':id' => (int) $invite['conversation_id']]);
+        $closedConversation = $closeStmt->rowCount() > 0;
     }
     $pdo->commit();
+    if ($closedConversation) {
+        automation_dispatch_event_safe(
+            $pdo,
+            'status_changed',
+            (int) $invite['conversation_id'],
+            ['previous_status' => $previousStatus, 'new_status' => 'closed'],
+            null,
+            'invite:' . $inviteId . ':dismissed'
+        );
+    }
     json_response(['success' => true, 'action' => 'dismissed']);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();

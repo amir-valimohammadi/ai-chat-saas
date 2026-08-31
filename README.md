@@ -39,7 +39,7 @@
 
 4. دیتابیس `ai_chat_saas` را با Collation مبتنی بر `utf8mb4` ایجاد کنید.
 
-5. برای نصب تازه فقط `backend/database/schema.sql` را import کنید. این فایل شامل ساختار نهایی همه migrationها تا `2026_08_30_automation_guardrails.sql` است و هیچ داده کاربر، نشست، پیام یا Secret ندارد. migrationهای قدیمی را بعد از این schema دوباره اجرا نکنید.
+5. برای نصب تازه فقط `backend/database/schema.sql` را import کنید. این فایل شامل ساختار نهایی همه migrationها تا `2026_08_30_smart_sla.sql` است و هیچ داده کاربر، نشست، پیام یا Secret ندارد. migrationهای قدیمی را بعد از این schema دوباره اجرا نکنید.
 
    ```powershell
    Get-Content backend\database\schema.sql -Raw |
@@ -108,12 +108,20 @@ C:\xampp\php\php-win.exe C:\xampp\htdocs\ai-chat-saas\backend\cron\automation-wo
 ```text
 backend/database/migrations/2026_08_30_automation_center.sql
 backend/database/migrations/2026_08_30_automation_guardrails.sql
+backend/database/migrations/2026_08_30_smart_sla.sql
 ```
 
-برای افزودن یا به‌روزرسانی سه قانون پیشنهادی و SLA استاندارد یک حساب مشتری، اسکریپت زیر idempotent است و رکورد تکراری نمی‌سازد. SLA پیش‌فرض، پاسخ اولیه ۱۵ دقیقه، حل گفتگو ۲۴ ساعت و هشدار ۵ دقیقه پیش از سررسید دارد و از زمان ایجاد به بعد اعمال می‌شود:
+برای افزودن یا به‌روزرسانی سه قانون پیشنهادی و SLA استاندارد یک حساب مشتری، اسکریپت زیر idempotent است و رکورد تکراری نمی‌سازد. SLA پیش‌فرض، پاسخ اولیه ۱۵ دقیقه، حل گفتگو ۲۴ ساعت و هشدار ۵ دقیقه پیش از سررسید دارد، فقط ساعت کاری و تعطیلات تقویم هر سایت را محاسبه می‌کند و زمان حل را در وضعیت «منتظر مشتری» متوقف نگه می‌دارد. این سیاست از زمان ایجاد به بعد روی گفتگوهای جدید اعمال می‌شود:
 
 ```powershell
 php backend\cli\seed-automation-defaults.php TENANT_ID CUSTOMER_ADMIN_USER_ID
+```
+
+برای فعال‌کردن SLA روی گفتگوهای قدیمیِ باز، ابتدا پیش‌نمایش بدون تغییر دیتابیس را اجرا کنید و سپس در صورت تأیید `--apply` را اضافه کنید. مهلت این گفتگوها از زمان اجرای فرمان آغاز می‌شود، نه تاریخ قدیمی ایجاد گفتگو؛ گفتگوهای بسته و ردیف‌های دارای SLA نیز دست‌نخورده می‌مانند:
+
+```powershell
+php backend\cli\backfill-automation-sla.php TENANT_ID
+php backend\cli\backfill-automation-sla.php TENANT_ID --apply
 ```
 
 اعلان‌های تولیدشده توسط قوانین و SLA از طریق SSE در تمام صفحات پنل مشتری و پشتیبان نمایش داده می‌شوند. در صورت قطع Stream، رابط به دریافت دوره‌ای خودکار برمی‌گردد.

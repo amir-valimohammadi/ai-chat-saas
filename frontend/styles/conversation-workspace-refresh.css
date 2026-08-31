@@ -824,3 +824,35 @@
 .conversation-automation-history b { color: #27364d; font-size: 9px; }
 .conversation-automation-history small { color: #8793a4; font-size: 8px; }
 .conversation-automation-history em { color: #c72c49; font-size: 8px; font-style: normal; line-height: 1.6; }
+
+/* شمارش‌گر زنده SLA؛ زمان آن از snapshot سرور تغذیه می‌شود و بیرون شیفت ثابت می‌ماند. */
+.conversation-context-strip { grid-template-columns: repeat(4,minmax(0,1fr)) minmax(150px,.9fr); }
+.conversation-sla-clock-pill { min-width: 150px; min-height: 34px; display: grid; grid-template-columns: 1fr auto; align-content: center; gap: 2px 8px; padding: 5px 10px; border: 1px solid #cdd8f7; border-radius: 11px; background: linear-gradient(135deg,#f5f7ff,#eef5ff); color: #3546ad; }
+.conversation-sla-clock-pill>span { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 900; }
+.conversation-sla-clock-pill>span i { width: 6px; height: 6px; border-radius: 50%; background: #5366df; box-shadow: 0 0 0 3px rgba(83,102,223,.12); }
+.conversation-sla-clock-pill>strong { direction: ltr; text-align: left; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.conversation-sla-clock-pill>small { grid-column: 1/-1; color: #7a86a4; font-size: 10px; }
+.conversation-sla-clock-pill.is-paused { border-color: #e3d6a9; background: #fff9e9; color: #8a6412; }
+.conversation-sla-clock-pill.is-paused>span i { background: #d39a21; box-shadow: 0 0 0 3px rgba(211,154,33,.13); }
+.conversation-sla-clock-pill.sla-warning { border-color: #f0d39a; background: #fff8e8; color: #9b650d; }
+.conversation-sla-clock-pill.sla-warning>span i { background: #e79a19; box-shadow: 0 0 0 3px rgba(231,154,25,.14); }
+.conversation-sla-clock-pill.is-overdue,.conversation-sla-clock-pill.sla-breached { border-color: #f3c2cc; background: #fff1f4; color: #bd2946; }
+.conversation-sla-clock-pill.is-overdue>span i,.conversation-sla-clock-pill.sla-breached>span i { background: #db3151; box-shadow: 0 0 0 3px rgba(219,49,81,.12); }
+.conversation-sla-clock-pill.is-completed { border-color: #dce3eb; background: #f5f7fa; color: #64748b; }
+.conversation-sla-clock-pill.is-completed>span i { background: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,.14); }
+.conversation-sla-summary>.conversation-sla-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.conversation-sla-summary-head>strong { font-size: 10px; color: #423aa6; }
+.conversation-sla-summary-head>span { display: inline-flex; padding: 4px 7px; border-radius: 999px; background: #fff; color: #5a53c4; font-size: 7px; font-weight: 900; }
+.conversation-sla-summary>.conversation-sla-live { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 9px; border: 1px solid #d9dcf8; border-radius: 11px; background: rgba(255,255,255,.76); }
+.conversation-sla-live>div { display: grid; gap: 3px; }
+.conversation-sla-live>div>small { color: #7b86a0; font-size: 10px; }
+.conversation-sla-live>div>strong { direction: ltr; color: #3f46a8; font-size: 12px; font-variant-numeric: tabular-nums; }
+.conversation-sla-live>span { max-width: 180px; color: #64718a; font-size: 10px; line-height: 1.7; text-align: start; }
+.conversation-sla-live.is-paused { border-color: #e9d9a8; background: #fffaf0; }
+.conversation-sla-live.is-warning { border-color: #efd397; background: #fff9ec; }
+.conversation-sla-live.is-overdue { border-color: #f1c4cd; background: #fff3f5; }
+.conversation-sla-live.is-overdue>div>strong { color: #c52b49; }
+.conversation-sla-live.is-completed { border-color: #dfe5ec; background: #f7f9fb; }
+.conversation-sla-summary>p { margin: 0; color: #6f7b92; font-size: 7.5px; line-height: 1.7; }
+@media(max-width:1220px){.conversation-context-strip{grid-template-columns:repeat(5,minmax(125px,1fr))}.conversation-sla-clock-pill{min-width:150px}}
+@media(max-width:760px){.conversation-sla-clock-pill{min-width:155px;flex:0 0 auto}.conversation-sla-live{align-items:flex-start!important;flex-direction:column}.conversation-sla-live>span{max-width:none;text-align:right}}

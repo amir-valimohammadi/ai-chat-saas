@@ -45,6 +45,7 @@ $session = null;
 $ruleId = 0;
 $policyId = 0;
 $alertId = 0;
+$fixtureConversationId = 0;
 $apiBase = rtrim((string) app_config('api_url', 'http://localhost/ai-chat-saas/backend/api'), '/');
 
 $request = static function (string $path, string $token, ?array $payload = null) use ($apiBase): array {
@@ -149,14 +150,15 @@ try {
     $request('/customer/automation-rule-toggle.php', $token, ['rule_id' => $ruleId, 'is_active' => true]);
 
     $conversationStmt = $pdo->prepare("
-        SELECT conversations.id
+        SELECT conversations.id, conversations.site_id, conversations.visitor_id
         FROM conversations
         INNER JOIN sites ON sites.id = conversations.site_id
         WHERE sites.tenant_id = :tenant_id
         ORDER BY conversations.id DESC LIMIT 1
     ");
     $conversationStmt->execute([':tenant_id' => (int) $user['tenant_id']]);
-    $conversationId = (int) ($conversationStmt->fetchColumn() ?: 0);
+    $conversation = $conversationStmt->fetch();
+    $conversationId = (int) ($conversation['id'] ?? 0);
     if ($conversationId > 0) {
         $request('/customer/automation-rule-test.php', $token, [
             'conversation_id' => $conversationId,
@@ -171,13 +173,78 @@ try {
         'resolution_minutes' => 1440,
         'warning_before_minutes' => 5,
         'breach_priority' => 'urgent',
+        'use_business_hours' => true,
+        'pause_statuses' => ['waiting_customer'],
         'is_default' => false,
         'is_active' => false,
     ]);
     $policyId = (int) ($policy['policy_id'] ?? 0);
     if ($policyId <= 0) throw new RuntimeException('SLA API did not return policy_id.');
+    if (empty($policy['policy']['use_business_hours']) || ($policy['policy']['pause_statuses'] ?? []) !== ['waiting_customer']) {
+        throw new RuntimeException('SLA API did not preserve smart scheduling settings.');
+    }
 
-    $request('/customer/automation-sla-delete.php', $token, ['policy_id' => $policyId]);
+    $legacyCompatibleUpdate = $request('/customer/automation-sla-save.php', $token, [
+        'policy_id' => $policyId,
+        'name' => $marker,
+        'first_response_minutes' => 20,
+        'resolution_minutes' => 1440,
+        'warning_before_minutes' => 5,
+        'breach_priority' => 'urgent',
+        'is_default' => false,
+        'is_active' => false,
+    ]);
+    if (empty($legacyCompatibleUpdate['policy']['use_business_hours']) || ($legacyCompatibleUpdate['policy']['pause_statuses'] ?? []) !== ['waiting_customer']) {
+        throw new RuntimeException('Legacy SLA update unexpectedly cleared smart scheduling settings.');
+    }
+
+    $smartOverview = $request('/customer/automation-overview.php', $token);
+    $savedPolicy = null;
+    foreach (($smartOverview['sla_policies'] ?? []) as $overviewPolicy) {
+        if ((int) ($overviewPolicy['id'] ?? 0) === $policyId) {
+            $savedPolicy = $overviewPolicy;
+            break;
+        }
+    }
+    if (!$savedPolicy || empty($savedPolicy['use_business_hours']) || ($savedPolicy['pause_statuses'] ?? []) !== ['waiting_customer']) {
+        throw new RuntimeException('Automation overview did not return normalized smart SLA settings.');
+    }
+
+    if ($conversationId > 0) {
+        $fixtureStmt = $pdo->prepare("
+            INSERT INTO conversations (site_id, visitor_id, status, priority, last_message_at, created_at)
+            VALUES (:site_id, :visitor_id, 'open', 'normal', NOW(), NOW())
+        ");
+        $fixtureStmt->execute([
+            ':site_id' => (int) $conversation['site_id'],
+            ':visitor_id' => (int) $conversation['visitor_id'],
+        ]);
+        $fixtureConversationId = (int) $pdo->lastInsertId();
+        $pdo->prepare("
+            INSERT INTO conversation_sla_status (
+                conversation_id, policy_id, uses_business_hours, sla_timezone, pause_statuses_json,
+                state, first_response_due_at, resolution_due_at
+            ) VALUES (
+                :conversation_id, :policy_id, 1, 'Asia/Tehran', :pause_statuses_json,
+                'tracking', DATE_ADD(NOW(), INTERVAL 20 MINUTE), DATE_ADD(NOW(), INTERVAL 2 HOUR)
+            )
+        ")->execute([
+            ':conversation_id' => $fixtureConversationId,
+            ':policy_id' => $policyId,
+            ':pause_statuses_json' => json_encode(['waiting_customer']),
+        ]);
+        $historyDelete = $request('/customer/automation-sla-delete.php', $token, ['policy_id' => $policyId]);
+        $policyStateStmt = $pdo->prepare("SELECT is_active FROM automation_sla_policies WHERE id = :id AND tenant_id = :tenant_id");
+        $policyStateStmt->execute([':id' => $policyId, ':tenant_id' => (int) $user['tenant_id']]);
+        if (empty($historyDelete['deactivated']) || $policyStateStmt->fetchColumn() === false) {
+            throw new RuntimeException('SLA delete did not preserve a policy that has tracking history.');
+        }
+        $pdo->prepare("DELETE FROM conversations WHERE id = :id")->execute([':id' => $fixtureConversationId]);
+        $fixtureConversationId = 0;
+    }
+
+    $finalDelete = $request('/customer/automation-sla-delete.php', $token, ['policy_id' => $policyId]);
+    if (!empty($finalDelete['deactivated'])) throw new RuntimeException('History-free SLA policy was not deleted.');
     $policyId = 0;
     $request('/customer/automation-rule-delete.php', $token, ['rule_id' => $ruleId]);
     $ruleId = 0;
@@ -188,6 +255,8 @@ try {
         'rule_crud' => 'passed',
         'rule_preview' => $conversationId > 0 ? 'passed' : 'skipped',
         'sla_crud' => 'passed',
+        'sla_smart_settings' => 'passed',
+        'sla_history_preservation' => $conversationId > 0 ? 'passed' : 'skipped',
         'alert_list' => 'passed',
         'alert_stream' => 'passed',
         'alert_read' => 'passed',
@@ -198,6 +267,9 @@ try {
     fwrite(STDERR, 'Automation API smoke test failed: ' . $e->getMessage() . PHP_EOL);
     $exitCode = 1;
 } finally {
+    if ($fixtureConversationId > 0) {
+        $pdo->prepare("DELETE FROM conversations WHERE id = :id")->execute([':id' => $fixtureConversationId]);
+    }
     if ($alertId > 0) {
         $pdo->prepare("DELETE FROM automation_alerts WHERE id = :id AND tenant_id = :tenant_id")
             ->execute([':id' => $alertId, ':tenant_id' => (int) $user['tenant_id']]);

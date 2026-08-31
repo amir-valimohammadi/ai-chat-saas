@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
 require_once __DIR__ . '/../../includes/message-helpers.php';
 require_once __DIR__ . '/../../includes/hosted-support.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response([
@@ -193,12 +194,7 @@ try {
 
     $updateStmt = $pdo->prepare("
         UPDATE conversations
-        SET
-            status = CASE 
-                WHEN status = 'new' THEN 'open'
-                ELSE status
-            END,
-            last_message_at = NOW()
+        SET last_message_at = NOW()
         WHERE id = :id
     ");
 
@@ -207,6 +203,36 @@ try {
     ]);
 
     $pdo->commit();
+
+    // Keep the pre-reply status visible to visitor-message rules before applying
+    // the default fallback that reopens an unanswered conversation.
+    automation_dispatch_event_safe(
+        $pdo,
+        'visitor_message',
+        $conversationId,
+        ['message_id' => $messageId, 'message_text' => $messageContent, 'message_type' => $messageType],
+        null,
+        'message:' . $messageId
+    );
+
+    $previousStatus = (string) $conversation['status'];
+    if (in_array($previousStatus, ['new', 'waiting_customer'], true)) {
+        $resumeStmt = $pdo->prepare("
+            UPDATE conversations
+            SET status = 'open'
+            WHERE id = :id AND status = :previous_status
+        ");
+        $resumeStmt->execute([':id' => $conversationId, ':previous_status' => $previousStatus]);
+        if ($resumeStmt->rowCount() > 0) {
+            automation_dispatch_event_safe(
+                $pdo,
+                'status_changed',
+                $conversationId,
+                ['previous_status' => $previousStatus, 'new_status' => 'open'],
+                null
+            );
+        }
+    }
 
     json_response([
         'success' => true,

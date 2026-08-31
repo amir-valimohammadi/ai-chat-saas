@@ -15,14 +15,39 @@ $policyId = max(0, (int) ($input['policy_id'] ?? 0));
 $siteId = max(0, (int) ($input['site_id'] ?? 0));
 $departmentId = max(0, (int) ($input['breach_department_id'] ?? 0));
 $name = mb_substr(trim((string) ($input['name'] ?? '')), 0, 190, 'UTF-8');
-$firstResponseMinutes = max(1, min(43200, (int) ($input['first_response_minutes'] ?? 15)));
-$resolutionMinutes = max($firstResponseMinutes, min(525600, (int) ($input['resolution_minutes'] ?? 1440)));
-$warningMinutes = max(0, min($firstResponseMinutes - 1, (int) ($input['warning_before_minutes'] ?? 5)));
+$firstResponseMinutes = (int) ($input['first_response_minutes'] ?? 15);
+$resolutionMinutes = (int) ($input['resolution_minutes'] ?? 1440);
+$warningMinutes = (int) ($input['warning_before_minutes'] ?? 5);
 $breachPriority = trim((string) ($input['breach_priority'] ?? 'urgent'));
 $isDefault = !empty($input['is_default']) ? 1 : 0;
 $isActive = array_key_exists('is_active', $input) ? (!empty($input['is_active']) ? 1 : 0) : 1;
+$useBusinessHoursProvided = array_key_exists('use_business_hours', $input);
+$useBusinessHours = $useBusinessHoursProvided && !empty($input['use_business_hours']) ? 1 : 0;
+$pauseStatusesProvided = array_key_exists('pause_statuses', $input);
+$pauseStatuses = [];
+
+if ($pauseStatusesProvided) {
+    if (!is_array($input['pause_statuses'])) {
+        json_response(['success' => false, 'message' => 'وضعیت‌های توقف SLA معتبر نیست.'], 422);
+    }
+
+    $allowedPauseStatuses = ['new', 'open', 'in_progress', 'waiting_customer', 'follow_up', 'pending'];
+    foreach ($input['pause_statuses'] as $pauseStatus) {
+        if (!is_scalar($pauseStatus)) {
+            json_response(['success' => false, 'message' => 'وضعیت‌های توقف SLA معتبر نیست.'], 422);
+        }
+        $pauseStatus = trim((string) $pauseStatus);
+        if (!in_array($pauseStatus, $allowedPauseStatuses, true)) {
+            json_response(['success' => false, 'message' => 'یکی از وضعیت‌های توقف SLA معتبر نیست.'], 422);
+        }
+        if (!in_array($pauseStatus, $pauseStatuses, true)) $pauseStatuses[] = $pauseStatus;
+    }
+}
 
 if ($name === '') json_response(['success' => false, 'message' => 'نام سیاست SLA الزامی است.'], 422);
+if ($firstResponseMinutes < 1 || $firstResponseMinutes > 43200) json_response(['success' => false, 'message' => 'زمان پاسخ اولیه باید بین ۱ دقیقه و ۳۰ روز باشد.'], 422);
+if ($resolutionMinutes < $firstResponseMinutes || $resolutionMinutes > 525600) json_response(['success' => false, 'message' => 'زمان حل باید حداقل برابر زمان پاسخ اولیه و حداکثر یک سال باشد.'], 422);
+if ($warningMinutes < 0 || $warningMinutes >= $firstResponseMinutes) json_response(['success' => false, 'message' => 'زمان هشدار باید صفر یا کمتر از زمان پاسخ اولیه باشد.'], 422);
 if (!in_array($breachPriority, ['low', 'normal', 'high', 'urgent'], true)) json_response(['success' => false, 'message' => 'اولویت نقض معتبر نیست.'], 422);
 
 try {
@@ -42,15 +67,27 @@ try {
 
     $pdo->beginTransaction();
     if ($policyId > 0) {
-        $exists = $pdo->prepare("SELECT id FROM automation_sla_policies WHERE id = :id AND tenant_id = :tenant_id LIMIT 1");
+        $exists = $pdo->prepare("SELECT id, use_business_hours, pause_statuses_json FROM automation_sla_policies WHERE id = :id AND tenant_id = :tenant_id LIMIT 1 FOR UPDATE");
         $exists->execute([':id' => $policyId, ':tenant_id' => $tenantId]);
-        if (!$exists->fetchColumn()) {
+        $currentPolicy = $exists->fetch();
+        if (!$currentPolicy) {
             $pdo->rollBack();
             json_response(['success' => false, 'message' => 'سیاست SLA پیدا نشد.'], 404);
         }
+
+        if (!$useBusinessHoursProvided) $useBusinessHours = !empty($currentPolicy['use_business_hours']) ? 1 : 0;
+        if (!$pauseStatusesProvided) {
+            $decodedPauseStatuses = json_decode((string) ($currentPolicy['pause_statuses_json'] ?? ''), true);
+            $pauseStatuses = is_array($decodedPauseStatuses)
+                ? array_values(array_filter($decodedPauseStatuses, static fn(mixed $status): bool => is_string($status)))
+                : [];
+        }
+        $pauseStatusesJson = json_encode($pauseStatuses, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
         $stmt = $pdo->prepare("
             UPDATE automation_sla_policies SET site_id = :site_id, name = :name,
                 first_response_minutes = :first_response_minutes, resolution_minutes = :resolution_minutes,
+                use_business_hours = :use_business_hours, pause_statuses_json = :pause_statuses_json,
                 warning_before_minutes = :warning_before_minutes, breach_priority = :breach_priority,
                 breach_department_id = :breach_department_id, is_default = :is_default,
                 is_active = :is_active, updated_by = :updated_by
@@ -59,19 +96,23 @@ try {
         $stmt->execute([
             ':site_id' => $siteId > 0 ? $siteId : null, ':name' => $name,
             ':first_response_minutes' => $firstResponseMinutes, ':resolution_minutes' => $resolutionMinutes,
+            ':use_business_hours' => $useBusinessHours, ':pause_statuses_json' => $pauseStatusesJson,
             ':warning_before_minutes' => $warningMinutes, ':breach_priority' => $breachPriority,
             ':breach_department_id' => $departmentId > 0 ? $departmentId : null,
             ':is_default' => $isDefault, ':is_active' => $isActive, ':updated_by' => (int) $user['id'],
             ':id' => $policyId, ':tenant_id' => $tenantId,
         ]);
     } else {
+        $pauseStatusesJson = json_encode($pauseStatuses, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $stmt = $pdo->prepare("
             INSERT INTO automation_sla_policies (
                 tenant_id, site_id, name, first_response_minutes, resolution_minutes,
+                use_business_hours, pause_statuses_json,
                 warning_before_minutes, breach_priority, breach_department_id,
                 is_default, is_active, created_by, updated_by
             ) VALUES (
                 :tenant_id, :site_id, :name, :first_response_minutes, :resolution_minutes,
+                :use_business_hours, :pause_statuses_json,
                 :warning_before_minutes, :breach_priority, :breach_department_id,
                 :is_default, :is_active, :created_by, :updated_by
             )
@@ -79,6 +120,7 @@ try {
         $stmt->execute([
             ':tenant_id' => $tenantId, ':site_id' => $siteId > 0 ? $siteId : null, ':name' => $name,
             ':first_response_minutes' => $firstResponseMinutes, ':resolution_minutes' => $resolutionMinutes,
+            ':use_business_hours' => $useBusinessHours, ':pause_statuses_json' => $pauseStatusesJson,
             ':warning_before_minutes' => $warningMinutes, ':breach_priority' => $breachPriority,
             ':breach_department_id' => $departmentId > 0 ? $departmentId : null,
             ':is_default' => $isDefault, ':is_active' => $isActive,
@@ -98,10 +140,17 @@ try {
     }
 
     $pdo->commit();
-    json_response(['success' => true, 'message' => 'سیاست SLA ذخیره شد.', 'policy_id' => $policyId]);
+    json_response([
+        'success' => true,
+        'message' => 'سیاست SLA ذخیره شد.',
+        'policy_id' => $policyId,
+        'policy' => [
+            'use_business_hours' => (bool) $useBusinessHours,
+            'pause_statuses' => $pauseStatuses,
+        ],
+    ]);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     safe_api_exception_context($e);
     json_response(['success' => false, 'message' => 'ذخیره سیاست SLA ناموفق بود.'], 500);
 }
-

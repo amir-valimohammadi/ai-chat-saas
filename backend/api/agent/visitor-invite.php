@@ -13,6 +13,7 @@ require_once __DIR__ . '/../../includes/plan-limits.php';
 require_once __DIR__ . '/../../includes/routing.php';
 require_once __DIR__ . '/../../includes/rate-limit.php';
 require_once __DIR__ . '/../../includes/visitor-presence.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 $user = require_auth($pdo);
@@ -44,14 +45,18 @@ try {
     }
 
     $pdo->beginTransaction();
+    $createdConversation = false;
+    $previousConversationStatus = null;
     $conversationStmt = $pdo->prepare("SELECT id, assigned_agent_id, status FROM conversations WHERE site_id = :site_id AND visitor_id = :visitor_id AND status <> 'closed' ORDER BY id DESC LIMIT 1 FOR UPDATE");
     $conversationStmt->execute([':site_id' => (int) $visitor['site_id'], ':visitor_id' => $visitorId]);
     $conversation = $conversationStmt->fetch();
     if ($conversation) {
         $conversationId = (int) $conversation['id'];
+        $previousConversationStatus = (string) $conversation['status'];
         $pdo->prepare("UPDATE conversations SET department_id = :department_id, assigned_agent_id = COALESCE(assigned_agent_id, :agent_id), queue_status = 'assigned', queue_position = NULL, assigned_at = COALESCE(assigned_at, NOW()), assignment_method = COALESCE(assignment_method, 'manual'), status = CASE WHEN status IN ('new','pending') THEN 'in_progress' ELSE status END WHERE id = :id")
             ->execute([':department_id' => $departmentId, ':agent_id' => (int) $user['id'], ':id' => $conversationId]);
     } else {
+        $createdConversation = true;
         lock_tenant_plan_scope($pdo, (int) $visitor['tenant_id']);
         ensure_monthly_conversation_limit($pdo, (int) $visitor['site_id']);
         $insertConversation = $pdo->prepare("\n            INSERT INTO conversations (site_id, visitor_id, assigned_agent_id, department_id, status, queue_status, assigned_at, assignment_method, source_page_url, source_page_title, last_message_at)\n            VALUES (:site_id, :visitor_id, :agent_id, :department_id, 'in_progress', 'assigned', NOW(), 'manual', :source_page_url, :source_page_title, NOW())\n        ");
@@ -82,6 +87,26 @@ try {
     ]);
     $inviteId = (int) $pdo->lastInsertId();
     $pdo->commit();
+
+    if ($createdConversation) {
+        automation_dispatch_event_safe($pdo, 'conversation_created', $conversationId, [], (int) $user['id'], (string) $conversationId);
+    } elseif (in_array($previousConversationStatus, ['new', 'pending'], true)) {
+        automation_dispatch_event_safe(
+            $pdo,
+            'status_changed',
+            $conversationId,
+            ['previous_status' => $previousConversationStatus, 'new_status' => 'in_progress'],
+            (int) $user['id']
+        );
+    }
+    automation_dispatch_event_safe(
+        $pdo,
+        'agent_message',
+        $conversationId,
+        ['message_id' => $messageId, 'message_type' => 'text', 'message_text' => $message],
+        (int) $user['id'],
+        (string) $messageId
+    );
 
     json_response(['success' => true, 'message' => 'Invitation sent', 'invite' => ['id' => $inviteId, 'conversation_id' => $conversationId, 'expires_in_seconds' => $ttl]], 201);
 } catch (Throwable $e) {

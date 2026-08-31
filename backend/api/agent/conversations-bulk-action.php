@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/routing.php';
+require_once __DIR__ . '/../../includes/automation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_response(['success' => false, 'message' => 'Method not allowed'], 405);
 $user = require_auth($pdo);
@@ -30,8 +31,8 @@ if ($action === 'status' && !in_array((string) $value, $allowedStatuses, true)) 
 try {
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $accessSql = $user['role'] === 'customer_admin'
-        ? "SELECT conversations.id, conversations.site_id, conversations.department_id, conversations.assigned_agent_id FROM conversations INNER JOIN sites ON sites.id = conversations.site_id WHERE conversations.id IN ($placeholders) AND sites.tenant_id = ?"
-        : "SELECT DISTINCT conversations.id, conversations.site_id, conversations.department_id, conversations.assigned_agent_id FROM conversations INNER JOIN sites ON sites.id = conversations.site_id INNER JOIN agent_site_access ON agent_site_access.site_id = sites.id AND agent_site_access.user_id = ? WHERE conversations.id IN ($placeholders) AND sites.tenant_id = ?";
+        ? "SELECT conversations.id, conversations.site_id, conversations.department_id, conversations.assigned_agent_id, conversations.status FROM conversations INNER JOIN sites ON sites.id = conversations.site_id WHERE conversations.id IN ($placeholders) AND sites.tenant_id = ?"
+        : "SELECT DISTINCT conversations.id, conversations.site_id, conversations.department_id, conversations.assigned_agent_id, conversations.status FROM conversations INNER JOIN sites ON sites.id = conversations.site_id INNER JOIN agent_site_access ON agent_site_access.site_id = sites.id AND agent_site_access.user_id = ? WHERE conversations.id IN ($placeholders) AND sites.tenant_id = ?";
     $accessParams = $user['role'] === 'customer_admin'
         ? array_merge($ids, [(int) $user['tenant_id']])
         : array_merge([(int) $user['id']], $ids, [(int) $user['tenant_id']]);
@@ -104,6 +105,17 @@ try {
     $updateStmt = $pdo->prepare("UPDATE conversations SET {$setSql} WHERE id IN ({$placeholders})");
     $updateStmt->execute(array_merge($updateParams, $ids));
     foreach ($accessible as $row) if ($row['department_id'] !== null) routing_reindex_queue($pdo, (int) $row['department_id']);
+    if ($action === 'status') {
+        foreach ($accessible as $row) {
+            automation_dispatch_event_safe(
+                $pdo,
+                'status_changed',
+                (int) $row['id'],
+                ['previous_status' => $row['status'], 'new_status' => (string) $value],
+                (int) $user['id']
+            );
+        }
+    }
 
     json_response(['success' => true, 'message' => 'Bulk action completed', 'updated_count' => $updateStmt->rowCount(), 'selected_count' => count($ids)]);
 } catch (Throwable $e) {

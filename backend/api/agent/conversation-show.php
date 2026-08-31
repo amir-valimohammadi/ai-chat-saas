@@ -204,27 +204,7 @@ try {
             'color' => $row['color'],
         ], $tagsStmt->fetchAll());
 
-        $slaStatusStmt = $pdo->prepare("
-            SELECT conversation_sla_status.state, conversation_sla_status.first_response_due_at,
-                   conversation_sla_status.resolution_due_at, conversation_sla_status.first_response_at,
-                   conversation_sla_status.warning_sent_at, conversation_sla_status.first_response_breached_at,
-                   conversation_sla_status.resolution_breached_at, conversation_sla_status.last_checked_at,
-                   automation_sla_policies.id AS policy_id, automation_sla_policies.name AS policy_name
-            FROM conversation_sla_status
-            INNER JOIN automation_sla_policies ON automation_sla_policies.id = conversation_sla_status.policy_id
-            WHERE conversation_sla_status.conversation_id = :conversation_id
-              AND automation_sla_policies.tenant_id = :tenant_id
-            LIMIT 1
-        ");
-        $slaStatusStmt->execute([
-            ':conversation_id' => $conversationId,
-            ':tenant_id' => (int) $conversation['site_tenant_id'],
-        ]);
-        $slaRow = $slaStatusStmt->fetch();
-        if ($slaRow) {
-            $slaRow['policy_id'] = (int) $slaRow['policy_id'];
-            $automationSla = $slaRow;
-        }
+        $automationSla = automation_get_sla_snapshot($pdo, $conversationId);
 
         $automationHistoryStmt = $pdo->prepare("
             SELECT id, rule_id, rule_name, trigger_type, status, duration_ms, error_message, created_at

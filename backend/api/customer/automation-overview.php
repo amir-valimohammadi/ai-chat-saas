@@ -57,7 +57,7 @@ try {
     }
     $slaStmt = $pdo->prepare("
         SELECT automation_sla_policies.*, sites.name AS site_name, departments.name AS breach_department_name,
-               COUNT(DISTINCT conversation_sla_status.conversation_id) AS tracked_count,
+               COUNT(DISTINCT CASE WHEN conversation_sla_status.state <> 'resolved' THEN conversation_sla_status.conversation_id END) AS tracked_count,
                COUNT(DISTINCT CASE WHEN conversation_sla_status.state = 'warning' THEN conversation_sla_status.conversation_id END) AS warning_count,
                COUNT(DISTINCT CASE WHEN conversation_sla_status.state = 'breached' THEN conversation_sla_status.conversation_id END) AS breached_count
         FROM automation_sla_policies
@@ -77,6 +77,9 @@ try {
         $row['breach_department_id'] = $row['breach_department_id'] !== null ? (int) $row['breach_department_id'] : null;
         $row['is_default'] = (bool) $row['is_default'];
         $row['is_active'] = (bool) $row['is_active'];
+        $row['use_business_hours'] = (bool) $row['use_business_hours'];
+        $row['pause_statuses'] = automation_decode_list($row['pause_statuses_json'] ?? null);
+        unset($row['pause_statuses_json']);
         return $row;
     }, $slaStmt->fetchAll());
 
