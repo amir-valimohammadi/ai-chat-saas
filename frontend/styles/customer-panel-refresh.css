@@ -1,36 +1,20 @@
 /*
- * Customer panel visual system
- * هماهنگ‌سازی صفحات مشتری و پشتیبان؛ همه selectorها زیر AppShell مشتری scope شده‌اند.
+ * Customer workspace finishing layer.
+ * این فایل فقط صفحات داخل AppShell مشتری را هماهنگ می‌کند و عمداً globals.css را تغییر نمی‌دهد.
  */
 
 .app-shell--customer {
-    --customer-ink: #172033;
-    --customer-muted: #718096;
-    --customer-border: #e3e8f1;
-    --customer-border-strong: #d5ddea;
-    --customer-surface: rgba(255, 255, 255, .96);
-    --customer-surface-soft: #f7f9fc;
-    --customer-brand: #4f5fd4;
-    --customer-accent: #0d94a8;
-    --customer-shadow: 0 11px 32px rgba(23, 32, 51, .06);
-    --customer-shadow-hover: 0 17px 42px rgba(23, 32, 51, .09);
-}
-
-.app-shell--customer .sidebar {
-    background:
-        radial-gradient(circle at 88% -7%, rgba(79, 95, 212, .36), transparent 32%),
-        radial-gradient(circle at 8% 106%, rgba(13, 148, 168, .21), transparent 36%),
-        linear-gradient(180deg, #172033 0%, #101827 57%, #0c1421 100%);
-}
-
-.app-shell--customer .sidebar-link.active {
-    background: linear-gradient(90deg, rgba(79, 95, 212, .32), rgba(13, 148, 168, .14));
-    border-color: rgba(130, 144, 238, .18);
-    box-shadow: inset -3px 0 0 #8190ee, 0 9px 20px rgba(6, 10, 24, .16);
-}
-
-.app-shell--customer .sidebar-link.active .sidebar-link-icon {
-    background: linear-gradient(135deg, #5d6cda, #178fa9);
+    --customer-ink: #17272a;
+    --customer-muted: #68787b;
+    --customer-border: #dfe7e5;
+    --customer-border-strong: #cedbd8;
+    --customer-surface: #ffffff;
+    --customer-surface-soft: #f6f9f8;
+    --customer-brand: #0f766e;
+    --customer-brand-hover: #0b5f59;
+    --customer-brand-soft: #e8f5f2;
+    --customer-accent: #2f6fed;
+    --customer-shadow: 0 1px 2px rgba(15, 39, 42, .035), 0 8px 24px rgba(15, 39, 42, .045);
 }
 
 .app-shell--customer :where(h1, h2, h3, h4, p) {
@@ -40,17 +24,18 @@
 .app-shell--customer :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
     color: var(--customer-ink);
     border-color: var(--customer-border-strong);
-    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    background: #fff;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 
 .app-shell--customer :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
-    border-color: color-mix(in srgb, var(--customer-brand) 56%, white);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--customer-brand) 9%, transparent);
+    border-color: color-mix(in srgb, var(--customer-brand) 62%, white);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--customer-brand) 11%, transparent);
     outline: none;
 }
 
 .app-shell--customer :where(input, textarea)::placeholder {
-    color: #9aa6b8;
+    color: #91a09f;
 }
 
 .app-shell--customer :is(
@@ -77,8 +62,8 @@
     .security-side-card
 ) {
     border-color: var(--customer-border);
-    border-radius: 20px;
-    background-color: var(--customer-surface);
+    border-radius: 16px;
+    background: var(--customer-surface);
     box-shadow: var(--customer-shadow);
 }
 
@@ -94,9 +79,10 @@
     .metric-compact
 ) {
     border-color: var(--customer-border);
-    border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(23, 32, 51, .05);
-    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .app-shell--customer :is(
@@ -110,32 +96,47 @@
     .stat-card,
     .metric-compact
 ):hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--customer-brand) 17%, var(--customer-border));
-    box-shadow: var(--customer-shadow-hover);
+    border-color: color-mix(in srgb, var(--customer-brand) 24%, var(--customer-border));
+    box-shadow: 0 8px 20px rgba(15, 39, 42, .06);
+    transform: translateY(-1px);
 }
 
 .app-shell--customer :is(
-    .dashboard-command-card,
-    .conversations-command-card,
     .team-hero-card,
     .reports-hero-card,
     .subscription-hero,
     .hosted-settings-hero-card
 ) {
     overflow: hidden;
-    border-radius: 25px;
-    box-shadow: 0 20px 52px rgba(18, 29, 50, .14);
+    color: #f4fbf9;
+    border: 1px solid #26484a;
+    border-radius: 18px;
+    background: #123238;
+    box-shadow: 0 10px 28px rgba(10, 36, 39, .11);
 }
 
 .app-shell--customer :is(
-    .dashboard-command-card,
-    .conversations-command-card
-) {
-    background:
-        radial-gradient(circle at 90% -4%, rgba(93, 108, 218, .42), transparent 31%),
-        radial-gradient(circle at 4% 105%, rgba(13, 148, 168, .25), transparent 35%),
-        linear-gradient(135deg, #18243c 0%, #121c30 55%, #0e1727 100%);
+    .team-hero-card,
+    .reports-hero-card,
+    .subscription-hero,
+    .hosted-settings-hero-card
+)::before,
+.app-shell--customer :is(
+    .team-hero-card,
+    .reports-hero-card,
+    .subscription-hero,
+    .hosted-settings-hero-card
+)::after {
+    display: none;
+}
+
+.app-shell--customer :is(
+    .team-hero-card,
+    .reports-hero-card,
+    .subscription-hero,
+    .hosted-settings-hero-card
+) :where(p, small) {
+    color: #b9ceca;
 }
 
 .app-shell--customer :is(
@@ -148,6 +149,8 @@
     .security-form
 ) {
     border-color: var(--customer-border);
+    background: var(--customer-surface-soft);
+    box-shadow: none;
 }
 
 .app-shell--customer :is(
@@ -160,7 +163,9 @@
     .customer-sites-card,
     .subscription-payment-row
 ) {
-    transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease, background 170ms ease;
+    border-color: var(--customer-border);
+    background: #fff;
+    transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 
 .app-shell--customer :is(
@@ -173,30 +178,40 @@
     .customer-sites-card,
     .subscription-payment-row
 ):hover {
-    transform: translateY(-1px);
-    border-color: #d2d9e6;
-    box-shadow: 0 10px 27px rgba(23, 32, 51, .06);
+    border-color: #c9d8d5;
+    background: #fbfdfc;
+    box-shadow: 0 6px 16px rgba(15, 39, 42, .045);
+}
+
+.app-shell--customer :where(table) {
+    color: var(--customer-ink);
 }
 
 .app-shell--customer :where(table th) {
-    color: #67748a;
+    color: #5f706f;
+    border-color: #e8eeec;
     background: var(--customer-surface-soft);
-    border-color: #edf0f5;
+    font-weight: 800;
 }
 
 .app-shell--customer :where(table td) {
-    border-color: #edf0f5;
+    border-color: #e8eeec;
 }
 
 .app-shell--customer :where(table tbody tr:hover td) {
-    background: #fafbfe;
+    background: #f8fbfa;
 }
 
 .app-shell--customer :is(.button-primary, .widget-button.primary) {
     color: #fff;
-    border-color: transparent;
-    background: linear-gradient(135deg, var(--customer-brand), var(--customer-accent));
-    box-shadow: 0 9px 22px rgba(79, 95, 212, .2);
+    border-color: var(--customer-brand);
+    background: var(--customer-brand);
+    box-shadow: none;
+}
+
+.app-shell--customer :is(.button-primary, .widget-button.primary):hover {
+    border-color: var(--customer-brand-hover);
+    background: var(--customer-brand-hover);
 }
 
 .app-shell--customer :is(.button-secondary, .widget-button.secondary) {
@@ -206,19 +221,98 @@
 }
 
 .app-shell--customer :where(.error, .success, .alert, [role="alert"]) {
+    border-radius: 12px;
+}
+
+/* صفحات عملیاتی قدیمی‌تر هم با همان زبان بصری نمایش داده شوند. */
+.app-shell--customer :is(.visitor-command-card, .announcements-overview) {
+    min-height: auto;
+    padding: 18px 20px;
+    color: #f4fbf9;
+    border: 1px solid #26484a;
+    border-radius: 18px;
+    background: #123238;
+    box-shadow: 0 10px 28px rgba(10, 36, 39, .11);
+}
+
+.app-shell--customer :is(.visitor-command-card, .announcements-overview)::before,
+.app-shell--customer :is(.visitor-command-card, .announcements-overview)::after {
+    display: none;
+}
+
+.app-shell--customer :is(.visitor-command-copy p, .announcements-overview p, .announcements-live-label) {
+    color: #b9ceca;
+}
+
+.app-shell--customer :is(.visitor-command-total, .announcements-summary) {
+    border-color: rgba(217, 237, 232, .14);
     border-radius: 14px;
+    background: rgba(255, 255, 255, .045);
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.app-shell--customer .automation-shell {
+    --auto-ink: var(--customer-ink);
+    --auto-muted: var(--customer-muted);
+    --auto-line: var(--customer-border);
+    --auto-brand: var(--customer-brand);
+    gap: 14px;
+}
+
+.app-shell--customer .automation-tabs {
+    padding: 4px;
+    border-radius: 13px;
+    background: #eef3f1;
+    box-shadow: none;
+}
+
+.app-shell--customer .automation-tabs button {
+    min-height: 38px;
+    border-radius: 9px;
+}
+
+.app-shell--customer .automation-tabs button:hover {
+    color: var(--customer-brand-hover);
+    background: #fff;
+}
+
+.app-shell--customer .automation-tabs button.active {
+    color: #fff;
+    background: var(--customer-brand);
+    box-shadow: none;
+}
+
+.app-shell--customer :is(.automation-stat, .automation-panel, .automation-history-card, .automation-section, .automation-rule-card, .automation-sla-card) {
+    border-color: var(--customer-border);
+    border-radius: 15px;
+    background: #fff;
+    box-shadow: var(--customer-shadow);
+}
+
+.app-shell--customer :is(.automation-panel header > div > span, .automation-section-head > div > span, .automation-text-button) {
+    color: var(--customer-brand);
+}
+
+.app-shell--customer :is(.automation-rule-orb, .automation-step-number) {
+    color: var(--customer-brand-hover);
+    background: var(--customer-brand-soft);
+    box-shadow: none;
 }
 
 @media (max-width: 720px) {
     .app-shell--customer :is(
-        .dashboard-command-card,
-        .conversations-command-card,
         .team-hero-card,
         .reports-hero-card,
         .subscription-hero,
         .hosted-settings-hero-card
     ) {
-        border-radius: 19px;
+        border-radius: 15px;
+    }
+
+    .app-shell--customer :is(.visitor-command-card, .announcements-overview) {
+        padding: 15px;
+        border-radius: 15px;
     }
 
     .app-shell--customer :is(
@@ -237,7 +331,7 @@
         .security-main-card,
         .security-side-card
     ) {
-        border-radius: 16px;
+        border-radius: 14px;
     }
 }
 

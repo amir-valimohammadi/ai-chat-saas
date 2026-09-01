@@ -1,65 +1,79 @@
 /* مسیر فایل: ai-chat-saas/frontend/styles/tokens.css */
-/* Design tokens اصلی پنل */
+/* Design system foundation: calm, accessible and intentionally low-noise. */
 
 :root {
-    /* Background */
-    --app-bg: #eef2f7;
-    --app-bg-deep: #e5eaf3;
-    --app-sidebar-bg: #111827;
-    --app-sidebar-bg-soft: #1f2937;
+    color-scheme: light;
+
+    /* App canvas */
+    --app-bg: #f3f6f5;
+    --app-bg-deep: #e8eeec;
+    --app-sidebar-bg: #102629;
+    --app-sidebar-bg-soft: #193539;
 
     /* Surfaces */
     --surface: #ffffff;
-    --surface-soft: #f8fafc;
-    --surface-muted: #f1f5f9;
-    --surface-dark: #111827;
+    --surface-soft: #f8faf9;
+    --surface-muted: #edf2f0;
+    --surface-dark: #102629;
+    --surface-glass: rgba(255, 255, 255, 0.94);
 
     /* Text */
-    --text: #111827;
-    --text-soft: #334155;
-    --muted: #64748b;
-    --muted-light: #94a3b8;
-    --text-inverse: #f9fafb;
+    --text: #172624;
+    --text-soft: #405651;
+    --muted: #6b7d78;
+    --muted-light: #91a19d;
+    --text-inverse: #f7fbfa;
 
     /* Borders */
-    --border: #dbe3ef;
-    --border-soft: #e5eaf2;
-    --border-dark: rgba(255, 255, 255, 0.08);
+    --border: #d3dedb;
+    --border-soft: #e2e9e7;
+    --border-strong: #bdcbc7;
+    --border-dark: rgba(231, 243, 240, 0.12);
 
-    /* Brand */
-    --primary: #4f46e5;
-    --primary-dark: #4338ca;
-    --primary-soft: #eef2ff;
+    /* Brand: teal leads; blue is reserved for secondary emphasis. */
+    --primary: #0f766e;
+    --primary-dark: #0b5f59;
+    --primary-soft: #e5f4f1;
 
-    --accent: #0ea5e9;
-    --accent-soft: #e0f2fe;
+    --accent: #2f6fed;
+    --accent-soft: #eaf0ff;
 
     /* States */
-    --success: #16a34a;
-    --success-soft: #ecfdf5;
+    --success: #15803d;
+    --success-soft: #eaf7ef;
 
-    --danger: #dc2626;
-    --danger-soft: #fef2f2;
+    --danger: #c2413a;
+    --danger-soft: #fceeed;
 
-    --warning: #d97706;
-    --warning-soft: #fffbeb;
+    --warning: #a96512;
+    --warning-soft: #fff7e7;
+
+    /* Focus */
+    --focus-ring: rgba(15, 118, 110, 0.16);
+    --focus-border: rgba(15, 118, 110, 0.72);
 
     /* Radius */
-    --radius-xs: 8px;
-    --radius-sm: 10px;
-    --radius-md: 14px;
-    --radius-lg: 18px;
-    --radius-xl: 24px;
+    --radius-xs: 6px;
+    --radius-sm: 9px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
 
-    /* Shadows */
-    --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-    --shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.06);
-    --shadow-md: 0 18px 50px rgba(15, 23, 42, 0.1);
+    /* Shadows: quiet depth instead of floating layers. */
+    --shadow-xs: 0 1px 2px rgba(16, 38, 41, 0.04);
+    --shadow-sm: 0 6px 18px rgba(16, 38, 41, 0.055);
+    --shadow-md: 0 16px 36px rgba(16, 38, 41, 0.08);
+    --shadow-lg: 0 24px 56px rgba(16, 38, 41, 0.11);
 
     /* Layout */
     --sidebar-width: 246px;
+    --sidebar-collapsed-width: 76px;
     --page-max-width: 1440px;
 
     /* Motion */
-    --transition: 160ms ease;
+    --transition: 160ms cubic-bezier(0.2, 0, 0, 1);
+
+    /* Backward-compatible semantic aliases used by older screens. */
+    --bg: var(--app-bg);
+    --line: var(--border-soft);
 }

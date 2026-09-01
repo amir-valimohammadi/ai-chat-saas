@@ -1,37 +1,19 @@
 /*
- * Super Admin visual system
- * لایه نهایی مشترک برای هماهنگی صفحات مدیریتی، بدون ورود به globals.css.
+ * Super-admin workspace finishing layer.
+ * هماهنگی نمای مدیریتی با سیستم طراحی اصلی، بدون افزودن استایل به globals.css.
  */
 
 .super-admin-route {
-    --sa-ink: #172033;
-    --sa-muted: #718096;
-    --sa-border: #e3e8f1;
-    --sa-border-strong: #d5ddea;
-    --sa-surface: rgba(255, 255, 255, .96);
-    --sa-surface-soft: #f7f9fc;
-    --sa-brand: #6857e5;
-    --sa-brand-soft: #f0edff;
-    --sa-blue: #2888d8;
-    --sa-shadow: 0 12px 34px rgba(23, 32, 51, .065);
-    --sa-shadow-hover: 0 18px 42px rgba(23, 32, 51, .095);
-}
-
-.app-shell--super .sidebar {
-    background:
-        radial-gradient(circle at 86% -4%, rgba(118, 92, 232, .38), transparent 31%),
-        radial-gradient(circle at 8% 106%, rgba(40, 136, 216, .2), transparent 35%),
-        linear-gradient(180deg, #171b34 0%, #111629 56%, #0c1120 100%);
-}
-
-.app-shell--super .sidebar-link.active {
-    background: linear-gradient(90deg, rgba(115, 87, 229, .34), rgba(40, 136, 216, .14));
-    border-color: rgba(159, 141, 244, .18);
-    box-shadow: inset -3px 0 0 #9888f2, 0 9px 20px rgba(6, 10, 24, .18);
-}
-
-.app-shell--super .sidebar-link.active .sidebar-link-icon {
-    background: linear-gradient(135deg, #7662e5, #3e87dc);
+    --sa-ink: #17272a;
+    --sa-muted: #68787b;
+    --sa-border: #dfe7e5;
+    --sa-border-strong: #cedbd8;
+    --sa-surface: #ffffff;
+    --sa-surface-soft: #f6f9f8;
+    --sa-brand: #0f766e;
+    --sa-brand-soft: #e8f5f2;
+    --sa-blue: #2f6fed;
+    --sa-shadow: 0 1px 2px rgba(15, 39, 42, .035), 0 8px 24px rgba(15, 39, 42, .045);
 }
 
 .super-admin-route :where(h1, h2, h3, h4, p) {
@@ -41,19 +23,18 @@
 .super-admin-route :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
     color: var(--sa-ink);
     border-color: var(--sa-border-strong);
-    background-color: #fff;
-    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    background: #fff;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 
 .super-admin-route :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
-    border-color: color-mix(in srgb, var(--sa-brand) 58%, white);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--sa-brand) 9%, transparent);
-    background-color: #fff;
+    border-color: color-mix(in srgb, var(--sa-brand) 62%, white);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--sa-brand) 11%, transparent);
     outline: none;
 }
 
 .super-admin-route :where(input, textarea)::placeholder {
-    color: #9aa6b8;
+    color: #91a09f;
 }
 
 .super-admin-route :where(table) {
@@ -61,22 +42,18 @@
 }
 
 .super-admin-route :where(table th) {
-    color: #67748a;
+    color: #5f706f;
+    border-color: #e8eeec;
     background: var(--sa-surface-soft);
-    border-color: #edf0f5;
-    letter-spacing: -.05px;
+    font-weight: 800;
 }
 
 .super-admin-route :where(table td) {
-    border-color: #edf0f5;
-}
-
-.super-admin-route :where(table tbody tr) {
-    transition: background 150ms ease;
+    border-color: #e8eeec;
 }
 
 .super-admin-route :where(table tbody tr:hover td) {
-    background: #fafbfe;
+    background: #f8fbfa;
 }
 
 .super-admin-route :is(
@@ -115,7 +92,7 @@
     .subscription-panel
 ) {
     border-color: var(--sa-border);
-    border-radius: 21px;
+    border-radius: 16px;
     background: var(--sa-surface);
     box-shadow: var(--sa-shadow);
 }
@@ -134,9 +111,10 @@
     .qa-security-summary-grid article
 ) {
     border-color: var(--sa-border);
-    border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(23, 32, 51, .05);
-    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .super-admin-route :is(
@@ -150,9 +128,9 @@
     .subscription-stat,
     .customer360-metric
 ):hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--sa-brand) 18%, var(--sa-border));
-    box-shadow: var(--sa-shadow-hover);
+    border-color: color-mix(in srgb, var(--sa-brand) 24%, var(--sa-border));
+    box-shadow: 0 8px 20px rgba(15, 39, 42, .06);
+    transform: translateY(-1px);
 }
 
 .super-admin-route :is(
@@ -165,15 +143,83 @@
     .ann-admin-hero
 ) {
     overflow: hidden;
-    border-radius: 26px;
-    box-shadow: 0 20px 54px rgba(20, 25, 50, .14);
+    color: #f4fbf9;
+    border: 1px solid #26484a;
+    border-radius: 18px;
+    background: #123238;
+    box-shadow: 0 10px 28px rgba(10, 36, 39, .11);
 }
 
-.super-admin-route .sa-dashboard-overview {
+.super-admin-route :is(
+    .sa-dashboard-overview,
+    .sa-customer-detail-hero,
+    .ops-hero,
+    .qa-hero,
+    .qa-run-hero,
+    .admin-hero,
+    .ann-admin-hero
+)::before,
+.super-admin-route :is(
+    .sa-dashboard-overview,
+    .sa-customer-detail-hero,
+    .ops-hero,
+    .qa-hero,
+    .qa-run-hero,
+    .admin-hero,
+    .ann-admin-hero
+)::after {
+    display: none;
+}
+
+.super-admin-route :is(
+    .sa-dashboard-overview,
+    .sa-customer-detail-hero,
+    .ops-hero,
+    .qa-hero,
+    .qa-run-hero,
+    .admin-hero,
+    .ann-admin-hero
+) :where(p, small) {
+    color: #b9ceca;
+}
+
+.super-admin-route .sa-dashboard-overview-kicker {
+    color: #cce8e2;
+    border-color: rgba(186, 224, 216, .2);
+    background: rgba(187, 226, 218, .1);
+}
+
+.super-admin-route .sa-dashboard-overview-links a {
+    color: #e8f4f1;
+    border-color: rgba(217, 237, 232, .16);
+    background: rgba(255, 255, 255, .055);
+}
+
+.super-admin-route .sa-dashboard-overview-links a:hover {
+    border-color: rgba(217, 237, 232, .28);
+    background: rgba(255, 255, 255, .1);
+    transform: none;
+}
+
+.super-admin-route .sa-dashboard-overview-score {
+    border-color: rgba(217, 237, 232, .12);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, .045);
+    backdrop-filter: none;
+}
+
+.super-admin-route .sa-dashboard-score-ring {
     background:
-        radial-gradient(circle at 88% -5%, rgba(125, 96, 235, .42), transparent 31%),
-        radial-gradient(circle at 5% 105%, rgba(40, 136, 216, .24), transparent 36%),
-        linear-gradient(135deg, #1b203d 0%, #151a31 56%, #101629 100%);
+        radial-gradient(circle at center, #123238 57%, transparent 58%),
+        conic-gradient(#2fb886 0 74%, rgba(255, 255, 255, .12) 74% 100%);
+}
+
+.super-admin-route .sa-dashboard-chart-values span {
+    background: var(--sa-brand);
+}
+
+.super-admin-route .sa-dashboard-chart-values .is-message {
+    background: var(--sa-blue);
 }
 
 .super-admin-route :is(
@@ -187,29 +233,23 @@
     .global-search-box
 ) {
     border-color: var(--sa-border);
-    border-radius: 19px;
-    background: rgba(255, 255, 255, .95);
-    box-shadow: 0 8px 26px rgba(23, 32, 51, .05);
+    border-radius: 14px;
+    background: var(--sa-surface-soft);
+    box-shadow: none;
 }
 
-.super-admin-route :is(
-    .admin-access-tabs,
-    .security-center-tabs
-) {
-    padding: 5px;
+.super-admin-route :is(.admin-access-tabs, .security-center-tabs) {
+    padding: 4px;
     border-color: var(--sa-border);
-    border-radius: 15px;
-    background: #fff;
-    box-shadow: 0 7px 22px rgba(23, 32, 51, .05);
+    border-radius: 12px;
+    background: #f1f5f4;
+    box-shadow: none;
 }
 
-.super-admin-route :is(
-    .admin-access-tabs button.active,
-    .security-center-tabs button.active
-) {
+.super-admin-route :is(.admin-access-tabs button.active, .security-center-tabs button.active) {
     color: #fff;
-    background: linear-gradient(135deg, var(--sa-brand), var(--sa-blue));
-    box-shadow: 0 8px 20px color-mix(in srgb, var(--sa-brand) 22%, transparent);
+    background: var(--sa-brand);
+    box-shadow: none;
 }
 
 .super-admin-route :where(.btn, button) {
@@ -217,7 +257,7 @@
 }
 
 .super-admin-route :where(.error, .success, [role="alert"]) {
-    border-radius: 14px;
+    border-radius: 12px;
 }
 
 .super-admin-route :where(code) {
@@ -234,7 +274,7 @@
         .admin-hero,
         .ann-admin-hero
     ) {
-        border-radius: 20px;
+        border-radius: 15px;
     }
 
     .super-admin-route :is(
@@ -257,7 +297,7 @@
         .security-list-card,
         .subscription-panel
     ) {
-        border-radius: 17px;
+        border-radius: 14px;
     }
 }
 

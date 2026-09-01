@@ -1,5 +1,5 @@
 /* مسیر فایل: ai-chat-saas/frontend/styles/components.css */
-/* کامپوننت‌های عمومی: card, button, input, badge, list */
+/* Shared UI primitives. Keep these deliberately neutral and composable. */
 
 .grid {
     display: grid;
@@ -21,8 +21,7 @@
 }
 
 .card {
-    background: rgba(255, 255, 255, 0.82);
-    backdrop-filter: blur(14px);
+    background: var(--surface-glass);
 }
 
 .card-solid {
@@ -30,36 +29,62 @@
 }
 
 .card-solid:hover {
-    border-color: #cbd5e1;
+    border-color: var(--border);
 }
 
 .btn,
 .btn-primary {
-    min-height: 34px;
-    padding: 0 12px;
-    border: none;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--primary);
     border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 7px;
     color: #ffffff;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
+    background: var(--primary);
+    font: inherit;
     font-size: 12.5px;
-    font-weight: 850;
-    box-shadow: 0 8px 18px rgba(79, 70, 229, 0.18);
-    transition: var(--transition);
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: var(--shadow-xs);
+    cursor: pointer;
+    transition:
+        color var(--transition),
+        background-color var(--transition),
+        border-color var(--transition),
+        box-shadow var(--transition);
 }
 
 .btn:hover,
 .btn-primary:hover {
-    filter: brightness(0.98);
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    box-shadow: 0 5px 14px rgba(15, 118, 110, 0.16);
+}
+
+.btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.btn:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled {
+    opacity: 0.52;
+    cursor: not-allowed;
+    box-shadow: none;
 }
 
 .btn.secondary,
 .btn-secondary {
-    color: var(--text);
-    background: #ffffff;
+    color: var(--text-soft);
+    background: var(--surface);
     border: 1px solid var(--border);
     box-shadow: none;
 }
@@ -68,41 +93,74 @@
 .btn-secondary:hover {
     color: var(--primary-dark);
     background: var(--primary-soft);
-    border-color: rgba(79, 70, 229, 0.24);
+    border-color: rgba(15, 118, 110, 0.34);
 }
 
 .btn.danger,
 .btn-danger {
     color: #ffffff;
     background: var(--danger);
-    box-shadow: 0 8px 18px rgba(220, 38, 38, 0.16);
+    border-color: var(--danger);
+    box-shadow: var(--shadow-xs);
+}
+
+.btn.danger:hover,
+.btn-danger:hover {
+    background: #a93631;
+    border-color: #a93631;
+    box-shadow: 0 5px 14px rgba(194, 65, 58, 0.14);
 }
 
 .input,
 .textarea,
 select.input {
     width: 100%;
+    min-height: 40px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 9px 11px;
     outline: none;
     color: var(--text);
-    background: #ffffff;
+    background: var(--surface);
+    font: inherit;
     font-size: 13px;
-    transition: var(--transition);
+    line-height: 1.55;
+    transition:
+        background-color var(--transition),
+        border-color var(--transition),
+        box-shadow var(--transition);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+    color: var(--muted-light);
 }
 
 .textarea {
-    min-height: 76px;
+    min-height: 84px;
     resize: vertical;
     line-height: 1.75;
+}
+
+.input:hover,
+.textarea:hover,
+select.input:hover {
+    border-color: var(--border-strong);
 }
 
 .input:focus,
 .textarea:focus,
 select.input:focus {
-    border-color: rgba(79, 70, 229, 0.62);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    border-color: var(--focus-border);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.input:disabled,
+.textarea:disabled,
+select.input:disabled {
+    color: var(--muted);
+    background: var(--surface-muted);
+    cursor: not-allowed;
 }
 
 label.grid {
@@ -112,7 +170,7 @@ label.grid {
 label.grid > span {
     color: var(--text-soft);
     font-size: 12px;
-    font-weight: 850;
+    font-weight: 800;
 }
 
 .badge,
@@ -121,20 +179,23 @@ label.grid > span {
     align-items: center;
     gap: 5px;
     width: fit-content;
+    min-height: 25px;
     border-radius: 999px;
-    padding: 4px 8px;
+    padding: 3px 9px;
     font-size: 10.5px;
-    font-weight: 850;
+    font-weight: 800;
+    line-height: 1.2;
     white-space: nowrap;
 }
 
 .badge {
     color: var(--primary-dark);
     background: var(--primary-soft);
+    border: 1px solid rgba(15, 118, 110, 0.13);
 }
 
 .soft-chip {
-    color: #475569;
+    color: var(--text-soft);
     background: var(--surface-muted);
     border: 1px solid var(--border-soft);
 }
@@ -142,19 +203,19 @@ label.grid > span {
 .soft-chip.primary {
     color: var(--primary-dark);
     background: var(--primary-soft);
-    border-color: rgba(79, 70, 229, 0.18);
+    border-color: rgba(15, 118, 110, 0.18);
 }
 
 .soft-chip.success {
-    color: #15803d;
+    color: #11652f;
     background: var(--success-soft);
-    border-color: #bbf7d0;
+    border-color: #c4e8cf;
 }
 
 .soft-chip.danger {
-    color: #b91c1c;
+    color: #9d302b;
     background: var(--danger-soft);
-    border-color: #fecaca;
+    border-color: #efcfcc;
 }
 
 .error,
@@ -164,18 +225,19 @@ label.grid > span {
     margin-bottom: 10px;
     font-size: 12.5px;
     font-weight: 750;
+    line-height: 1.75;
 }
 
 .error {
-    color: #991b1b;
+    color: #8e2c27;
     background: var(--danger-soft);
-    border: 1px solid #fecaca;
+    border: 1px solid #efcfcc;
 }
 
 .success {
-    color: #166534;
+    color: #105e2c;
     background: var(--success-soft);
-    border: 1px solid #bbf7d0;
+    border: 1px solid #c4e8cf;
 }
 
 .table-list {
@@ -188,23 +250,27 @@ label.grid > span {
     gap: 8px;
     padding: 12px;
     border-radius: var(--radius-md);
-    background: #ffffff;
+    background: var(--surface);
     border: 1px solid var(--border-soft);
     box-shadow: none;
     cursor: default;
-    transition: var(--transition);
+    transition:
+        background-color var(--transition),
+        border-color var(--transition);
 }
 
 .list-item:hover {
-    border-color: #cbd5e1;
-    box-shadow: var(--shadow-xs);
+    background: var(--surface-soft);
+    border-color: var(--border);
+    box-shadow: none;
     transform: none;
 }
 
 .empty-soft {
-    padding: 14px;
+    padding: 18px;
     border-radius: var(--radius-md);
     text-align: center;
+    color: var(--muted);
     background: var(--surface-soft);
     border: 1px dashed var(--border);
 }
@@ -220,7 +286,7 @@ label.grid > span {
 .metric-compact {
     padding: 14px;
     border-radius: var(--radius-lg);
-    background: #ffffff;
+    background: var(--surface);
     border: 1px solid var(--border-soft);
     box-shadow: var(--shadow-xs);
 }
@@ -230,17 +296,19 @@ label.grid > span {
     height: 34px;
     display: grid;
     place-items: center;
-    margin-bottom: 9px;
+    margin-bottom: 10px;
     border-radius: var(--radius-sm);
     color: var(--primary-dark);
     background: var(--primary-soft);
-    font-weight: 950;
+    border: 1px solid rgba(15, 118, 110, 0.1);
+    font-weight: 900;
 }
 
 .stat-value,
 .metric-compact-value {
+    color: var(--text);
     font-size: 21px;
-    font-weight: 950;
+    font-weight: 900;
     letter-spacing: -0.3px;
 }
 
@@ -249,4 +317,46 @@ label.grid > span {
     margin-top: 4px;
     color: var(--muted);
     font-size: 11.5px;
+    line-height: 1.65;
+}
+
+@media (max-width: 640px) {
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger {
+        min-height: 40px;
+    }
+
+    .card,
+    .card-solid,
+    .stat-card,
+    .metric-compact {
+        border-radius: var(--radius-md);
+    }
+
+    .stat-grid,
+    .metric-compact-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 420px) {
+    .stat-grid,
+    .metric-compact-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .input,
+    .textarea,
+    select.input,
+    .list-item {
+        transition: none;
+    }
 }

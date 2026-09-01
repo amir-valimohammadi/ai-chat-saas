@@ -299,7 +299,8 @@ type ChatIconName =
     | "reply"
     | "edit"
     | "trash"
-    | "history";
+    | "history"
+    | "more";
 
 export default function ConversationShowPage() {
     const router = useRouter();
@@ -777,7 +778,7 @@ export default function ConversationShowPage() {
     }
 
     useEffect(() => {
-        const media = window.matchMedia("(min-width: 1181px)");
+        const media = window.matchMedia("(min-width: 1441px)");
 
         function syncInspector(event?: MediaQueryListEvent) {
             setIsInspectorOpen(event ? event.matches : media.matches);
@@ -1439,58 +1440,60 @@ export default function ConversationShowPage() {
                                         <span>{generatingAi ? "در حال تولید" : "پیشنهاد هوشمند"}</span>
                                     </button>
 
-                                    {!isClosed && (
-                                        <button
-                                            className="conversation-tool-btn is-danger"
-                                            type="button"
-                                            onClick={() => handleUpdateStatus("closed")}
-                                            disabled={changingStatus}
+                                    <details className="conversation-more-actions">
+                                        <summary className="conversation-tool-btn" title="ابزارهای بیشتر گفتگو">
+                                            <ChatIcon name="more" />
+                                            <span>بیشتر</span>
+                                        </summary>
+                                        <div
+                                            className="conversation-more-actions-menu"
+                                            onClick={(event) => {
+                                                if ((event.target as HTMLElement).closest("button")) {
+                                                    event.currentTarget.closest("details")?.removeAttribute("open");
+                                                }
+                                            }}
                                         >
-                                            <ChatIcon name="close" />
-                                            <span>{changingStatus ? "در حال بستن" : "بستن گفتگو"}</span>
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="conversation-head-toolbar">
-                                <span className="conversation-toolbar-label">ابزارهای گفتگو</span>
-                                <div className="conversation-head-actions">
-                                    <button
-                                        className={`conversation-tool-btn ${messageNotifications.preferences.sound_enabled ? "is-active" : ""}`}
-                                        type="button"
-                                        onClick={() => messageNotifications.toggleSound()}
-                                        title="صدای پیام جدید"
-                                    >
-                                        <ChatIcon name="sound" />
-                                        <span>صدا</span>
-                                    </button>
-                                    <button
-                                        className={`conversation-tool-btn ${messageNotifications.preferences.browser_notifications_enabled ? "is-active" : ""}`}
-                                        type="button"
-                                        onClick={() => messageNotifications.enableBrowserNotifications()}
-                                        title="اعلان مرورگر"
-                                    >
-                                        <ChatIcon name="notification" />
-                                        <span>اعلان</span>
-                                    </button>
-                                    <button
-                                        className={`conversation-tool-btn ${showMessageSearch ? "is-active" : ""}`}
-                                        type="button"
-                                        onClick={() => setShowMessageSearch((value) => !value)}
-                                    >
-                                        <ChatIcon name="search" />
-                                        <span>{showMessageSearch ? "بستن جست‌وجو" : "جست‌وجو"}</span>
-                                    </button>
-
-                                    <button
-                                        className="conversation-tool-btn"
-                                        type="button"
-                                        onClick={() => loadConversation(true)}
-                                    >
-                                        <ChatIcon name="refresh" />
-                                        <span>بروزرسانی</span>
-                                    </button>
+                                            <button
+                                                className={messageNotifications.preferences.sound_enabled ? "is-active" : ""}
+                                                type="button"
+                                                onClick={() => messageNotifications.toggleSound()}
+                                            >
+                                                <ChatIcon name="sound" />
+                                                <span>صدای پیام جدید</span>
+                                            </button>
+                                            <button
+                                                className={messageNotifications.preferences.browser_notifications_enabled ? "is-active" : ""}
+                                                type="button"
+                                                onClick={() => messageNotifications.enableBrowserNotifications()}
+                                            >
+                                                <ChatIcon name="notification" />
+                                                <span>اعلان مرورگر</span>
+                                            </button>
+                                            <button
+                                                className={showMessageSearch ? "is-active" : ""}
+                                                type="button"
+                                                onClick={() => setShowMessageSearch((value) => !value)}
+                                            >
+                                                <ChatIcon name="search" />
+                                                <span>{showMessageSearch ? "بستن جست‌وجو" : "جست‌وجوی پیام‌ها"}</span>
+                                            </button>
+                                            <button type="button" onClick={() => loadConversation(true)}>
+                                                <ChatIcon name="refresh" />
+                                                <span>بروزرسانی گفتگو</span>
+                                            </button>
+                                            {!isClosed && (
+                                                <button
+                                                    className="is-danger"
+                                                    type="button"
+                                                    onClick={() => handleUpdateStatus("closed")}
+                                                    disabled={changingStatus}
+                                                >
+                                                    <ChatIcon name="close" />
+                                                    <span>{changingStatus ? "در حال بستن" : "بستن گفتگو"}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
                         </header>
@@ -1690,6 +1693,8 @@ export default function ConversationShowPage() {
                                                     type="button"
                                                     onClick={() => setShowEmojiPicker((value) => !value)}
                                                     disabled={isClosed}
+                                                    title="افزودن ایموجی"
+                                                    aria-label="افزودن ایموجی"
                                                 >
                                                     <ChatIcon name="smile" />
                                                     <span>ایموجی</span>
@@ -1725,6 +1730,8 @@ export default function ConversationShowPage() {
                                                 type="button"
                                                 onClick={() => fileInputRef.current?.click()}
                                                 disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                                title="پیوست فایل"
+                                                aria-label="پیوست فایل"
                                             >
                                                 <ChatIcon name="paperclip" />
                                                 <span>فایل</span>
@@ -1735,6 +1742,8 @@ export default function ConversationShowPage() {
                                                 type="button"
                                                 onClick={recording ? stopVoiceRecording : startVoiceRecording}
                                                 disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                                title={recording ? "توقف ضبط صدا" : "ضبط پیام صوتی"}
+                                                aria-label={recording ? "توقف ضبط صدا" : "ضبط پیام صوتی"}
                                             >
                                                 <ChatIcon name="microphone" />
                                                 <span>{recording ? `توقف ضبط ${recordingSeconds}s` : "صوت"}</span>
@@ -1745,6 +1754,8 @@ export default function ConversationShowPage() {
                                                 type="button"
                                                 onClick={handleGenerateAiSuggestion}
                                                 disabled={generatingAi || isClosed}
+                                                title="دریافت پیشنهاد هوشمند"
+                                                aria-label="دریافت پیشنهاد هوشمند"
                                             >
                                                 <ChatIcon name="sparkles" />
                                                 <span>{generatingAi ? "در حال تولید" : "کمک هوشمند"}</span>
@@ -1754,15 +1765,17 @@ export default function ConversationShowPage() {
                                         <div className="conversation-composer-submit">
                                             <span>{reply.trim().length} کاراکتر</span>
 
-                                            <button
-                                                className="btn secondary conversation-attachment-send"
-                                                type="button"
-                                                onClick={handleSendAttachment}
-                                                disabled={sendingFile || isClosed || !selectedFile || Boolean(editingMessage) || composerMode === "internal"}
-                                            >
-                                                <ChatIcon name="paperclip" />
-                                                <span>{sendingFile ? "در حال ارسال" : "ارسال فایل"}</span>
-                                            </button>
+                                            {selectedFile && (
+                                                <button
+                                                    className="btn secondary conversation-attachment-send"
+                                                    type="button"
+                                                    onClick={handleSendAttachment}
+                                                    disabled={sendingFile || isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                                >
+                                                    <ChatIcon name="paperclip" />
+                                                    <span>{sendingFile ? "در حال ارسال" : "ارسال فایل"}</span>
+                                                </button>
+                                            )}
 
                                             <button
                                                 className="btn conversation-send-btn"
@@ -1799,7 +1812,7 @@ export default function ConversationShowPage() {
                         <header className="conversation-inspector-head">
                             <div>
                                 <strong>جزئیات گفتگو</strong>
-                                <span>اطلاعات مشتری و ابزارهای پشتیبانی</span>
+                                <span>مشتری، مدیریت و منابع گفتگو</span>
                             </div>
                             <button type="button" onClick={() => setIsInspectorOpen(false)} title="بستن پنل">
                                 <ChatIcon name="close" />
@@ -2622,6 +2635,7 @@ function ChatIcon({ name }: { name: ChatIconName }) {
         edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></>,
         trash: <><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 15H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></>,
         history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></>,
+        more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></>,
     };
 
     return (

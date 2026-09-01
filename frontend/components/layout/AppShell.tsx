@@ -610,6 +610,9 @@ export default function AppShell({
     }
 
     const shellRoleClass = user.role === "super_admin" ? "app-shell--super" : "app-shell--customer";
+    const displayRole = user.role === "super_admin" && user.admin_role_name
+        ? user.admin_role_name
+        : roleLabels[user.role];
 
     return (
         <div className={`app-shell app-shell-pro ${shellRoleClass} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${user.is_impersonating ? "has-impersonation" : ""} ${variant === "workspace" ? "app-shell-workspace" : ""}`}>
@@ -626,8 +629,8 @@ export default function AppShell({
                 <div className="shell-mobile-brand">
                     <span className="shell-mobile-logo">AI</span>
                     <div>
-                        <strong>AI Chat SaaS</strong>
-                        <small>{roleLabels[user.role]}</small>
+                        <strong>{title}</strong>
+                        <small>AI Chat SaaS · {displayRole}</small>
                     </div>
                 </div>
                 <button
@@ -661,8 +664,8 @@ export default function AppShell({
                         <div className="sidebar-title">AI Chat SaaS</div>
                         <div className="sidebar-subtitle">
                             {user.role === "super_admin"
-                                ? "فرماندهی و پایش پلتفرم"
-                                : "فضای کار پشتیبانی هوشمند"}
+                                ? "مدیریت و پایش پلتفرم"
+                                : "ارتباط و پشتیبانی مشتریان"}
                         </div>
                     </div>
 
@@ -687,19 +690,7 @@ export default function AppShell({
                     </button>
                 </div>
 
-                <div className="sidebar-role-card">
-                    <span className="role-dot" />
-                    <div>
-                        <strong>{user.role === "super_admin" && user.admin_role_name ? user.admin_role_name : roleLabels[user.role]}</strong>
-                        <p>
-                            {user.role === "super_admin"
-                                ? "مدیریت کل سیستم"
-                                : "مدیریت پشتیبانی"}
-                        </p>
-                    </div>
-                </div>
-
-                <nav className="sidebar-nav sidebar-nav-pro">
+                <nav className="sidebar-nav sidebar-nav-pro" aria-label="منوی اصلی پنل">
                     {navGroups.map((group) => (
                         <div className="sidebar-section" key={group.title}>
                             <div className="sidebar-section-title">
@@ -742,9 +733,6 @@ export default function AppShell({
                                                 </span>
                                             )}
 
-                                            <span className="sidebar-link-arrow">
-                                                ‹
-                                            </span>
                                         </Link>
                                     );
                                 })}
@@ -762,7 +750,7 @@ export default function AppShell({
                         <div className="user-card-content">
                             <strong>{user.name}</strong>
                             <span>{user.email}</span>
-                            <b>{roleLabels[user.role]}</b>
+                            <b>{displayRole}</b>
                         </div>
                     </div>
 
@@ -782,15 +770,6 @@ export default function AppShell({
                     <>
                         <div className="shell-utility-bar">
                             <div className="shell-breadcrumbs">
-                                <button
-                                    type="button"
-                                    className="shell-sidebar-toggle"
-                                    onClick={toggleSidebar}
-                                    aria-label={sidebarCollapsed ? "باز کردن نوار کناری" : "جمع کردن نوار کناری"}
-                                    aria-pressed={sidebarCollapsed}
-                                >
-                                    <ShellIcon name="panel-left" />
-                                </button>
                                 <span>{user.role === "super_admin" ? "مدیریت پلتفرم" : "فضای کاری"}</span>
                                 <b>/</b>
                                 <strong>{title}</strong>
@@ -802,7 +781,7 @@ export default function AppShell({
                                     href={user.role === "super_admin" ? "/super-admin/search" : "/conversations"}
                                 >
                                     <ShellIcon name={user.role === "super_admin" ? "search" : "conversations"} />
-                                    <span>{user.role === "super_admin" ? "جست‌وجوی سراسری" : "رفتن به گفتگوها"}</span>
+                                    <span>{user.role === "super_admin" ? "جست‌وجو" : "گفتگوها"}</span>
                                 </Link>
 
                                 {user.role === "super_admin" && newRequestCount > 0 && (
@@ -814,7 +793,7 @@ export default function AppShell({
 
                                 <div className="shell-user-compact">
                                     <span>{user.name?.slice(0, 1) || "U"}</span>
-                                    <div><strong>{user.name}</strong><small>{roleLabels[user.role]}</small></div>
+                                    <div><strong>{user.name}</strong><small>{displayRole}</small></div>
                                 </div>
                             </div>
                         </div>
@@ -832,17 +811,11 @@ export default function AppShell({
                                 )}
                             </div>
 
-                            <div className="page-header-tools">
-                                <div className="shell-context-chip">
-                                    <span />
-                                    {user.role === "super_admin" && user.admin_role_name
-                                        ? user.admin_role_name
-                                        : roleLabels[user.role]}
-                                </div>
-                                {actions && (
+                            {actions && (
+                                <div className="page-header-tools">
                                     <div className="page-actions">{actions}</div>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </header>
                     </>
                 )}
