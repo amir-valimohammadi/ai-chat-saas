@@ -47,19 +47,15 @@ const statusLabels: Record<string, string> = {
     closed: "بسته‌شده",
 };
 
-const roleLabels: Record<UserRole, string> = {
-    super_admin: "سوپر ادمین",
-    customer_admin: "مدیر مشتری",
-    agent: "پشتیبان",
-};
-
 export default function DashboardPage() {
     const router = useRouter();
 
     const [user, setUser] = useState<User | null>(null);
     const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [totalAvailable, setTotalAvailable] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [hasLoadedData, setHasLoadedData] = useState(false);
 
     const stats = useMemo(() => {
         const total = conversations.length;
@@ -89,7 +85,7 @@ export default function DashboardPage() {
     }, [conversations]);
 
     const recentConversations = useMemo(() => {
-        return conversations.slice(0, 6);
+        return conversations.slice(0, 5);
     }, [conversations]);
 
     const workloadRows = useMemo(() => {
@@ -140,8 +136,18 @@ export default function DashboardPage() {
             setError("");
 
             const data = await apiRequest("/agent/conversations-list.php");
+            const loadedConversations = Array.isArray(data.conversations)
+                ? data.conversations
+                : [];
+            const paginationTotal = Number(data.pagination?.total);
 
-            setConversations(data.conversations || []);
+            setConversations(loadedConversations);
+            setTotalAvailable(
+                Number.isFinite(paginationTotal)
+                    ? Math.max(loadedConversations.length, paginationTotal)
+                    : loadedConversations.length
+            );
+            setHasLoadedData(true);
         } catch (error: any) {
             setError(error.message || "خطا در دریافت اطلاعات داشبورد");
         } finally {
@@ -157,120 +163,136 @@ export default function DashboardPage() {
         );
     }
 
+    const normalizedName = typeof user.name === "string" ? user.name.trim() : "";
+    const firstName = normalizedName.split(/\s+/)[0] || "همکار";
+    const isInitialLoading = loading && !hasLoadedData;
+    const dataUnavailable = Boolean(error) && !hasLoadedData;
+    const showingStaleData = Boolean(error) && hasLoadedData;
+    const displayStat = (value: number) => dataUnavailable ? "—" : isInitialLoading ? "..." : value;
+    let priorityTitle = "در نمای فعلی پیام تازه‌ای باقی نمانده است";
+    let priorityDescription = "در این نما پیام خوانده‌نشده‌ای باقی نمانده؛ می‌توانید گفتگوهای فعال را ادامه دهید.";
+
+    if (dataUnavailable) {
+        priorityTitle = "اطلاعات نمای امروز در دسترس نیست";
+        priorityDescription = "دریافت اطلاعات ناموفق بود؛ از گزینه تلاش دوباره استفاده کنید.";
+    } else if (showingStaleData) {
+        priorityTitle = stats.unreadConversations > 0
+            ? `${stats.unreadConversations} گفتگوی خوانده‌نشده در آخرین نمای دریافت‌شده دارید`
+            : "آخرین نمای دریافت‌شده پیام تازه‌ای ندارد";
+        priorityDescription = "آخرین اطلاعات سالم نمایش داده می‌شود؛ برای دریافت وضعیت تازه دوباره تلاش کنید.";
+    } else if (isInitialLoading) {
+        priorityTitle = "در حال آماده‌سازی نمای امروز";
+        priorityDescription = "اطلاعات گفتگوها در حال دریافت است.";
+    } else if (loading) {
+        priorityTitle = "در حال بروزرسانی اطلاعات";
+        priorityDescription = "تا پایان بروزرسانی، آخرین اطلاعات دریافت‌شده نمایش داده می‌شود.";
+    } else if (stats.unreadConversations > 0) {
+        priorityTitle = `${stats.unreadConversations} گفتگوی خوانده‌نشده در نمای فعلی دارید`;
+        priorityDescription = `در همین نما ${stats.unreadMessages} پیام تازه دارید؛ ابتدا موارد خوانده‌نشده و پیگیری‌ها را بررسی کنید.`;
+    }
+
     return (
-        <AppShell
-            title="داشبورد"
-            kicker="Customer Panel"
-            description="نمای عملیاتی گفتگوها، پیام‌های جدید و مسیرهای اصلی مدیریت پشتیبانی"
-            actions={
-                <button className="btn secondary" onClick={loadDashboardData} disabled={loading}>
-                    {loading ? "در حال بروزرسانی..." : "بروزرسانی"}
-                </button>
-            }
-        >
+        <AppShell title="داشبورد">
             <div className="dashboard-page-shell">
-                <CustomerAnnouncementsWidget />
+                {error && (
+                    <div className="error dashboard-error" role="alert">
+                        <span>{error}</span>
+                        <button
+                            className="btn secondary"
+                            type="button"
+                            onClick={loadDashboardData}
+                            disabled={loading}
+                        >
+                            تلاش دوباره
+                        </button>
+                    </div>
+                )}
 
-                {error && <div className="error">{error}</div>}
-
-                <section className="dashboard-command-card">
-                    <div className="dashboard-command-copy">
-                        <span className="dashboard-eyebrow">Support Workspace</span>
-
-                        <h2>تمرکز امروز: پیام‌های جدید، گفتگوهای فعال و پیگیری‌های باز</h2>
-
-                        <p>
-                            این صفحه برای تصمیم سریع طراحی شده است: اول وضعیت کلی را ببین،
-                            بعد وارد گفتگوهای مهم شو یا مسیرهای مدیریتی را باز کن.
-                        </p>
-
-                        <div className="dashboard-command-actions">
-                            <Link className="btn" href="/conversations">
-                                ورود به Inbox
-                            </Link>
-
-                            {user.role === "customer_admin" && (
-                                <Link className="btn secondary" href="/ai-center">
-                                    مرکز AI
-                                </Link>
-                            )}
-
-                            <Link className="btn secondary" href="/announcements">
-                                اعلان‌ها
-                            </Link>
-                        </div>
+                <section
+                    className="dashboard-summary-card"
+                    aria-labelledby="dashboard-today-title"
+                    aria-busy={loading}
+                >
+                    <div className="dashboard-summary-copy" aria-live="polite">
+                        <span className="dashboard-eyebrow"><i /> وضعیت امروز</span>
+                        <h2 id="dashboard-today-title">سلام {firstName}، {priorityTitle}</h2>
+                        <p>{priorityDescription}</p>
+                        <small>
+                            {dataUnavailable
+                                ? "اطلاعات نمای فعلی دریافت نشد"
+                                : loading
+                                    ? "در حال بروزرسانی"
+                                    : totalAvailable > stats.total
+                                        ? `${stats.total} گفتگو در نمای فعلی از ${totalAvailable} گفتگو`
+                                        : `${stats.total} گفتگو در نمای فعلی`}
+                        </small>
                     </div>
 
-                    <div className="dashboard-focus-card">
-                        <div className="dashboard-focus-head">
-                            <span><i /> اولویت پاسخ‌گویی</span>
-                            <b>{roleLabels[user.role]}</b>
-                        </div>
-
-                        <div className="dashboard-focus-body">
-                            <div className={stats.unreadConversations > 0 ? "dashboard-focus-orbit has-work" : "dashboard-focus-orbit"}>
-                                <strong>{loading ? "..." : stats.unreadConversations}</strong>
-                                <span>گفتگو با پیام جدید</span>
-                            </div>
-
-                            <div className="dashboard-focus-metrics">
-                                <span><b>{loading ? "..." : stats.unreadMessages}</b> پیام تازه</span>
-                                <span><b>{loading ? "..." : stats.followUp}</b> نیازمند پیگیری</span>
-                                <span><b>{loading ? "..." : stats.active}</b> گفتگوی فعال</span>
-                            </div>
-                        </div>
-
-                        <Link className="dashboard-focus-link" href="/conversations">
-                            شروع رسیدگی به پیام‌ها
+                    <div className="dashboard-summary-actions">
+                        <Link className="dashboard-summary-action" href="/conversations">
+                            <span>صندوق گفتگوها</span>
                             <DashboardIcon name="arrow" />
                         </Link>
+
+                        <button
+                            className={`dashboard-summary-refresh ${loading ? "is-loading" : ""}`}
+                            type="button"
+                            onClick={loadDashboardData}
+                            disabled={loading}
+                            aria-busy={loading}
+                            aria-label="بروزرسانی داشبورد"
+                            title="بروزرسانی داشبورد"
+                        >
+                            <DashboardIcon name="refresh" />
+                            <span>بروزرسانی</span>
+                        </button>
+                    </div>
+
+                    <div
+                        className="dashboard-summary-metrics"
+                        role="list"
+                        aria-label="خلاصه وضعیت گفتگوهای نمای فعلی"
+                    >
+                        <DashboardSummaryMetric
+                            icon="unread"
+                            label="گفتگوی خوانده‌نشده"
+                            value={displayStat(stats.unreadConversations)}
+                            meta={isInitialLoading || dataUnavailable ? "" : `${stats.unreadMessages} پیام تازه`}
+                            tone={!dataUnavailable && stats.unreadConversations > 0 ? "attention" : "default"}
+                        />
+                        <DashboardSummaryMetric
+                            icon="activity"
+                            label="گفتگوی فعال"
+                            value={displayStat(stats.active)}
+                        />
+                        <DashboardSummaryMetric
+                            icon="follow"
+                            label="نیاز به پیگیری"
+                            value={displayStat(stats.followUp)}
+                            tone={!dataUnavailable && stats.followUp > 0 ? "warning" : "default"}
+                        />
+                        <DashboardSummaryMetric
+                            icon="check"
+                            label="بسته‌شده"
+                            value={displayStat(stats.closed)}
+                            tone={dataUnavailable ? "default" : "success"}
+                        />
                     </div>
                 </section>
 
-                <section className="dashboard-kpi-strip">
-                    <DashboardKpiCard
-                        icon="messages"
-                        label="کل گفتگوها"
-                        value={loading ? "..." : stats.total}
-                        hint="همه گفتگوهای قابل دسترسی"
-                    />
-                    <DashboardKpiCard
-                        icon="activity"
-                        label="فعال"
-                        value={loading ? "..." : stats.active}
-                        hint="باز، جدید، در حال انجام یا pending"
-                        tone="primary"
-                    />
-                    <DashboardKpiCard
-                        icon="unread"
-                        label="پیام جدید"
-                        value={loading ? "..." : stats.unreadMessages}
-                        hint="مجموع پیام‌های خوانده‌نشده"
-                        tone={stats.unreadMessages > 0 ? "danger" : "default"}
-                    />
-                    <DashboardKpiCard
-                        icon="follow"
-                        label="نیاز به پیگیری"
-                        value={loading ? "..." : stats.followUp}
-                        hint="گفتگوهای follow_up"
-                        tone={stats.followUp > 0 ? "warning" : "default"}
-                    />
-                    <DashboardKpiCard
-                        icon="check"
-                        label="بسته‌شده"
-                        value={loading ? "..." : stats.closed}
-                        hint="گفتگوهای تکمیل‌شده"
-                        tone="success"
-                    />
-                </section>
+                <CustomerAnnouncementsWidget />
 
                 <div className="dashboard-main-grid">
-                    <section className="dashboard-panel dashboard-inbox-panel">
+                    <section
+                        className="dashboard-panel dashboard-inbox-panel"
+                        aria-labelledby="dashboard-conversations-title"
+                        aria-busy={loading}
+                    >
                         <div className="dashboard-panel-head">
                             <div>
-                                <span className="dashboard-section-kicker">Inbox</span>
-                                <h2>آخرین گفتگوها</h2>
-                                <p className="muted">۶ گفتگوی آخر برای شروع سریع کار روزانه.</p>
+                                <span className="dashboard-section-kicker">صندوق کار</span>
+                                <h2 id="dashboard-conversations-title">گفتگوهای اولویت‌دار و اخیر</h2>
+                                <p className="muted">موارد مهم برای ادامه سریع کار روزانه</p>
                             </div>
 
                             <Link className="btn secondary" href="/conversations">
@@ -278,11 +300,15 @@ export default function DashboardPage() {
                             </Link>
                         </div>
 
-                        {loading ? (
+                        {isInitialLoading ? (
                             <div className="dashboard-loading-list">
                                 {[1, 2, 3].map((item) => (
                                     <div key={item} className="dashboard-skeleton-row" />
                                 ))}
+                            </div>
+                        ) : dataUnavailable ? (
+                            <div className="empty-soft">
+                                فهرست گفتگوها در حال حاضر در دسترس نیست.
                             </div>
                         ) : recentConversations.length === 0 ? (
                             <div className="empty-soft">
@@ -298,13 +324,11 @@ export default function DashboardPage() {
                                             conversation.has_unread ? "unread" : ""
                                         }`}
                                     >
-                                        <div className="dashboard-inbox-avatar" aria-hidden="true">
-                                            <DashboardIcon name="messages" />
-                                        </div>
-
                                         <div className="dashboard-inbox-main">
                                             <div className="dashboard-inbox-title-row">
-                                                <strong>گفتگو #{conversation.id}</strong>
+                                                <strong>
+                                                    گفتگو <bdi>#{conversation.id}</bdi>
+                                                </strong>
                                                 <StatusPill status={conversation.status} />
                                             </div>
 
@@ -316,16 +340,14 @@ export default function DashboardPage() {
                                             </p>
 
                                             <span>
-                                                آخرین پیام: {formatDateTime(conversation.last_message_at)}
+                                                {formatDateTime(conversation.last_message_at)}
                                             </span>
                                         </div>
 
                                         <div className="dashboard-inbox-meta">
                                             {conversation.has_unread ? (
                                                 <b>{conversation.unread_count}</b>
-                                            ) : (
-                                                <span>بدون پیام جدید</span>
-                                            )}
+                                            ) : null}
                                             <DashboardIcon name="arrow" />
                                         </div>
                                     </Link>
@@ -334,57 +356,30 @@ export default function DashboardPage() {
                         )}
                     </section>
 
-                    <aside className="dashboard-side-stack">
-                        <section className="dashboard-panel">
-                            <div className="dashboard-panel-head compact">
-                                <div>
-                                    <span className="dashboard-section-kicker">Shortcuts</span>
-                                    <h2>دسترسی سریع</h2>
-                                </div>
+                    <aside
+                        className="dashboard-panel dashboard-work-center"
+                        aria-labelledby="dashboard-queue-title"
+                        aria-busy={loading}
+                    >
+                        <div className="dashboard-panel-head compact">
+                            <div>
+                                <span className="dashboard-section-kicker">نمای کاری</span>
+                                <h2 id="dashboard-queue-title">وضعیت همین نما</h2>
                             </div>
+                            <Link className="dashboard-text-link" href="/conversations">جزئیات</Link>
+                        </div>
 
-                            <div className="dashboard-shortcut-list-pro">
-                                <DashboardShortcut icon="messages" href="/conversations" label="مدیریت گفتگوها" meta="Inbox و پاسخ‌گویی" />
-                                <DashboardShortcut icon="bell" href="/announcements" label="اعلان‌ها" meta="پیام‌های سیستم" />
+                        <div className="dashboard-workload-list">
+                            {workloadRows.map((row) => (
+                                <DashboardWorkloadRow
+                                    key={row.label}
+                                    label={row.label}
+                                    value={displayStat(row.value)}
+                                    tone={row.tone}
+                                />
+                            ))}
+                        </div>
 
-                                {user.role === "customer_admin" && (
-                                    <>
-                                        <DashboardShortcut icon="spark" href="/ai-center" label="مرکز AI" meta="دانش، خزش و تست" />
-                                        <DashboardShortcut icon="widget" href="/widget-settings" label="تنظیمات ویجت" meta="ظاهر و رفتار ویجت" />
-                                        <DashboardShortcut icon="quick" href="/quick-replies" label="پاسخ‌های آماده" meta="متن‌های پرتکرار" />
-                                        <DashboardShortcut icon="users" href="/team" label="تیم پشتیبانی" meta="کاربران و دسترسی‌ها" />
-                                    </>
-                                )}
-                            </div>
-                        </section>
-
-                        <section className="dashboard-panel">
-                            <div className="dashboard-panel-head compact">
-                                <div>
-                                    <span className="dashboard-section-kicker">Workload</span>
-                                    <h2>بار کاری گفتگوها</h2>
-                                </div>
-                            </div>
-
-                            <div className="dashboard-workload-list">
-                                {workloadRows.map((row) => (
-                                    <DashboardWorkloadRow
-                                        key={row.label}
-                                        label={row.label}
-                                        value={loading ? "..." : row.value}
-                                        tone={row.tone}
-                                    />
-                                ))}
-                            </div>
-
-                            <div className="dashboard-note-card">
-                                <strong>پیشنهاد عملیاتی</strong>
-                                <p>
-                                    اول پیام‌های خوانده‌نشده و گفتگوهای follow_up را بررسی کن،
-                                    سپس گفتگوهای بدون پاسخ را ببند یا به پشتیبان مناسب بسپار.
-                                </p>
-                            </div>
-                        </section>
                     </aside>
                 </div>
             </div>
@@ -392,51 +387,28 @@ export default function DashboardPage() {
     );
 }
 
-function DashboardKpiCard({
-                              icon,
-                              value,
-                              label,
-                              hint,
-                              tone = "default",
-                          }: {
+function DashboardSummaryMetric({
+                                    icon,
+                                    value,
+                                    label,
+                                    meta,
+                                    tone = "default",
+                                }: {
     icon: DashboardIconName;
     value: string | number;
     label: string;
-    hint: string;
-    tone?: "default" | "primary" | "success" | "warning" | "danger";
+    meta?: string;
+    tone?: "default" | "attention" | "success" | "warning";
 }) {
     return (
-        <article className={`dashboard-kpi-card tone-${tone}`}>
-            <div className="dashboard-kpi-topline">
-                <span><DashboardIcon name={icon} /></span>
-                <div className="dashboard-kpi-value">{value}</div>
-            </div>
-            <div className="dashboard-kpi-label">{label}</div>
-            <p>{hint}</p>
-        </article>
-    );
-}
-
-function DashboardShortcut({
-                               icon,
-                               href,
-                               label,
-                               meta,
-                           }: {
-    icon: DashboardIconName;
-    href: string;
-    label: string;
-    meta: string;
-}) {
-    return (
-        <Link className="dashboard-shortcut-pro" href={href}>
-            <span className="dashboard-shortcut-icon"><DashboardIcon name={icon} /></span>
+        <article className={`dashboard-summary-metric tone-${tone}`} role="listitem">
+            <span><DashboardIcon name={icon} /></span>
             <div>
-                <strong>{label}</strong>
-                <span>{meta}</span>
+                <strong>{value}</strong>
+                <p>{label}</p>
+                {meta && <small>{meta}</small>}
             </div>
-            <b><DashboardIcon name="arrow" /></b>
-        </Link>
+        </article>
     );
 }
 
@@ -488,29 +460,19 @@ function formatDateTime(value: string | null) {
 type DashboardIconName =
     | "activity"
     | "arrow"
-    | "bell"
     | "check"
     | "follow"
-    | "messages"
-    | "quick"
-    | "spark"
-    | "unread"
-    | "users"
-    | "widget";
+    | "refresh"
+    | "unread";
 
 function DashboardIcon({ name }: { name: DashboardIconName }) {
     const paths: Record<DashboardIconName, ReactNode> = {
         activity: <><path d="M4 13h4l2.2-6 3.2 11 2.1-5H20"/><path d="M4 4v16h16"/></>,
         arrow: <><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></>,
-        bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
         check: <><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></>,
         follow: <><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8"/><path d="M4 4v4h4"/><path d="M12 8v5l3 2"/></>,
-        messages: <><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></>,
-        quick: <><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></>,
-        spark: <><path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></>,
+        refresh: <><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></>,
         unread: <><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/><circle cx="18" cy="6" r="3"/></>,
-        users: <><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4.5a4 4 0 0 1 0 7.5M18 14a6 6 0 0 1 4 6"/></>,
-        widget: <><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 9v12"/></>,
     };
 
     return (

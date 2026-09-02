@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiDownload, apiRequest, getAuthUser } from "@/lib/api";
@@ -134,6 +135,7 @@ export default function ConversationsPage() {
     const [page, setPage] = useState(1);
     const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0, limit: 50 });
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [canUseInbox, setCanUseInbox] = useState(false);
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -145,6 +147,8 @@ export default function ConversationsPage() {
     const knownLastMessageMap = useRef<Record<number, string | null>>({});
     const filtersRef = useRef(filters);
     const pageRef = useRef(page);
+    const listRequestIdRef = useRef(0);
+    const bulkActionPendingRef = useRef(false);
 
     function buildQuery(activeFilters = filtersRef.current, activePage = pageRef.current) {
         const params = new URLSearchParams();
@@ -161,13 +165,32 @@ export default function ConversationsPage() {
     }
 
     async function loadConversations(silent = false, activeFilters = filtersRef.current, activePage = pageRef.current) {
+        if (!canUseInbox) return;
+
+        const requestId = ++listRequestIdRef.current;
+        const query = buildQuery(activeFilters, activePage);
+        const isCurrentRequest = () => requestId === listRequestIdRef.current && query === buildQuery();
+
         try {
             setError("");
             silent ? setRefreshing(true) : setLoading(true);
-            const data = await apiRequest(`/agent/conversations-list.php?${buildQuery(activeFilters, activePage)}`);
+            const data = await apiRequest(`/agent/conversations-list.php?${query}`);
+            if (!isCurrentRequest()) return;
+
             const loaded: Conversation[] = data.conversations || [];
+            const nextPagination = data.pagination || { page: activePage, pages: 1, total: loaded.length, limit: 50 };
+            const lastPage = Math.max(1, Number(nextPagination.pages) || 1);
+
+            if (activePage > lastPage) {
+                // آرشیو آخرین ردیف ممکن است تعداد صفحات را کم کند؛ effect صفحه صحیح را دوباره می‌خواند.
+                pageRef.current = lastPage;
+                setPage(lastPage);
+                setLoading(true);
+                return;
+            }
+
             setConversations(loaded);
-            setPagination(data.pagination || { page: activePage, pages: 1, total: loaded.length, limit: 50 });
+            setPagination({ ...nextPagination, pages: lastPage });
             setSelectedIds((current) => current.filter((id) => loaded.some((item) => item.id === id)));
 
             const totalUnread = loaded.reduce((sum, item) => sum + (item.unread_count || 0), 0);
@@ -189,10 +212,14 @@ export default function ConversationsPage() {
                 });
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : "خطا در دریافت گفتگوها");
+            if (isCurrentRequest()) {
+                setError(err instanceof Error ? err.message : "خطا در دریافت گفتگوها");
+            }
         } finally {
-            setLoading(false);
-            setRefreshing(false);
+            if (isCurrentRequest()) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
     }
 
@@ -213,6 +240,8 @@ export default function ConversationsPage() {
     }
 
     async function updatePresence(next: "online" | "offline") {
+        if (!canUseInbox) return;
+
         try {
             setPresenceLoading(true);
             const data = await apiRequest("/agent/presence-status.php", {
@@ -228,23 +257,44 @@ export default function ConversationsPage() {
     }
 
     useEffect(() => {
-        if (!getAuthUser()) {
-            router.push("/login");
+        const authUser = getAuthUser();
+
+        if (!authUser) {
+            router.replace("/login");
             return;
         }
+
+        if (authUser.role === "super_admin") {
+            router.replace("/super-admin/dashboard");
+            return;
+        }
+
+        if (authUser.role !== "customer_admin" && authUser.role !== "agent") {
+            router.replace("/login");
+            return;
+        }
+
+        setCanUseInbox(true);
         loadOptions();
         loadPresence();
+
+        return () => {
+            listRequestIdRef.current += 1;
+        };
     }, [router]);
 
     useEffect(() => {
         filtersRef.current = filters;
         pageRef.current = page;
+        if (!canUseInbox) return;
+
         const timer = window.setTimeout(() => loadConversations(false, filters, page), filters.q ? 350 : 0);
         return () => window.clearTimeout(timer);
-    }, [filters, page]);
+    }, [canUseInbox, filters, page]);
 
     useApiEventStream({
         path: "/agent/inbox-stream.php",
+        enabled: canUseInbox,
         fallbackIntervalMs: 6000,
         onEvent: (message) => {
             if (message.event === "inbox.updated") {
@@ -259,6 +309,21 @@ export default function ConversationsPage() {
         setFilters((current) => ({ ...current, [key]: value }));
     }
 
+    function changeSiteFilter(siteId: string) {
+        setPage(1);
+        setFilters((current) => {
+            const departmentMatchesSite = !current.department_id || !siteId || options.departments.some(
+                (department) => department.id === Number(current.department_id) && department.site_id === Number(siteId)
+            );
+
+            return {
+                ...current,
+                site_id: siteId,
+                department_id: departmentMatchesSite ? current.department_id : "",
+            };
+        });
+    }
+
     function applyQuickView(view: QuickView) {
         const next: Filters = { ...initialFilters };
         if (view === "unread") next.unread = true;
@@ -270,6 +335,8 @@ export default function ConversationsPage() {
     }
 
     async function updateManagement(conversationId: number, payload: Record<string, unknown>) {
+        if (!canUseInbox || bulkActionPendingRef.current) return;
+
         try {
             setError("");
             await apiRequest("/agent/conversation-management-update.php", {
@@ -283,26 +350,36 @@ export default function ConversationsPage() {
     }
 
     async function runBulkAction(action: string, value: unknown = null) {
-        if (!selectedIds.length) return;
+        if (!canUseInbox || bulkActionPendingRef.current || !selectedIds.length) return;
+        if (action === "department" && !bulkDepartments.some((department) => department.id === Number(value))) {
+            setError("برای انتقال دپارتمان، گفتگوهای یک سایت و دپارتمان همان سایت را انتخاب کنید.");
+            return;
+        }
+
+        const conversationIds = [...selectedIds];
+        bulkActionPendingRef.current = true;
         try {
             setBulkLoading(true);
             setError("");
             const data = await apiRequest("/agent/conversations-bulk-action.php", {
                 method: "POST",
-                body: JSON.stringify({ conversation_ids: selectedIds, action, value }),
+                body: JSON.stringify({ conversation_ids: conversationIds, action, value }),
             });
-            setNotice(`${data.selected_count || selectedIds.length} گفتگو بروزرسانی شد.`);
+            setNotice(`${data.selected_count || conversationIds.length} گفتگو بروزرسانی شد.`);
             setSelectedIds([]);
             await loadConversations(true);
             window.setTimeout(() => setNotice(""), 3500);
         } catch (err) {
             setError(err instanceof Error ? err.message : "عملیات گروهی ناموفق بود");
         } finally {
+            bulkActionPendingRef.current = false;
             setBulkLoading(false);
         }
     }
 
     async function exportCsv() {
+        if (!canUseInbox) return;
+
         try {
             setError("");
             await apiDownload(`/agent/conversations-export.php?${buildQuery(filters, 1)}`, "conversations.csv");
@@ -310,15 +387,6 @@ export default function ConversationsPage() {
             setError(err instanceof Error ? err.message : "خروجی CSV ناموفق بود");
         }
     }
-
-    const stats = useMemo(() => ({
-        total: pagination.total,
-        unread: conversations.reduce((sum, item) => sum + item.unread_count, 0),
-        urgent: conversations.filter((item) => item.priority === "urgent").length,
-        unassigned: conversations.filter((item) => !item.assigned_agent).length,
-        pinned: conversations.filter((item) => item.is_pinned).length,
-        files: conversations.reduce((sum, item) => sum + item.attachment_count, 0),
-    }), [conversations, pagination.total]);
 
     const activeFilterCount = useMemo(() => {
         return Object.entries(filters).reduce((count, [key, value]) => {
@@ -329,32 +397,49 @@ export default function ConversationsPage() {
     }, [filters]);
 
     const activeQuickView: QuickView | "custom" = useMemo(() => {
-        const normalized = { ...filters, q: "", status: "" as StatusFilter };
-        const base = { ...initialFilters, q: "", status: "" as StatusFilter };
-        const matches = (candidate: Filters) => JSON.stringify(normalized) === JSON.stringify(candidate);
-        if (matches({ ...base, unread: true })) return "unread";
-        if (matches({ ...base, unassigned: true })) return "unassigned";
-        if (matches({ ...base, priority: "urgent" })) return "urgent";
-        if (matches(base) && !filters.q && !filters.status) return "all";
+        const matches = (candidate: Filters) => (Object.keys(initialFilters) as (keyof Filters)[]).every(
+            (key) => filters[key] === candidate[key]
+        );
+        if (matches(initialFilters)) return "all";
+        if (matches({ ...initialFilters, unread: true })) return "unread";
+        if (matches({ ...initialFilters, unassigned: true })) return "unassigned";
+        if (matches({ ...initialFilters, priority: "urgent" })) return "urgent";
         return "custom";
     }, [filters]);
+
+    const bulkDepartmentSiteId = useMemo(() => {
+        const selectedConversations = conversations.filter((conversation) => selectedIds.includes(conversation.id));
+        if (!selectedIds.length || selectedConversations.length !== selectedIds.length) return null;
+
+        const siteIds = new Set(selectedConversations.map((conversation) => conversation.site.id));
+        return siteIds.size === 1 ? selectedConversations[0].site.id : null;
+    }, [conversations, selectedIds]);
+    const bulkDepartments = useMemo(() => options.departments.filter(
+        (department) => department.site_id === bulkDepartmentSiteId
+    ), [bulkDepartmentSiteId, options.departments]);
+    const bulkDepartmentHint = bulkDepartmentSiteId === null
+        ? "برای انتقال دپارتمان، گفتگوهای یک سایت را انتخاب کنید."
+        : bulkDepartments.length === 0
+            ? "دپارتمان فعالی برای سایت انتخاب‌شده وجود ندارد."
+            : "";
 
     const allSelected = conversations.length > 0 && conversations.every((item) => selectedIds.includes(item.id));
 
     return (
         <AppShell
             title="گفتگوها"
-            kicker="صندوق پشتیبانی"
-            description="پیام‌های مشتریان را سریع پیدا، اولویت‌بندی و مدیریت کنید."
             actions={
                 <div className="conversations-header-actions">
                     <button
-                        className="btn secondary conversations-action-btn"
+                        className={`btn secondary conversations-icon-action ${notifications.preferences.sound_enabled ? "active" : ""}`}
                         onClick={() => notifications.toggleSound()}
                         type="button"
+                        aria-pressed={notifications.preferences.sound_enabled}
+                        aria-label={notifications.preferences.sound_enabled ? "خاموش‌کردن صدای اعلان" : "روشن‌کردن صدای اعلان"}
+                        title={notifications.preferences.sound_enabled ? "صدای اعلان روشن است" : "صدای اعلان خاموش است"}
                     >
                         <ConversationIcon name={notifications.preferences.sound_enabled ? "bell" : "bellOff"} />
-                        <span>{notifications.preferences.sound_enabled ? "صدای اعلان روشن" : "صدای اعلان خاموش"}</span>
+                        <span className="conversations-action-label">صدای اعلان</span>
                     </button>
 
                     <label className={`presence-control ${availabilityStatus}`}>
@@ -364,7 +449,7 @@ export default function ConversationsPage() {
                             className="presence-select"
                             value={availabilityStatus}
                             onChange={(event) => updatePresence(event.target.value as "online" | "offline")}
-                            disabled={presenceLoading}
+                            disabled={!canUseInbox || presenceLoading}
                             aria-label="وضعیت حضور"
                         >
                             <option value="online">آنلاین</option>
@@ -372,68 +457,47 @@ export default function ConversationsPage() {
                         </select>
                     </label>
 
-                    <button className="btn secondary conversations-icon-action" onClick={exportCsv} type="button">
+                    <button
+                        className="btn secondary conversations-icon-action"
+                        onClick={exportCsv}
+                        type="button"
+                        disabled={!canUseInbox}
+                        aria-label="دریافت خروجی CSV"
+                        title="دریافت خروجی CSV"
+                    >
                         <ConversationIcon name="download" />
-                        <span>خروجی</span>
+                        <span className="conversations-action-label">خروجی</span>
                     </button>
 
                     <button
                         className="btn secondary conversations-icon-action"
                         onClick={() => loadConversations(true)}
-                        disabled={refreshing}
+                        disabled={!canUseInbox || loading || refreshing}
                         type="button"
+                        aria-label="بروزرسانی فهرست گفتگوها"
                     >
                         <ConversationIcon name="refresh" className={refreshing ? "is-spinning" : ""} />
-                        <span>{refreshing ? "در حال بروزرسانی" : "بروزرسانی"}</span>
+                        <span className="conversations-action-label">{refreshing ? "در حال بروزرسانی" : "بروزرسانی"}</span>
                     </button>
                 </div>
             }
         >
             <div className="conversations-page-shell">
-                <section className="conversations-overview-card">
-                    <div className="conversations-overview-copy">
-                        <span className="conversations-eyebrow">
-                            <ConversationIcon name="inbox" />
-                            مرکز مدیریت پیام‌ها
-                        </span>
-                        <h2>گفتگوهای مهم را از دست ندهید</h2>
-                        <p>
-                            پیام‌های جدید، گفتگوهای فوری و مکالمات بدون مسئول را از یک نمای واحد مدیریت کنید.
-                        </p>
-                        <div className="conversations-overview-meta">
-                            <span><ConversationIcon name="search" /> جست‌وجو در متن، فایل و اطلاعات مشتری</span>
-                            <span><ConversationIcon name="filter" /> فیلترهای دقیق و عملیات گروهی</span>
-                        </div>
-                    </div>
-
-                    <div className="conversations-overview-result">
-                        <span>نتیجه فعلی</span>
-                        <strong>{pagination.total}</strong>
-                        <small>صفحه {pagination.page} از {pagination.pages}</small>
-                        {activeFilterCount > 0 && <b>{activeFilterCount} فیلتر فعال</b>}
-                    </div>
-                </section>
-
-                <section className="conversations-kpi-strip" aria-label="آمار صندوق گفتگو">
-                    <InboxKpi icon="messages" label="کل گفتگوها" value={stats.total} />
-                    <InboxKpi icon="unread" label="پیام خوانده‌نشده" value={stats.unread} tone={stats.unread ? "danger" : "default"} />
-                    <InboxKpi icon="urgent" label="اولویت فوری" value={stats.urgent} tone={stats.urgent ? "danger" : "default"} />
-                    <InboxKpi icon="userMinus" label="بدون مسئول" value={stats.unassigned} tone={stats.unassigned ? "warning" : "default"} />
-                    <InboxKpi icon="pin" label="سنجاق‌شده" value={stats.pinned} tone="primary" />
-                    <InboxKpi icon="paperclip" label="فایل‌های پیوست" value={stats.files} />
-                </section>
-
-                {notice && <div className="success conversations-notice">{notice}</div>}
-                {error && <div className="error conversations-notice">{error}</div>}
-
-                <section className="conversations-inbox-card">
+                <section
+                    className="conversations-inbox-card"
+                    aria-labelledby="conversations-inbox-title"
+                    aria-busy={loading || refreshing}
+                >
                     <div className="conversations-filter-header">
                         <div>
-                            <span className="conversations-section-kicker">فیلتر و جست‌وجو</span>
-                            <h3>صندوق گفتگوها</h3>
+                            <span className="conversations-section-kicker">صندوق اولویت‌دار</span>
+                            <h2 id="conversations-inbox-title">گفتگوها</h2>
+                            <p>سنجاق‌شده‌ها، موارد فوری و تازه‌ترین پیام‌ها در ابتدای فهرست قرار می‌گیرند.</p>
                         </div>
                         <div className="conversations-filter-summary">
-                            <span>{pagination.total} نتیجه</span>
+                            <strong>{pagination.total}</strong>
+                            <span>نتیجه</span>
+                            <small>صفحه {pagination.page} از {pagination.pages}</small>
                             {activeFilterCount > 0 && <b>{activeFilterCount} فیلتر فعال</b>}
                         </div>
                     </div>
@@ -493,6 +557,8 @@ export default function ConversationsPage() {
                             className={`btn secondary conversations-filter-toggle ${showAdvanced ? "active" : ""}`}
                             type="button"
                             onClick={() => setShowAdvanced((value) => !value)}
+                            aria-expanded={showAdvanced}
+                            aria-controls="conversations-advanced-filters"
                         >
                             <ConversationIcon name="filter" />
                             <span>{showAdvanced ? "بستن فیلترها" : "فیلترهای بیشتر"}</span>
@@ -510,12 +576,26 @@ export default function ConversationsPage() {
                         </button>
                     </div>
 
+                    {notice && (
+                        <div className="success conversations-notice" role="status" aria-live="polite">
+                            {notice}
+                        </div>
+                    )}
+                    {error && (
+                        <div className="error conversations-notice" role="alert">
+                            <span>{error}</span>
+                            <button type="button" className="btn secondary" onClick={() => loadConversations(false)}>
+                                تلاش دوباره
+                            </button>
+                        </div>
+                    )}
+
                     {showAdvanced && (
-                        <div className="phase4-advanced-filters">
+                        <div className="phase4-advanced-filters" id="conversations-advanced-filters">
                             <label><span>اولویت</span><select className="input" value={filters.priority} onChange={(event) => changeFilter("priority", event.target.value as Priority)}><option value="">همه</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="normal">عادی</option><option value="low">کم</option></select></label>
                             <label><span>پشتیبان</span><select className="input" value={filters.assigned_agent_id} onChange={(event) => changeFilter("assigned_agent_id", event.target.value)}><option value="">همه</option>{options.agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label>
                             <label><span>دپارتمان</span><select className="input" value={filters.department_id} onChange={(event) => changeFilter("department_id", event.target.value)}><option value="">همه</option>{options.departments.filter((department) => !filters.site_id || department.site_id === Number(filters.site_id)).map((department) => <option key={department.id} value={department.id}>{department.name} · {department.site_name}</option>)}</select></label>
-                            <label><span>سایت</span><select className="input" value={filters.site_id} onChange={(event) => changeFilter("site_id", event.target.value)}><option value="">همه</option>{options.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+                            <label><span>سایت</span><select className="input" value={filters.site_id} onChange={(event) => changeSiteFilter(event.target.value)}><option value="">همه</option>{options.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
                             <label><span>از تاریخ</span><input className="input" type="date" value={filters.date_from} onChange={(event) => changeFilter("date_from", event.target.value)} /></label>
                             <label><span>تا تاریخ</span><input className="input" type="date" value={filters.date_to} onChange={(event) => changeFilter("date_to", event.target.value)} /></label>
                             <div className="phase4-check-filters">
@@ -532,26 +612,29 @@ export default function ConversationsPage() {
                     )}
 
                     {selectedIds.length > 0 && (
-                        <div className="phase4-bulk-bar">
+                        <div className="phase4-bulk-bar" aria-busy={bulkLoading}>
                             <div className="phase4-bulk-title">
                                 <ConversationIcon name="checkSquare" />
                                 <strong>{selectedIds.length} گفتگو انتخاب شده</strong>
                             </div>
-                            <button className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction(filters.archived === "1" ? "unarchive" : "archive")}>
+                            <button type="button" className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction(filters.archived === "1" ? "unarchive" : "archive")}>
                                 <ConversationIcon name="archive" />
                                 {filters.archived === "1" ? "بازگردانی" : "آرشیو"}
                             </button>
-                            <button className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction("pin")}>
+                            <button type="button" className="btn secondary" disabled={bulkLoading} onClick={() => runBulkAction("pin")}>
                                 <ConversationIcon name="pin" />
                                 سنجاق
                             </button>
-                            <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("priority", event.target.value); event.currentTarget.value = ""; }}><option value="">تغییر اولویت...</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="normal">عادی</option><option value="low">کم</option></select>
-                            <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("assign", event.target.value); event.currentTarget.value = ""; }}><option value="">اختصاص به...</option><option value="0">بدون مسئول</option>{options.agents.filter((agent) => agent.is_active).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select>
-                            <select className="input" defaultValue="" onChange={(event) => { if (event.target.value) runBulkAction("department", event.target.value); event.currentTarget.value = ""; }}><option value="">انتقال دپارتمان...</option>{options.departments.map((department) => <option key={department.id} value={department.id}>{department.name} · {department.site_name}</option>)}</select>
-                            <button className="btn secondary phase4-bulk-cancel" onClick={() => setSelectedIds([])}>
+                            <select className="input" defaultValue="" disabled={bulkLoading} aria-label="تغییر اولویت گفتگوهای انتخاب‌شده" onChange={(event) => { if (event.target.value) void runBulkAction("priority", event.target.value); event.currentTarget.value = ""; }}><option value="">تغییر اولویت...</option><option value="urgent">فوری</option><option value="high">بالا</option><option value="normal">عادی</option><option value="low">کم</option></select>
+                            <select className="input" defaultValue="" disabled={bulkLoading} aria-label="مسئول گفتگوهای انتخاب‌شده" onChange={(event) => { if (event.target.value) void runBulkAction("assign", event.target.value); event.currentTarget.value = ""; }}><option value="">اختصاص به...</option><option value="0">بدون مسئول</option>{options.agents.filter((agent) => agent.is_active).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select>
+                            <select className="input" defaultValue="" disabled={bulkLoading || bulkDepartments.length === 0} aria-label="انتقال گفتگوهای انتخاب‌شده به دپارتمان" aria-describedby={bulkDepartmentHint ? "conversations-bulk-department-hint" : undefined} onChange={(event) => { if (event.target.value) void runBulkAction("department", event.target.value); event.currentTarget.value = ""; }}><option value="">انتقال دپارتمان...</option>{bulkDepartments.map((department) => <option key={department.id} value={department.id}>{department.name} · {department.site_name}</option>)}</select>
+                            <button type="button" className="btn secondary phase4-bulk-cancel" disabled={bulkLoading} onClick={() => setSelectedIds([])}>
                                 <ConversationIcon name="close" />
                                 لغو انتخاب
                             </button>
+                            {bulkDepartmentHint && (
+                                <p className="phase4-bulk-help" id="conversations-bulk-department-hint">{bulkDepartmentHint}</p>
+                            )}
                         </div>
                     )}
 
@@ -559,7 +642,7 @@ export default function ConversationsPage() {
                         <div className="conversations-skeleton-list">
                             {[1, 2, 3, 4].map((item) => <div key={item} className="conversations-skeleton-row" />)}
                         </div>
-                    ) : conversations.length === 0 ? (
+                    ) : error && conversations.length === 0 ? null : conversations.length === 0 ? (
                         <div className="conversations-empty-state">
                             <div className="conversations-empty-icon"><ConversationIcon name="search" /></div>
                             <h3>گفتگویی پیدا نشد</h3>
@@ -573,12 +656,11 @@ export default function ConversationsPage() {
                     ) : (
                         <div className="conversations-table">
                             <div className="conversations-table-head phase4-table-head">
-                                <span><input type="checkbox" checked={allSelected} onChange={(event) => setSelectedIds(event.target.checked ? conversations.map((item) => item.id) : [])} aria-label="انتخاب همه گفتگوها" /></span>
-                                <span>مخاطب و آخرین پیام</span>
+                                <span><input type="checkbox" checked={allSelected} disabled={bulkLoading} onChange={(event) => setSelectedIds(event.target.checked ? conversations.map((item) => item.id) : [])} aria-label="انتخاب همه گفتگوهای این صفحه" /></span>
+                                <span>مخاطب و پیام</span>
                                 <span>وضعیت</span>
                                 <span>مسئول</span>
-                                <span>جزئیات</span>
-                                <span>عملیات</span>
+                                <span>آخرین فعالیت</span>
                             </div>
 
                             {conversations.map((conversation) => {
@@ -594,18 +676,23 @@ export default function ConversationsPage() {
                                             conversation.is_pinned ? "pinned" : "",
                                             `priority-${conversation.priority}`,
                                         ].filter(Boolean).join(" ")}
-                                        onClick={() => router.push(`/conversations/${conversation.id}`)}
                                     >
-                                        <div className="phase4-select-cell" onClick={(event) => event.stopPropagation()}>
+                                        <div className="phase4-select-cell">
                                             <input
                                                 type="checkbox"
                                                 checked={selectedIds.includes(conversation.id)}
+                                                disabled={bulkLoading}
                                                 onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, conversation.id] : current.filter((id) => id !== conversation.id))}
                                                 aria-label={`انتخاب گفتگوی ${visitorName}`}
                                             />
                                         </div>
 
-                                        <div className="conversation-cell-main">
+                                        <Link
+                                            className="conversation-cell-main conversation-row-link"
+                                            href={`/conversations/${conversation.id}`}
+                                            prefetch={false}
+                                            aria-label={`باز کردن گفتگوی ${visitorName} با شناسه ${conversation.id}`}
+                                        >
                                             <div className="conversation-avatar-wrap">
                                                 <div className="conversation-list-avatar">{getInitials(visitorName)}</div>
                                                 <span className={conversation.visitor.is_online ? "conversation-presence online" : "conversation-presence"} />
@@ -613,27 +700,31 @@ export default function ConversationsPage() {
                                             <div className="conversation-main-content">
                                                 <div className="conversation-title-row">
                                                     <strong>{visitorName}</strong>
-                                                    <span className="conversation-id">#{conversation.id}</span>
+                                                    <span className="conversation-id"><bdi>#{conversation.id}</bdi></span>
                                                     {conversation.is_pinned && <b className="phase4-pin-badge"><ConversationIcon name="pin" /></b>}
                                                     {conversation.has_unread && <b className="conversation-unread-badge">{conversation.unread_count} جدید</b>}
                                                     {conversation.has_unread_mention && <b className="mention-badge">منشن شما</b>}
                                                 </div>
                                                 <p>{truncateText(conversation.last_message || "هنوز پیامی ثبت نشده است.", 130)}</p>
                                                 <div className="conversation-message-meta">
-                                                    <span><ConversationIcon name="clock" /> {formatDateTime(conversation.last_message_at)}</span>
-                                                    <PriorityBadge priority={conversation.priority} />
-                                                    {conversation.department && (
-                                                        <b className="phase5-department-badge" style={{ borderColor: conversation.department.color, color: conversation.department.color }}>
-                                                            {conversation.department.name}
-                                                        </b>
+                                                    <span>{conversation.site.name}</span>
+                                                    {(conversation.visitor.phone || conversation.visitor.email) && (
+                                                        <span className="conversation-contact-value" dir="ltr">
+                                                            {conversation.visitor.phone || conversation.visitor.email}
+                                                        </span>
                                                     )}
                                                     {conversation.queue_status === "waiting" && <b className="phase5-queue-badge">صف {conversation.queue_position || "-"}</b>}
+                                                    {conversation.message_count > 0 && <span><ConversationIcon name="messages" /> {conversation.message_count}</span>}
+                                                    {conversation.attachment_count > 0 && <span><ConversationIcon name="paperclip" /> {conversation.attachment_count}</span>}
+                                                    {conversation.has_voice && <span>صوت</span>}
+                                                    {conversation.has_internal_note && <span>یادداشت</span>}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </Link>
 
                                         <div className="conversation-cell-status">
                                             <StatusBadge status={conversation.status} />
+                                            <PriorityBadge priority={conversation.priority} />
                                         </div>
 
                                         <div className="conversation-cell-agent">
@@ -645,40 +736,42 @@ export default function ConversationsPage() {
                                             ) : (
                                                 <span className="conversation-unassigned"><ConversationIcon name="userMinus" /> بدون مسئول</span>
                                             )}
+                                            {conversation.department && (
+                                                <b className="phase5-department-badge" style={{ borderColor: conversation.department.color, color: conversation.department.color }}>
+                                                    {conversation.department.name}
+                                                </b>
+                                            )}
                                         </div>
 
-                                        <div className="conversation-cell-contact">
-                                            <strong>{conversation.site.name}</strong>
-                                            <span>{conversation.visitor.phone || conversation.visitor.email || "اطلاعات تماس ثبت نشده"}</span>
-                                            <small>
-                                                <span><ConversationIcon name="messages" /> {conversation.message_count}</span>
-                                                <span><ConversationIcon name="paperclip" /> {conversation.attachment_count}</span>
-                                                {conversation.has_voice && <span>صوت</span>}
-                                                {conversation.has_internal_note && <span>یادداشت</span>}
-                                            </small>
-                                        </div>
-
-                                        <div className="conversation-cell-action phase4-row-actions" onClick={(event) => event.stopPropagation()}>
-                                            <button
-                                                className={`phase4-icon-btn ${conversation.is_pinned ? "active" : ""}`}
-                                                title={conversation.is_pinned ? "برداشتن سنجاق" : "سنجاق‌کردن"}
-                                                aria-label={conversation.is_pinned ? "برداشتن سنجاق" : "سنجاق‌کردن"}
-                                                onClick={() => updateManagement(conversation.id, { is_pinned: !conversation.is_pinned })}
-                                            >
-                                                <ConversationIcon name="pin" />
-                                            </button>
-                                            <button
-                                                className="phase4-icon-btn"
-                                                title={conversation.is_archived ? "بازگردانی" : "آرشیو"}
-                                                aria-label={conversation.is_archived ? "بازگردانی" : "آرشیو"}
-                                                onClick={() => updateManagement(conversation.id, { is_archived: !conversation.is_archived })}
-                                            >
-                                                <ConversationIcon name={conversation.is_archived ? "restore" : "archive"} />
-                                            </button>
-                                            <button className="conversation-open-btn" onClick={() => router.push(`/conversations/${conversation.id}`)}>
-                                                بازکردن
+                                        <div className="conversation-cell-activity">
+                                            <time dateTime={conversation.last_message_at || undefined} dir="ltr">
+                                                {formatDateTime(conversation.last_message_at)}
+                                            </time>
+                                            <div className="conversation-cell-action phase4-row-actions">
+                                                <button
+                                                    type="button"
+                                                    className={`phase4-icon-btn ${conversation.is_pinned ? "active" : ""}`}
+                                                    title={conversation.is_pinned ? "برداشتن سنجاق" : "سنجاق‌کردن"}
+                                                    aria-label={conversation.is_pinned ? "برداشتن سنجاق" : "سنجاق‌کردن"}
+                                                    disabled={bulkLoading}
+                                                    onClick={() => updateManagement(conversation.id, { is_pinned: !conversation.is_pinned })}
+                                                >
+                                                    <ConversationIcon name="pin" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="phase4-icon-btn"
+                                                    title={conversation.is_archived ? "بازگردانی" : "آرشیو"}
+                                                    aria-label={conversation.is_archived ? "بازگردانی" : "آرشیو"}
+                                                    disabled={bulkLoading}
+                                                    onClick={() => updateManagement(conversation.id, { is_archived: !conversation.is_archived })}
+                                                >
+                                                    <ConversationIcon name={conversation.is_archived ? "restore" : "archive"} />
+                                                </button>
+                                            </div>
+                                            <span className="conversation-open-indicator" aria-hidden="true">
                                                 <ConversationIcon name="arrowLeft" />
-                                            </button>
+                                            </span>
                                         </div>
                                     </article>
                                 );
@@ -688,12 +781,12 @@ export default function ConversationsPage() {
 
                     {pagination.pages > 1 && (
                         <div className="phase4-pagination">
-                            <button className="btn secondary" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                            <button type="button" className="btn secondary" disabled={loading || page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
                                 <ConversationIcon name="arrowRight" />
                                 قبلی
                             </button>
                             <span>صفحه {pagination.page} از {pagination.pages} · {pagination.total} نتیجه</span>
-                            <button className="btn secondary" disabled={page >= pagination.pages} onClick={() => setPage((value) => Math.min(pagination.pages, value + 1))}>
+                            <button type="button" className="btn secondary" disabled={loading || page >= pagination.pages} onClick={() => setPage((value) => Math.min(pagination.pages, value + 1))}>
                                 بعدی
                                 <ConversationIcon name="arrowLeft" />
                             </button>
@@ -712,7 +805,6 @@ type ConversationIconName =
     | "bell"
     | "bellOff"
     | "checkSquare"
-    | "clock"
     | "close"
     | "download"
     | "eraser"
@@ -736,7 +828,6 @@ function ConversationIcon({ name, className = "" }: { name: ConversationIconName
         bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
         bellOff: <><path d="m2 2 20 20"/><path d="M6.3 6.3A6 6 0 0 0 6 8c0 7-3 7-3 9h14"/><path d="M18 13.7V8a6 6 0 0 0-8.5-5.5"/><path d="M10 21h4"/></>,
         checkSquare: <><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></>,
-        clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
         close: <><path d="m6 6 12 12"/><path d="m18 6-12 12"/></>,
         download: <><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></>,
         eraser: <><path d="m7 21-4-4L15 5l4 4L7 21Z"/><path d="m11 9 4 4"/><path d="M7 21h12"/></>,
@@ -757,15 +848,6 @@ function ConversationIcon({ name, className = "" }: { name: ConversationIconName
         <svg className={`conversation-ui-icon ${className}`.trim()} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             {paths[name]}
         </svg>
-    );
-}
-
-function InboxKpi({ icon, label, value, tone = "default" }: { icon: ConversationIconName; label: string; value: string | number; tone?: "default" | "primary" | "success" | "warning" | "danger" }) {
-    return (
-        <article className={`conversations-kpi tone-${tone}`}>
-            <span className="conversations-kpi-icon"><ConversationIcon name={icon} /></span>
-            <div><strong>{value}</strong><span>{label}</span></div>
-        </article>
     );
 }
 

@@ -320,8 +320,12 @@ export default function ConversationShowPage() {
     const [loadingDepartments, setLoadingDepartments] = useState(false);
     const [transferringDepartment, setTransferringDepartment] = useState(false);
 
-    const [reply, setReply] = useState("");
     const [composerMode, setComposerMode] = useState<"public" | "internal">("public");
+    const [composerDrafts, setComposerDrafts] = useState<Record<"public" | "internal", string>>({
+        public: "",
+        internal: "",
+    });
+    const reply = composerDrafts[composerMode];
     const [selectedMentionIds, setSelectedMentionIds] = useState<number[]>([]);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -332,11 +336,13 @@ export default function ConversationShowPage() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedMessageType, setSelectedMessageType] = useState<"file" | "voice">("file");
     const [recording, setRecording] = useState(false);
+    const [startingRecording, setStartingRecording] = useState(false);
     const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [activePanel, setActivePanel] = useState<
         "quick" | "ai" | "manage" | "files" | "info"
     >("quick");
     const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+    const [isInspectorDrawer, setIsInspectorDrawer] = useState(false);
 
     const [error, setError] = useState("");
     const [aiError, setAiError] = useState("");
@@ -375,9 +381,12 @@ export default function ConversationShowPage() {
     const lastTypingSentAtRef = useRef(0);
     const isCurrentlyTypingRef = useRef(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const recordingChunksRef = useRef<Blob[]>([]);
     const recordingStreamRef = useRef<MediaStream | null>(null);
     const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const recordingGenerationRef = useRef(0);
+    const recordingRequestPendingRef = useRef(false);
+    const inspectorToggleRef = useRef<HTMLButtonElement | null>(null);
+    const inspectorRef = useRef<HTMLElement | null>(null);
     const latestVisitorMessageIdRef = useRef(0);
     const initialConversationLoadedRef = useRef(false);
     const shouldAutoScrollRef = useRef(true);
@@ -391,6 +400,7 @@ export default function ConversationShowPage() {
         : "";
 
     const isClosed = conversation?.status === "closed";
+    const composerBusy = sending || sendingFile;
 
     useEffect(() => {
         setSlaElapsedSeconds(0);
@@ -716,6 +726,12 @@ export default function ConversationShowPage() {
     async function focusMessageById(messageId: number) {
         try {
             setError("");
+            const inspectorIsDrawer = window.matchMedia("(max-width: 1440px)").matches;
+
+            if (inspectorIsDrawer) {
+                setIsInspectorOpen(false);
+            }
+
             if (!conversation?.messages.some((message) => message.id === messageId)) {
                 const data = await apiRequest(
                     `/agent/conversation-show.php?conversation_id=${conversationId}&around_id=${messageId}&limit=100&mark_read=0`
@@ -733,15 +749,20 @@ export default function ConversationShowPage() {
             setHighlightedMessageId(messageId);
             window.setTimeout(() => {
                 document.getElementById(`message-${messageId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }, 100);
+            }, inspectorIsDrawer ? 220 : 100);
             window.setTimeout(() => setHighlightedMessageId(null), 2600);
+            return true;
         } catch (err) {
             setError(err instanceof Error ? err.message : "بازکردن پیام ناموفق بود");
+            return false;
         }
     }
 
     async function focusSearchResult(result: MessageSearchResult) {
-        await focusMessageById(result.id);
+        const didFocus = await focusMessageById(result.id);
+        if (didFocus) {
+            setShowMessageSearch(false);
+        }
     }
 
     async function loadAttachments() {
@@ -781,7 +802,9 @@ export default function ConversationShowPage() {
         const media = window.matchMedia("(min-width: 1441px)");
 
         function syncInspector(event?: MediaQueryListEvent) {
-            setIsInspectorOpen(event ? event.matches : media.matches);
+            const isWideScreen = event ? event.matches : media.matches;
+            setIsInspectorDrawer(!isWideScreen);
+            setIsInspectorOpen(isWideScreen);
         }
 
         syncInspector();
@@ -789,6 +812,16 @@ export default function ConversationShowPage() {
 
         return () => media.removeEventListener("change", syncInspector);
     }, []);
+
+    useEffect(() => {
+        if (!isInspectorOpen || !isInspectorDrawer) {
+            return;
+        }
+
+        window.setTimeout(() => {
+            inspectorRef.current?.querySelector<HTMLButtonElement>(".conversation-inspector-head button")?.focus();
+        }, 0);
+    }, [isInspectorOpen, isInspectorDrawer]);
 
     useEffect(() => {
         if (!showMessageSearch) return;
@@ -852,13 +885,15 @@ export default function ConversationShowPage() {
             }
 
             updateTypingStatus(false);
-            if (mediaRecorderRef.current?.state === "recording") {
-                mediaRecorderRef.current.stop();
-            } else {
-                cleanupRecorder();
-            }
+            discardVoiceRecording();
         };
     }, [updateTypingStatus]);
+
+    useEffect(() => {
+        if (isClosed || composerMode !== "public" || editingMessage) {
+            discardVoiceRecording();
+        }
+    }, [isClosed, composerMode, editingMessage?.id]);
 
     useEffect(() => {
         window.setTimeout(() => {
@@ -869,12 +904,31 @@ export default function ConversationShowPage() {
         }, 0);
     }, [conversation?.messages?.length]);
 
+    function setComposerDraft(
+        mode: "public" | "internal",
+        value: string | ((current: string) => string)
+    ) {
+        setComposerDrafts((current) => {
+            const nextValue = typeof value === "function" ? value(current[mode]) : value;
+
+            if (nextValue === current[mode]) {
+                return current;
+            }
+
+            return { ...current, [mode]: nextValue };
+        });
+    }
+
+    function updateReply(value: string | ((current: string) => string)) {
+        setComposerDraft(composerMode, value);
+    }
+
     async function handleSendReply(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
         const content = reply.trim();
 
-        if (!content || sending) {
+        if (!content || composerBusy || recording || startingRecording) {
             return;
         }
 
@@ -908,11 +962,11 @@ export default function ConversationShowPage() {
             stopAgentTyping();
             await updateTypingStatus(false);
 
-            setReply("");
+            setComposerDraft(composerMode, "");
             setEditingMessage(null);
             setReplyingTo(null);
             setComposerMode("public");
-            setSelectedMentionIds([]);
+            if (composerMode === "internal") setSelectedMentionIds([]);
             setShowEmojiPicker(false);
             await loadConversation(true);
         } catch (err) {
@@ -923,7 +977,7 @@ export default function ConversationShowPage() {
     }
 
     async function handleSendAttachment() {
-        if (!selectedFile || !conversation) {
+        if (!selectedFile || !conversation || composerBusy || recording || startingRecording) {
             return;
         }
 
@@ -979,7 +1033,7 @@ export default function ConversationShowPage() {
             stopAgentTyping();
             await updateTypingStatus(false);
 
-            setReply("");
+            setComposerDraft("public", "");
             setReplyingTo(null);
             setSelectedFile(null);
             setSelectedMessageType("file");
@@ -997,48 +1051,74 @@ export default function ConversationShowPage() {
     }
 
     function startReplyToMessage(message: Message) {
+        if (composerBusy) return;
+        const nextMode = message.is_internal ? "internal" : "public";
         setEditingMessage(null);
-        setComposerMode(message.is_internal ? "internal" : "public");
-        setSelectedMentionIds([]);
+        setComposerMode(nextMode);
+        if (nextMode === "internal") setSelectedMentionIds([]);
         setReplyingTo(message);
-        setReply("");
+        setComposerDraft(nextMode, "");
         window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
     }
 
     function startEditMessage(message: Message) {
+        if (composerBusy) return;
+        const nextMode = message.is_internal ? "internal" : "public";
         setReplyingTo(null);
         setEditingMessage(message);
-        setComposerMode(message.is_internal ? "internal" : "public");
-        setSelectedMentionIds(message.mentioned_users?.map((item) => item.id) || []);
+        setComposerMode(nextMode);
+        if (nextMode === "internal") {
+            setSelectedMentionIds(message.mentioned_users?.map((item) => item.id) || []);
+        }
         setSelectedFile(null);
-        setReply(message.content);
+        setComposerDraft(nextMode, message.content);
         window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
     }
 
     function changeComposerMode(nextMode: "public" | "internal") {
-        if (composerMode === nextMode || editingMessage) {
+        if (composerMode === nextMode || editingMessage || composerBusy) {
             return;
         }
 
         stopAgentTyping();
         setComposerMode(nextMode);
         setSelectedFile(null);
-        setSelectedMentionIds([]);
-        setReply("");
         setShowEmojiPicker(false);
+
+        if (nextMode === "public" && replyingTo?.is_internal) {
+            setReplyingTo(null);
+        }
 
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
+
+        window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
+    }
+
+    function focusComposerAfterInspectorAction() {
+        if (window.matchMedia("(max-width: 1440px)").matches) {
+            setIsInspectorOpen(false);
+        }
+
+        window.setTimeout(() => {
+            document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus();
+        }, 180);
+    }
+
+    function closeInspectorAndRestoreFocus() {
+        setIsInspectorOpen(false);
+        window.setTimeout(() => inspectorToggleRef.current?.focus(), 0);
     }
 
     function cancelComposerMode() {
+        if (composerBusy) return;
         setReplyingTo(null);
         setEditingMessage(null);
         setComposerMode("public");
-        setSelectedMentionIds([]);
+        if (composerMode === "internal") setSelectedMentionIds([]);
         setShowEmojiPicker(false);
-        setReply("");
+        setComposerDraft(composerMode, "");
         stopAgentTyping();
     }
 
@@ -1082,7 +1162,9 @@ export default function ConversationShowPage() {
         }
     }
 
-    function cleanupRecorder() {
+    function cleanupRecorder(expectedRecorder?: MediaRecorder) {
+        if (expectedRecorder && mediaRecorderRef.current !== expectedRecorder) return;
+
         if (recordingTimerRef.current) {
             clearInterval(recordingTimerRef.current);
             recordingTimerRef.current = null;
@@ -1095,7 +1177,7 @@ export default function ConversationShowPage() {
     }
 
     async function startVoiceRecording() {
-        if (recording || isClosed || editingMessage) {
+        if (recordingRequestPendingRef.current || mediaRecorderRef.current || isClosed || composerMode !== "public" || editingMessage) {
             return;
         }
 
@@ -1104,34 +1186,44 @@ export default function ConversationShowPage() {
             return;
         }
 
+        const generation = ++recordingGenerationRef.current;
+        recordingRequestPendingRef.current = true;
+        setStartingRecording(true);
+        let stream: MediaStream | null = null;
+
         try {
             setError("");
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (generation !== recordingGenerationRef.current) {
+                stream.getTracks().forEach((track) => track.stop());
+                return;
+            }
+
             const preferredTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
             const mimeType = preferredTypes.find((type) => MediaRecorder.isTypeSupported(type)) || "";
             const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
-            recordingChunksRef.current = [];
+            const chunks: Blob[] = [];
             recordingStreamRef.current = stream;
             mediaRecorderRef.current = recorder;
 
             recorder.addEventListener("dataavailable", (event) => {
                 if (event.data.size > 0) {
-                    recordingChunksRef.current.push(event.data);
+                    chunks.push(event.data);
                 }
             });
 
             recorder.addEventListener("stop", () => {
                 const type = recorder.mimeType || "audio/webm";
                 const extension = type.includes("ogg") ? "ogg" : "webm";
-                const blob = new Blob(recordingChunksRef.current, { type });
+                const blob = new Blob(chunks, { type });
 
-                if (blob.size > 0) {
+                if (generation === recordingGenerationRef.current && blob.size > 0) {
                     setSelectedFile(new File([blob], `voice-${Date.now()}.${extension}`, { type }));
                     setSelectedMessageType("voice");
                 }
 
-                cleanupRecorder();
+                cleanupRecorder(recorder);
             });
 
             recorder.start(500);
@@ -1139,15 +1231,21 @@ export default function ConversationShowPage() {
             setRecordingSeconds(0);
             recordingTimerRef.current = setInterval(() => {
                 setRecordingSeconds((value) => {
-                    if (value >= 119 && mediaRecorderRef.current?.state === "recording") {
-                        mediaRecorderRef.current.stop();
+                    if (value >= 119 && recorder.state === "recording") {
+                        recorder.stop();
                     }
                     return value + 1;
                 });
             }, 1000);
         } catch {
-            cleanupRecorder();
-            setError("دسترسی به میکروفن داده نشد یا ضبط صدا شروع نشد.");
+            stream?.getTracks().forEach((track) => track.stop());
+            if (generation === recordingGenerationRef.current) {
+                cleanupRecorder();
+                setError("دسترسی به میکروفن داده نشد یا ضبط صدا شروع نشد.");
+            }
+        } finally {
+            recordingRequestPendingRef.current = false;
+            setStartingRecording(false);
         }
     }
 
@@ -1157,8 +1255,18 @@ export default function ConversationShowPage() {
         }
     }
 
+    function discardVoiceRecording() {
+        recordingGenerationRef.current += 1;
+
+        if (mediaRecorderRef.current?.state === "recording") {
+            mediaRecorderRef.current.stop();
+        }
+
+        cleanupRecorder();
+    }
+
     function insertComposerEmoji(emoji: string) {
-        setReply((value) => `${value}${emoji}`);
+        updateReply((value) => `${value}${emoji}`);
         setShowEmojiPicker(false);
         window.setTimeout(() => document.querySelector<HTMLTextAreaElement>(".conversation-composer-input")?.focus(), 0);
     }
@@ -1172,9 +1280,9 @@ export default function ConversationShowPage() {
         );
 
         if (isSelected) {
-            setReply((value) => value.replaceAll(`@${agent.name}`, "").replace(/\s{2,}/g, " ").trimStart());
+            updateReply((value) => value.replaceAll(`@${agent.name}`, "").replace(/\s{2,}/g, " ").trimStart());
         } else if (!reply.includes(`@${agent.name}`)) {
-            setReply((value) => `${value}${value && !value.endsWith(" ") ? " " : ""}@${agent.name} `);
+            updateReply((value) => `${value}${value && !value.endsWith(" ") ? " " : ""}@${agent.name} `);
         }
     }
 
@@ -1267,6 +1375,7 @@ export default function ConversationShowPage() {
             setGeneratingAi(true);
             setAiError("");
             setActivePanel("ai");
+            setIsInspectorOpen(true);
 
             await apiRequest("/agent/ai-suggestion-generate.php", {
                 method: "POST",
@@ -1286,7 +1395,10 @@ export default function ConversationShowPage() {
     }
 
     async function handleUseSuggestion(suggestion: AiSuggestion) {
-        setReply(suggestion.suggested_reply);
+        if (composerBusy) return;
+        updateReply(suggestion.suggested_reply);
+        if (composerMode === "internal") setSelectedMentionIds([]);
+        focusComposerAfterInspectorAction();
         if (composerMode === "public") {
             notifyAgentTyping(suggestion.suggested_reply);
         } else {
@@ -1317,7 +1429,10 @@ export default function ConversationShowPage() {
     }
 
     function handleUseQuickReply(item: QuickReply) {
-        setReply(item.content);
+        if (composerBusy) return;
+        updateReply(item.content);
+        if (composerMode === "internal") setSelectedMentionIds([]);
+        focusComposerAfterInspectorAction();
         if (composerMode === "public") {
             notifyAgentTyping(item.content);
         } else {
@@ -1326,7 +1441,8 @@ export default function ConversationShowPage() {
     }
 
     function handleAppendQuickReply(item: QuickReply) {
-        setReply((prev) => {
+        if (composerBusy) return;
+        updateReply((prev) => {
             const current = prev.trim();
             const nextValue = current ? `${current}\n\n${item.content}` : item.content;
 
@@ -1338,6 +1454,7 @@ export default function ConversationShowPage() {
 
             return nextValue;
         });
+        focusComposerAfterInspectorAction();
     }
 
     const filteredQuickReplies = useMemo(() => {
@@ -1359,12 +1476,6 @@ export default function ConversationShowPage() {
     return (
         <AppShell
             title={`گفتگو با ${title}`}
-            kicker="مرکز گفتگو"
-            description={
-                conversation
-                    ? `${conversation.site.name} · ${statusLabel}`
-                    : "در حال بارگذاری گفتگو"
-            }
             variant="workspace"
         >
             <div className="conversation-detail-shell">
@@ -1389,6 +1500,7 @@ export default function ConversationShowPage() {
                                         type="button"
                                         onClick={() => router.push("/conversations")}
                                         title="بازگشت به فهرست گفتگوها"
+                                        aria-label="بازگشت به فهرست گفتگوها"
                                     >
                                         <ChatIcon name="arrow-right" />
                                     </button>
@@ -1397,7 +1509,10 @@ export default function ConversationShowPage() {
                                             name={conversation.visitor.name || "کاربر"}
                                             tone="visitor"
                                         />
-                                        <span className={conversation.visitor.is_online ? "conversation-presence-dot online" : "conversation-presence-dot"} />
+                                        <span
+                                            className={conversation.visitor.is_online ? "conversation-presence-dot online" : "conversation-presence-dot"}
+                                            title={conversation.visitor.is_online ? "کاربر آنلاین است" : "کاربر آفلاین است"}
+                                        />
                                     </div>
 
                                     <div className="conversation-person-copy">
@@ -1410,34 +1525,30 @@ export default function ConversationShowPage() {
                                             <span>{visitorContact}</span>
                                             <span>{conversation.site.name}</span>
                                             <span className={conversation.visitor.is_online ? "visitor-online" : "visitor-offline"}>
-                                                {conversation.visitor.is_online
-                                                    ? "آنلاین"
-                                                    : `آخرین فعالیت: ${conversation.visitor.last_seen_at || "نامشخص"}`}
+                                                {conversation.visitor.is_online ? "آنلاین" : "آفلاین"}
                                             </span>
-                                            <span>شناسه {conversation.id}</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="conversation-head-priority-actions">
                                     <button
+                                        ref={inspectorToggleRef}
                                         className={`conversation-tool-btn conversation-inspector-toggle ${isInspectorOpen ? "is-active" : ""}`}
                                         type="button"
-                                        onClick={() => setIsInspectorOpen((value) => !value)}
+                                        onClick={() => {
+                                            if (isInspectorOpen) {
+                                                closeInspectorAndRestoreFocus();
+                                            } else {
+                                                setIsInspectorOpen(true);
+                                            }
+                                        }}
                                         title="پنل اطلاعات گفتگو"
+                                        aria-expanded={isInspectorOpen}
+                                        aria-controls="conversation-inspector"
                                     >
                                         <ChatIcon name="panel" />
                                         <span>جزئیات</span>
-                                    </button>
-
-                                    <button
-                                        className="conversation-tool-btn is-primary"
-                                        type="button"
-                                        onClick={handleGenerateAiSuggestion}
-                                        disabled={generatingAi || isClosed}
-                                    >
-                                        <ChatIcon name="sparkles" />
-                                        <span>{generatingAi ? "در حال تولید" : "پیشنهاد هوشمند"}</span>
                                     </button>
 
                                     <details className="conversation-more-actions">
@@ -1502,7 +1613,6 @@ export default function ConversationShowPage() {
                             <InfoPill label="مسئول گفتگو" value={conversation.assigned_agent ? conversation.assigned_agent.name : "بدون مسئول"} />
                             <InfoPill label="دپارتمان" value={conversation.department?.name || "بدون دپارتمان"} />
                             <InfoPill label="اولویت" value={priorityLabel(conversation.priority)} />
-                            <InfoPill label="پیام‌ها" value={conversation.messages.length} />
                             {conversation.sla && visibleSlaRemaining !== null && <SlaClockPill sla={conversation.sla} remainingSeconds={visibleSlaRemaining} />}
                         </div>
 
@@ -1532,69 +1642,90 @@ export default function ConversationShowPage() {
                             </section>
                         )}
 
-                        <div className="conversation-message-stage-pro" ref={messagesRef} onScroll={handleMessagesScroll}>
-                            {hasMoreMessages && (
-                                <div className="conversation-load-older-wrap">
-                                    <button
-                                        className="btn secondary"
-                                        type="button"
-                                        onClick={loadOlderMessages}
-                                        disabled={loadingOlderMessages}
-                                    >
-                                        {loadingOlderMessages ? "در حال دریافت..." : "نمایش پیام‌های قدیمی‌تر"}
-                                    </button>
-                                </div>
-                            )}
-
-                            {conversation.messages.length === 0 ? (
-                                <div className="conversation-empty-chat">
-                                    <div className="conversation-empty-chat-icon"><ChatIcon name="message" /></div>
-                                    <strong>هنوز پیامی وجود ندارد</strong>
-                                    <p>
-                                        وقتی کاربر از ویجت پیام بدهد، مکالمه اینجا نمایش داده می‌شود.
-                                    </p>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="conversation-day-divider">
-                                        <span>شروع گفتگو</span>
+                        <div className="conversation-timeline-pro">
+                            <div className="conversation-message-stage-pro" ref={messagesRef} onScroll={handleMessagesScroll}>
+                                {hasMoreMessages && (
+                                    <div className="conversation-load-older-wrap">
+                                        <button
+                                            className="btn secondary"
+                                            type="button"
+                                            onClick={loadOlderMessages}
+                                            disabled={loadingOlderMessages}
+                                        >
+                                            {loadingOlderMessages ? "در حال دریافت..." : "نمایش پیام‌های قدیمی‌تر"}
+                                        </button>
                                     </div>
+                                )}
 
-                                    {conversation.messages.map((message) => (
-                                        <Fragment key={message.id}>
-                                            {message.id === firstUnreadMessageId && (
-                                                <div className="conversation-new-messages-divider">
-                                                    <span>پیام‌های جدید</span>
-                                                </div>
-                                            )}
-                                            <MessageBubble
-                                                message={message}
-                                                onReply={startReplyToMessage}
-                                                onEdit={startEditMessage}
-                                                onDelete={handleDeleteMessage}
-                                                onHistory={handleShowMessageHistory}
-                                                onReact={handleToggleReaction}
-                                                disabled={mutatingMessage}
-                                                highlighted={highlightedMessageId === message.id}
-                                            />
-                                        </Fragment>
-                                    ))}
-                                </>
+                                {conversation.messages.length === 0 ? (
+                                    <div className="conversation-empty-chat">
+                                        <div className="conversation-empty-chat-icon"><ChatIcon name="message" /></div>
+                                        <strong>هنوز پیامی وجود ندارد</strong>
+                                        <p>
+                                            وقتی کاربر از ویجت پیام بدهد، مکالمه اینجا نمایش داده می‌شود.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="conversation-day-divider">
+                                            <span>شروع گفتگو</span>
+                                        </div>
+
+                                        {conversation.messages.map((message) => (
+                                            <Fragment key={message.id}>
+                                                {message.id === firstUnreadMessageId && (
+                                                    <div className="conversation-new-messages-divider">
+                                                        <span>پیام‌های جدید</span>
+                                                    </div>
+                                                )}
+                                                <MessageBubble
+                                                    message={message}
+                                                    onReply={startReplyToMessage}
+                                                    onEdit={startEditMessage}
+                                                    onDelete={handleDeleteMessage}
+                                                    onHistory={handleShowMessageHistory}
+                                                    onReact={handleToggleReaction}
+                                                    disabled={mutatingMessage || composerBusy}
+                                                    highlighted={highlightedMessageId === message.id}
+                                                />
+                                            </Fragment>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+
+                            {showJumpToBottom && (
+                                <button
+                                    className="conversation-jump-bottom"
+                                    type="button"
+                                    onClick={scrollMessagesToBottom}
+                                >
+                                    ↓ رفتن به آخرین پیام
+                                </button>
                             )}
                         </div>
 
-                        {showJumpToBottom && (
-                            <button
-                                className="conversation-jump-bottom"
-                                type="button"
-                                onClick={scrollMessagesToBottom}
-                            >
-                                ↓ رفتن به آخرین پیام
-                            </button>
-                        )}
-
+                        {isClosed ? (
+                            <section className="conversation-closed-composer" aria-label="گفتگو بسته است">
+                                <div>
+                                    <span className="conversation-closed-composer-icon"><ChatIcon name="lock" /></span>
+                                    <div>
+                                        <strong>این گفتگو بسته شده است</strong>
+                                        <span>برای ارسال پیام جدید، گفتگو را دوباره باز کنید.</span>
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn secondary"
+                                    type="button"
+                                    onClick={() => handleUpdateStatus("open")}
+                                    disabled={changingStatus}
+                                >
+                                    {changingStatus ? "در حال بازگشایی..." : "بازگشایی گفتگو"}
+                                </button>
+                            </section>
+                        ) : (
                         <form onSubmit={handleSendReply} className={`conversation-composer-pro ${composerMode === "internal" ? "internal-mode" : ""}`}>
-                            <div className="conversation-composer-shell">
+                            <fieldset className="conversation-composer-shell" disabled={composerBusy} aria-busy={composerBusy}>
                                 <div className="conversation-composer-heading">
                                     <div className="conversation-composer-mode-group">
                                         <div className="conversation-composer-tabs" role="tablist" aria-label="نوع پیام">
@@ -1665,7 +1796,7 @@ export default function ConversationShowPage() {
                                             onChange={(event) => {
                                                 const nextValue = event.target.value;
 
-                                                setReply(nextValue);
+                                                updateReply(nextValue);
                                                 if (composerMode === "public") {
                                                     notifyAgentTyping(nextValue);
                                                 } else {
@@ -1741,12 +1872,13 @@ export default function ConversationShowPage() {
                                                 className={`composer-tool-btn ${recording ? "recording" : ""}`}
                                                 type="button"
                                                 onClick={recording ? stopVoiceRecording : startVoiceRecording}
-                                                disabled={isClosed || Boolean(editingMessage) || composerMode === "internal"}
-                                                title={recording ? "توقف ضبط صدا" : "ضبط پیام صوتی"}
-                                                aria-label={recording ? "توقف ضبط صدا" : "ضبط پیام صوتی"}
+                                                disabled={startingRecording || isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                                title={startingRecording ? "در انتظار دسترسی به میکروفن" : recording ? "توقف ضبط صدا" : "ضبط پیام صوتی"}
+                                                aria-label={startingRecording ? "در انتظار دسترسی به میکروفن" : recording ? "توقف ضبط صدا" : "ضبط پیام صوتی"}
+                                                aria-busy={startingRecording}
                                             >
                                                 <ChatIcon name="microphone" />
-                                                <span>{recording ? `توقف ضبط ${recordingSeconds}s` : "صوت"}</span>
+                                                <span>{startingRecording ? "در انتظار میکروفن" : recording ? `توقف ضبط ${recordingSeconds}s` : "صوت"}</span>
                                             </button>
 
                                             <button
@@ -1770,7 +1902,7 @@ export default function ConversationShowPage() {
                                                     className="btn secondary conversation-attachment-send"
                                                     type="button"
                                                     onClick={handleSendAttachment}
-                                                    disabled={sendingFile || isClosed || Boolean(editingMessage) || composerMode === "internal"}
+                                                    disabled={composerBusy || recording || startingRecording || isClosed || Boolean(editingMessage) || composerMode === "internal"}
                                                 >
                                                     <ChatIcon name="paperclip" />
                                                     <span>{sendingFile ? "در حال ارسال" : "ارسال فایل"}</span>
@@ -1780,7 +1912,7 @@ export default function ConversationShowPage() {
                                             <button
                                                 className="btn conversation-send-btn"
                                                 type="submit"
-                                                disabled={sending || isClosed || reply.trim().length === 0}
+                                                disabled={composerBusy || recording || startingRecording || isClosed || reply.trim().length === 0}
                                             >
                                                 <ChatIcon name="send" />
                                                 <span>{sending ? "در حال ذخیره..." : editingMessage ? "ذخیره ویرایش" : composerMode === "internal" ? "ثبت یادداشت" : "ارسال پاسخ"}</span>
@@ -1790,59 +1922,73 @@ export default function ConversationShowPage() {
                                 </div>
 
                                 {composerMode === "internal" && assignableAgents.length > 0 && (
-                                    <div className="composer-mentions">
-                                        <span>منشن همکار:</span>
-                                        {assignableAgents.map((agent) => (
-                                            <button
-                                                key={agent.id}
-                                                type="button"
-                                                className={selectedMentionIds.includes(agent.id) ? "selected" : ""}
-                                                onClick={() => toggleMention(agent)}
-                                            >
-                                                @{agent.name}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <details className="composer-mentions">
+                                        <summary>
+                                            <span>منشن همکاران</span>
+                                            <small>
+                                                {selectedMentionIds.length > 0
+                                                    ? `${selectedMentionIds.length} نفر انتخاب شده`
+                                                    : "اختیاری"}
+                                            </small>
+                                        </summary>
+                                        <div className="composer-mentions-list">
+                                            {assignableAgents.map((agent) => (
+                                                <button
+                                                    key={agent.id}
+                                                    type="button"
+                                                    className={selectedMentionIds.includes(agent.id) ? "selected" : ""}
+                                                    onClick={() => toggleMention(agent)}
+                                                >
+                                                    @{agent.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </details>
                                 )}
-                            </div>
+                            </fieldset>
                         </form>
+                        )}
                     </section>
 
-                    <aside className={`conversation-side-pro ${isInspectorOpen ? "is-open" : ""}`}>
+                    <aside
+                        ref={inspectorRef}
+                        id="conversation-inspector"
+                        className={`conversation-side-pro ${isInspectorOpen ? "is-open" : ""}`}
+                        role={isInspectorDrawer ? "dialog" : undefined}
+                        aria-label="مرکز گفتگو"
+                        aria-modal={isInspectorDrawer && isInspectorOpen ? true : undefined}
+                        aria-hidden={!isInspectorOpen}
+                        inert={!isInspectorOpen}
+                        onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                                event.stopPropagation();
+                                closeInspectorAndRestoreFocus();
+                            } else if (event.key === "Tab" && isInspectorDrawer) {
+                                const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+                                    'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])'
+                                )).filter((element) => element.getClientRects().length > 0);
+                                const first = controls[0];
+                                const last = controls[controls.length - 1];
+
+                                if (event.shiftKey && document.activeElement === first) {
+                                    event.preventDefault();
+                                    last?.focus();
+                                } else if (!event.shiftKey && document.activeElement === last) {
+                                    event.preventDefault();
+                                    first?.focus();
+                                }
+                            }
+                        }}
+                    >
                         <header className="conversation-inspector-head">
                             <div>
-                                <strong>جزئیات گفتگو</strong>
-                                <span>مشتری، مدیریت و منابع گفتگو</span>
+                                <strong>مرکز گفتگو</strong>
+                                <span>پاسخ‌ها، مدیریت و اطلاعات</span>
                             </div>
-                            <button type="button" onClick={() => setIsInspectorOpen(false)} title="بستن پنل">
+                            <button type="button" onClick={closeInspectorAndRestoreFocus} title="بستن پنل" aria-label="بستن پنل">
                                 <ChatIcon name="close" />
                             </button>
                         </header>
-                        <section className="conversation-user-card-pro">
-                            <div className="conversation-user-top">
-                                <ConversationAvatar
-                                    name={conversation.visitor.name || "کاربر"}
-                                    tone="visitor"
-                                />
-
-                                <div>
-                                    <strong>{conversation.visitor.name || "کاربر بدون نام"}</strong>
-                                    <span>{visitorContact}</span>
-                                </div>
-                            </div>
-
-                            <div className="conversation-user-grid">
-                                <InfoPill label="وضعیت" value={statusLabel} />
-                                <InfoPill
-                                    label="مسئول"
-                                    value={
-                                        conversation.assigned_agent
-                                            ? conversation.assigned_agent.name
-                                            : "بدون مسئول"
-                                    }
-                                />
-                            </div>
-                        </section>
 
                         <div className="conversation-panel-tabs-pro">
                             <button
@@ -1933,7 +2079,7 @@ export default function ConversationShowPage() {
                                                         className="btn"
                                                         type="button"
                                                         onClick={() => handleUseQuickReply(item)}
-                                                        disabled={isClosed}
+                                                        disabled={isClosed || composerBusy}
                                                     >
                                                         استفاده
                                                     </button>
@@ -1942,7 +2088,7 @@ export default function ConversationShowPage() {
                                                         className="btn secondary"
                                                         type="button"
                                                         onClick={() => handleAppendQuickReply(item)}
-                                                        disabled={isClosed}
+                                                        disabled={isClosed || composerBusy}
                                                     >
                                                         افزودن
                                                     </button>
@@ -2001,7 +2147,7 @@ export default function ConversationShowPage() {
                                                         className="btn"
                                                         type="button"
                                                         onClick={() => handleUseSuggestion(suggestion)}
-                                                        disabled={isClosed}
+                                                        disabled={isClosed || composerBusy}
                                                     >
                                                         استفاده در پاسخ
                                                     </button>
@@ -2221,9 +2367,11 @@ export default function ConversationShowPage() {
                                 />
 
                                 <div className="conversation-info-grid-pro">
+                                    <InfoItem label="شناسه گفتگو" value={String(conversation.id)} />
                                     <InfoItem label="نام" value={conversation.visitor.name || "ثبت نشده"} />
                                     <InfoItem label="شماره تماس" value={conversation.visitor.phone || "ثبت نشده"} />
                                     <InfoItem label="ایمیل" value={conversation.visitor.email || "ثبت نشده"} />
+                                    <InfoItem label="آخرین فعالیت" value={conversation.visitor.last_seen_at || "نامشخص"} />
                                     <InfoItem label="IP" value={conversation.visitor.ip_address || "ثبت نشده"} />
                                     <InfoItem label="سایت" value={conversation.site.name} />
                                     <InfoItem label="دامنه" value={conversation.site.domain} />
@@ -2288,7 +2436,7 @@ export default function ConversationShowPage() {
                         <button
                             type="button"
                             className="conversation-inspector-backdrop"
-                            onClick={() => setIsInspectorOpen(false)}
+                            onClick={closeInspectorAndRestoreFocus}
                             aria-label="بستن پنل اطلاعات"
                         />
                     )}
@@ -2460,11 +2608,30 @@ function MessageBubble({
                                 {reaction.emoji} <span>{reaction.count}</span>
                             </button>
                         ))}
-                        <div className="message-reaction-picker-pro">
-                            {reactionEmojis.map((emoji) => (
-                                <button key={emoji} type="button" onClick={() => onReact(message, emoji)} disabled={disabled}>{emoji}</button>
-                            ))}
-                        </div>
+                        <details className="message-reaction-picker-pro">
+                            <summary
+                                title="افزودن واکنش"
+                                aria-label="افزودن واکنش"
+                                aria-disabled={disabled}
+                                onClick={(event) => {
+                                    if (disabled) event.preventDefault();
+                                }}
+                            >＋</summary>
+                            <div className="message-reaction-options-pro">
+                                {reactionEmojis.map((emoji) => (
+                                    <button
+                                        key={emoji}
+                                        type="button"
+                                        aria-label={`واکنش ${emoji}`}
+                                        onClick={(event) => {
+                                            onReact(message, emoji);
+                                            event.currentTarget.closest("details")?.removeAttribute("open");
+                                        }}
+                                        disabled={disabled}
+                                    >{emoji}</button>
+                                ))}
+                            </div>
+                        </details>
                     </div>
                 )}
             </div>
