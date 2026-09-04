@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
@@ -102,6 +102,20 @@ type FormState = {
     show_next_opening: boolean;
 };
 
+type SettingsSection = "identity" | "hours" | "offline" | "exceptions";
+
+const settingsSections: Array<{
+    id: SettingsSection;
+    number: string;
+    title: string;
+    description: string;
+}> = [
+    { id: "identity", number: "۰۱", title: "هویت صفحه", description: "عنوان، لینک و تماس" },
+    { id: "hours", number: "۰۲", title: "ساعات پاسخ‌گویی", description: "برنامه هفتگی تیم" },
+    { id: "offline", number: "۰۳", title: "رفتار آفلاین", description: "تجربه خارج از ساعت" },
+    { id: "exceptions", number: "۰۴", title: "روزهای استثنایی", description: "تعطیلی و برنامه ویژه" },
+];
+
 const emptyForm: FormState = {
     public_slug: "",
     page_title: "",
@@ -135,6 +149,7 @@ export default function HostedSupportSettingsPage() {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [copied, setCopied] = useState(false);
+    const [activeSection, setActiveSection] = useState<SettingsSection>("identity");
 
     useEffect(() => {
         const user = getAuthUser();
@@ -362,21 +377,48 @@ export default function HostedSupportSettingsPage() {
                         {selected && (
                             <form className="hosted-settings-form" onSubmit={saveSettings}>
                                 <section className="hosted-settings-hero-card">
-                                    <div>
-                                        <span>Public Support Page</span>
+                                    <div className="hosted-settings-hero-copy">
+                                        <span>مرکز ارتباط مستقیم</span>
                                         <h2>{selectedSite?.name || selected.site.name}</h2>
-                                        <p>
-                                            این لینک را می‌توان در اینستاگرام، واتساپ، پیامک یا QR Code در اختیار مشتریان قرار داد؛ نصب روی سایت ضروری نیست.
-                                        </p>
+                                        <p>یک لینک مستقل برای گفتگو، پیگیری و دریافت راهنمایی؛ آماده اشتراک‌گذاری در شبکه‌های اجتماعی، پیامک یا QR Code.</p>
+                                        <div className="hosted-settings-hero-meta">
+                                            <span>{selected.page?.public_slug ? `/support/${selected.page.public_slug}` : "لینک پس از اولین ذخیره ساخته می‌شود"}</span>
+                                            <b>{form.is_active ? "صفحه فعال" : "صفحه غیرفعال"}</b>
+                                        </div>
                                     </div>
                                     <div className={`hosted-settings-live ${selected.status.support_online ? "online" : "offline"}`}>
                                         <i />
-                                        <strong>{selected.status.status_text}</strong>
-                                        {selected.status.next_opening?.human_text && (
-                                            <span>شروع بعدی: {selected.status.next_opening.human_text}</span>
-                                        )}
+                                        <div>
+                                            <small>وضعیت پاسخ‌گویی</small>
+                                            <strong>{selected.status.status_text}</strong>
+                                            {selected.status.next_opening?.human_text && (
+                                                <span>شروع بعدی: {selected.status.next_opening.human_text}</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </section>
+
+                                <nav className="hosted-settings-steps" aria-label="بخش‌های تنظیمات صفحه پشتیبانی">
+                                    {settingsSections.map((section) => (
+                                        <button
+                                            key={section.id}
+                                            type="button"
+                                            className={activeSection === section.id ? "active" : ""}
+                                            aria-current={activeSection === section.id ? "step" : undefined}
+                                            onClick={() => setActiveSection(section.id)}
+                                        >
+                                            <span>{section.number}</span>
+                                            <div>
+                                                <strong>{section.title}</strong>
+                                                <small>{section.description}</small>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </nav>
+
+                                <div className="hosted-settings-workspace">
+                                    <div className="hosted-settings-content">
+                                {activeSection === "identity" && (
 
                                 <section className="hosted-settings-card">
                                     <div className="hosted-settings-card-head">
@@ -482,7 +524,9 @@ export default function HostedSupportSettingsPage() {
                                         <Toggle label="سؤالات متداول نمایش داده شود" checked={form.show_faq} onChange={(value) => updateForm("show_faq", value)} />
                                     </div>
                                 </section>
+                                )}
 
+                                {activeSection === "hours" && (
                                 <section className="hosted-settings-card">
                                     <div className="hosted-settings-card-head">
                                         <div>
@@ -533,7 +577,9 @@ export default function HostedSupportSettingsPage() {
                                         ))}
                                     </div>
                                 </section>
+                                )}
 
+                                {activeSection === "offline" && (
                                 <section className="hosted-settings-card">
                                     <div className="hosted-settings-card-head">
                                         <div>
@@ -582,7 +628,9 @@ export default function HostedSupportSettingsPage() {
                                         <Toggle label="زمان شروع بعدی نمایش داده شود" checked={form.show_next_opening} onChange={(value) => updateForm("show_next_opening", value)} />
                                     </div>
                                 </section>
+                                )}
 
+                                {activeSection === "exceptions" && (
                                 <section className="hosted-settings-card">
                                     <div className="hosted-settings-card-head">
                                         <div>
@@ -632,6 +680,16 @@ export default function HostedSupportSettingsPage() {
                                         </div>
                                     )}
                                 </section>
+                                )}
+                                    </div>
+
+                                    <HostedSupportPreview
+                                        form={form}
+                                        siteName={selectedSite?.name || selected.site.name}
+                                        statusText={selected.status.status_text}
+                                        supportOnline={selected.status.support_online}
+                                    />
+                                </div>
 
                                 <div className="hosted-settings-savebar">
                                     <div>
@@ -648,6 +706,78 @@ export default function HostedSupportSettingsPage() {
                 )}
             </div>
         </AppShell>
+    );
+}
+
+function HostedSupportPreview({
+    form,
+    siteName,
+    statusText,
+    supportOnline,
+}: {
+    form: FormState;
+    siteName: string;
+    statusText: string;
+    supportOnline: boolean;
+}) {
+    const previewStyle = { "--hosted-preview-color": form.primary_color } as CSSProperties;
+
+    return (
+        <aside className="hosted-settings-aside">
+            <div className="hosted-preview-heading">
+                <div>
+                    <span>پیش‌نمایش زنده</span>
+                    <strong>نمای تقریبی صفحه عمومی</strong>
+                </div>
+                <b>بدون نیاز به ذخیره</b>
+            </div>
+
+            <div className="hosted-preview-frame" style={previewStyle}>
+                <div className="hosted-preview-browser">
+                    <i /><i /><i />
+                    <span>{form.public_slug ? `/support/${form.public_slug}` : "/support/your-brand"}</span>
+                </div>
+                <div className="hosted-preview-canvas">
+                    <header>
+                        <div className="hosted-preview-brand">
+                            <span>{siteName.trim().charAt(0) || "پ"}</span>
+                            <div>
+                                <strong>{siteName}</strong>
+                                <small>مرکز پشتیبانی</small>
+                            </div>
+                        </div>
+                        <div className={`hosted-preview-status${supportOnline ? " online" : ""}`}>
+                            <i />
+                            {statusText}
+                        </div>
+                    </header>
+
+                    <main>
+                        <span>{form.page_subtitle || "پشتیبانی و ارتباط مستقیم"}</span>
+                        <h3>{form.page_title || `${siteName} | پشتیبانی آنلاین`}</h3>
+                        <p>{form.page_description || emptyForm.page_description}</p>
+
+                        <div className="hosted-preview-requirements">
+                            {form.require_name && <span>نام</span>}
+                            {form.require_phone && <span>شماره تماس</span>}
+                            {!form.require_name && !form.require_phone && <span>شروع سریع گفتگو</span>}
+                        </div>
+
+                        <button type="button" tabIndex={-1}>شروع گفتگو</button>
+                    </main>
+
+                    <footer>
+                        <span>{form.show_business_hours ? "ساعات پاسخ‌گویی نمایش داده می‌شود" : "ساعات کاری مخفی است"}</span>
+                        <b>{form.show_faq ? "سؤالات متداول فعال" : "FAQ غیرفعال"}</b>
+                    </footer>
+                </div>
+            </div>
+
+            <div className="hosted-preview-note">
+                <span>نکته</span>
+                <p>رنگ، عنوان و اطلاعات ورودی هم‌زمان با ویرایش شما در این قاب به‌روز می‌شوند.</p>
+            </div>
+        </aside>
     );
 }
 

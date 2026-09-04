@@ -10,6 +10,7 @@ import "../styles/conversation.css";
 import "../styles/ai-center.css";
 import "../styles/dashboard.css";
 import "../styles/conversations-list.css";
+import "../styles/quick-replies.css";
 import "../styles/widget-settings.css";
 import "../styles/team.css";
 import "../styles/departments.css";

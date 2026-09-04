@@ -43,7 +43,7 @@ type WidgetForm = {
 
 type FormErrors = Partial<Record<keyof WidgetForm, string>>;
 
-const DEFAULT_COLOR = "#2563eb";
+const DEFAULT_COLOR = "#0f766e";
 const DEFAULT_WELCOME_MESSAGE = "سلام، چطور می‌تونیم کمکتون کنیم؟";
 const MAX_BRAND_NAME_LENGTH = 80;
 const MAX_WELCOME_MESSAGE_LENGTH = 300;
@@ -61,11 +61,11 @@ const AI_MODE_DESCRIPTIONS: Record<AiMode, string> = {
 };
 
 const BRAND_COLOR_PRESETS = [
+    "#0f766e",
+    "#059669",
     "#2563eb",
     "#4f46e5",
     "#7c3aed",
-    "#0f766e",
-    "#059669",
     "#dc2626",
     "#c2410c",
     "#111827",
@@ -321,8 +321,8 @@ export default function WidgetSettingsPage() {
     return (
         <AppShell
             title="تنظیمات ویجت"
-            kicker="Widget Customization"
-            description="ظاهر و رفتار ویجت گفت‌وگو را برای هر سایت مدیریت کن"
+            kicker="شخصی‌سازی ارتباط"
+            description="ظاهر، پیام خوش‌آمدگویی و رفتار ویجت را برای هر سایت مدیریت کنید."
             actions={
                 <button
                     className="btn secondary widget-refresh-button"
@@ -331,15 +331,15 @@ export default function WidgetSettingsPage() {
                     disabled={loading || refreshing || saving}
                 >
                     <RefreshIcon />
-                    {refreshing ? "در حال بروزرسانی..." : "بروزرسانی اطلاعات"}
+                    {refreshing ? "در حال بروزرسانی..." : "بروزرسانی"}
                 </button>
             }
         >
             <div className="widget-settings-shell">
                 <div className="widget-alert-stack" aria-live="polite">
-                    {error && <div className="widget-alert error">{error}</div>}
+                    {error && <div className="widget-alert error" role="alert">{error}</div>}
                     {success && (
-                        <div className="widget-alert success">{success}</div>
+                        <div className="widget-alert success" role="status">{success}</div>
                     )}
                 </div>
 
@@ -365,7 +365,7 @@ export default function WidgetSettingsPage() {
                             <main className="widget-editor-column">
                                 <section className="widget-panel widget-editor-card">
                                     <PanelHeading
-                                        eyebrow="Appearance & behavior"
+                                        eyebrow="ظاهر و رفتار"
                                         title="ظاهر و رفتار ویجت"
                                         description="تغییرات فرم به‌صورت زنده در پیش‌نمایش نمایش داده می‌شوند و بعد از ذخیره روی سایت اعمال خواهند شد."
                                         aside={
@@ -742,7 +742,7 @@ function SiteSelector({
     return (
         <aside className="widget-panel widget-sites-panel">
             <PanelHeading
-                eyebrow="Sites"
+                eyebrow="انتخاب سایت"
                 title="سایت‌های شما"
                 description="برای هر سایت تنظیمات مستقل ذخیره می‌شود."
                 aside={<span className="widget-count-badge">{sites.length}</span>}
@@ -864,7 +864,7 @@ function InstallSection({
     return (
         <section className="widget-panel widget-install-card">
             <PanelHeading
-                eyebrow="Installation"
+                eyebrow="راه‌اندازی"
                 title="کد نصب ویجت"
                 description="این قطعه کد را قبل از بسته‌شدن تگ body در سایت قرار بده."
                 aside={
@@ -946,12 +946,13 @@ function WidgetPreview({
         "--widget-preview-primary": safeColor,
         "--widget-preview-primary-dark": darkenColor(safeColor, 18),
         "--widget-preview-primary-soft": hexToRgba(safeColor, 0.1),
+        "--widget-preview-primary-shadow": hexToRgba(safeColor, 0.26),
     } as CSSProperties;
 
     return (
         <aside className="widget-panel widget-preview-panel">
             <PanelHeading
-                eyebrow="Live preview"
+                eyebrow="نمایش زنده"
                 title="پیش‌نمایش زنده"
                 description="این پیش‌نمایش بدون تماس با API و فقط بر اساس فرم به‌روزرسانی می‌شود."
             />
@@ -1025,32 +1026,47 @@ function WidgetPreview({
                                         title={title}
                                     />
 
-                                    <button
-                                        type="button"
-                                        aria-label="بستن پیش‌نمایش ویجت"
-                                        onClick={() => onStateChange("closed")}
-                                    >
-                                        <CloseIcon />
-                                    </button>
+                                    <div className="widget-preview-header-actions">
+                                        <div className="widget-preview-new-chat">
+                                            <span aria-hidden="true">↻</span>
+                                            جدید
+                                        </div>
 
-                                    <div className="widget-preview-new-chat">
-                                        شروع گفتگوی جدید
+                                        <button
+                                            type="button"
+                                            aria-label="بستن پیش‌نمایش ویجت"
+                                            onClick={() => onStateChange("closed")}
+                                        >
+                                            <CloseIcon />
+                                        </button>
                                     </div>
                                 </div>
 
                                 <div className="widget-preview-chat-body">
                                     <div className="widget-preview-welcome-card">
-                                        <strong>سلام 👋</strong>
-                                        <p>
-                                            {message.trim() ||
-                                                DEFAULT_WELCOME_MESSAGE}
-                                        </p>
+                                        <span className="widget-preview-welcome-icon">
+                                            <ChatIcon />
+                                        </span>
+                                        <div>
+                                            <strong>سلام، خوش آمدید</strong>
+                                            <p>
+                                                {message.trim() ||
+                                                    DEFAULT_WELCOME_MESSAGE}
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div className="widget-preview-form-card">
-                                        <strong>شروع گفتگو</strong>
-                                        <span className="preview-field" />
-                                        <span className="preview-field" />
+                                        <div className="widget-preview-form-heading">
+                                            <strong>شروع یک گفتگوی تازه</strong>
+                                            <small>کمتر از یک دقیقه</small>
+                                        </div>
+                                        <div className="widget-preview-form-grid">
+                                            <span className="preview-field" />
+                                            <span className="preview-field" />
+                                            <span className="preview-field" />
+                                            <span className="preview-field" />
+                                        </div>
                                         <span className="preview-field message" />
                                         <span className="preview-submit">
                                             شروع گفتگو
@@ -1059,15 +1075,20 @@ function WidgetPreview({
                                 </div>
 
                                 <div className="widget-preview-footer">
-                                    <span>Powered by AI Chat SaaS</span>
+                                    <span>گفتگوی امن&nbsp; · &nbsp;AI Chat SaaS</span>
                                 </div>
                             </div>
                         )}
 
                         {state === "closed" && (
                             <div className="widget-preview-bubble">
-                                {message.trim() ||
-                                    "سوالی داری؟ ما همین‌جا هستیم."}
+                                <strong>
+                                    <i /> پشتیبانی آنلاین
+                                </strong>
+                                <span>
+                                    {message.trim() ||
+                                        "سوالی داری؟ ما همین‌جا هستیم."}
+                                </span>
                             </div>
                         )}
 
@@ -1088,6 +1109,7 @@ function WidgetPreview({
                             }
                         >
                             {state === "open" ? <CloseIcon /> : <ChatIcon />}
+                            <span className="widget-preview-launcher-status" aria-hidden="true" />
                         </button>
                     </div>
                 </div>
@@ -1228,7 +1250,7 @@ function validateForm(form: WidgetForm): FormErrors {
     }
 
     if (!isValidHexColor(form.brand_color.trim())) {
-        errors.brand_color = "رنگ باید با فرمت شش‌رقمی مانند #2563eb وارد شود.";
+        errors.brand_color = "رنگ باید با فرمت شش‌رقمی مانند #0f766e وارد شود.";
     }
 
     if (form.logo_url.trim() && !isValidHttpUrl(form.logo_url.trim())) {

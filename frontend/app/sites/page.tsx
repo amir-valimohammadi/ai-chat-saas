@@ -82,7 +82,7 @@ const DEFAULT_FORM: CreateSiteForm = {
     name: "",
     domain: "",
     brand_name: "",
-    brand_color: "#2563eb",
+    brand_color: "#0f766e",
     welcome_message: "سلام، چطور می‌تونیم کمکتون کنیم؟",
     ai_mode: "assistant",
 };
@@ -293,12 +293,12 @@ export default function CustomerSitesPage() {
     return (
         <AppShell
             title="سایت‌ها"
-            kicker="Sites"
-            description="مدیریت دامنه‌ها، کد نصب ویجت و ظرفیت سایت‌های پلن"
+            kicker="مدیریت کانال‌ها"
+            description="دامنه‌ها، وضعیت ویجت و ظرفیت سایت‌های متصل را از یک نما مدیریت کنید."
             actions={
                 <div className="customer-sites-header-actions">
                     <button
-                        className="btn secondary"
+                        className="btn secondary customer-sites-refresh-button"
                         type="button"
                         onClick={() => void loadData({ silent: true })}
                         disabled={loading || refreshing || creating}
@@ -309,7 +309,7 @@ export default function CustomerSitesPage() {
                     </button>
 
                     <button
-                        className="btn"
+                        className="btn customer-sites-create-button"
                         type="button"
                         onClick={openCreateModal}
                         disabled={!canCreateSite || loading}
@@ -325,13 +325,13 @@ export default function CustomerSitesPage() {
                     aria-live="polite"
                 >
                     {error && (
-                        <div className="customer-sites-alert error">
+                        <div className="customer-sites-alert error" role="alert">
                             {error}
                         </div>
                     )}
 
                     {success && (
-                        <div className="customer-sites-alert success">
+                        <div className="customer-sites-alert success" role="status">
                             {success}
                         </div>
                     )}
@@ -344,14 +344,12 @@ export default function CustomerSitesPage() {
                         <PlanCapacityCard
                             usage={siteUsage}
                             planName={planUsage?.plan.name || "بدون پلن"}
-                            canCreate={canCreateSite}
-                            onCreate={openCreateModal}
                         />
 
                         <section className="customer-sites-list-panel">
                             <div className="customer-sites-section-head">
                                 <div>
-                                    <span>Registered sites</span>
+                                    <span>فضاهای متصل</span>
                                     <h2>سایت‌های ثبت‌شده</h2>
                                     <p>
                                         هر سایت کلید و کد نصب مستقل دارد.
@@ -412,13 +410,9 @@ export default function CustomerSitesPage() {
 function PlanCapacityCard({
     usage,
     planName,
-    canCreate,
-    onCreate,
 }: {
     usage: UsageItem | null;
     planName: string;
-    canCreate: boolean;
-    onCreate: () => void;
 }) {
     const percent = usage
         ? Math.min(Math.max(usage.percent, 0), 100)
@@ -469,16 +463,6 @@ function PlanCapacityCard({
                 </div>
             </div>
 
-            <button
-                className="btn"
-                type="button"
-                onClick={onCreate}
-                disabled={!canCreate}
-            >
-                {canCreate
-                    ? "افزودن سایت جدید"
-                    : "ظرفیت تکمیل است"}
-            </button>
         </section>
     );
 }
@@ -501,7 +485,7 @@ function SiteCard({
     ) => void;
 }) {
     const color = normalizeColor(
-        site.brand_color || "#2563eb"
+        site.brand_color || "#0f766e"
     );
 
     const siteKeyCopyId = `site-key-${site.id}`;
@@ -684,7 +668,7 @@ function CreateSiteModal({
             >
                 <header className="customer-sites-modal-head">
                     <div>
-                        <span>New site</span>
+                        <span>سایت جدید</span>
                         <h2 id="create-site-title">
                             افزودن سایت جدید
                         </h2>
@@ -1004,7 +988,7 @@ function normalizeDomainHref(domain: string) {
 function normalizeColor(value: string) {
     return /^#[0-9a-fA-F]{6}$/.test(value)
         ? value
-        : "#2563eb";
+        : "#0f766e";
 }
 
 function getInitial(value: string) {

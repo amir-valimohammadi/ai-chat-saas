@@ -77,11 +77,13 @@
     </section>
 </main>
 
-<script
-        src="http://localhost/ai-chat-saas/widget/dist/widget.js"
-        data-site-key="000a6effd58a3f83e14bb0f53f07acbb6661dfbb156a2b20"
-        data-api-base="http://localhost/ai-chat-saas/backend/api"
-        defer
-></script>
+<script>
+    // صفحه تست همیشه تازه‌ترین خروجی ویجت را می‌گیرد تا کش مرورگر مزاحم بررسی نشود.
+    const widgetScript = document.createElement("script");
+    widgetScript.src = `http://localhost/ai-chat-saas/widget/dist/widget.js?v=${Date.now()}`;
+    widgetScript.dataset.siteKey = "000a6effd58a3f83e14bb0f53f07acbb6661dfbb156a2b20";
+    widgetScript.dataset.apiBase = "http://localhost/ai-chat-saas/backend/api";
+    document.body.appendChild(widgetScript);
+</script>
 </body>
 </html>
