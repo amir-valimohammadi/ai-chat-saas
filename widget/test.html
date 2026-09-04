@@ -83,6 +83,21 @@
     widgetScript.src = `http://localhost/ai-chat-saas/widget/dist/widget.js?v=${Date.now()}`;
     widgetScript.dataset.siteKey = "000a6effd58a3f83e14bb0f53f07acbb6661dfbb156a2b20";
     widgetScript.dataset.apiBase = "http://localhost/ai-chat-saas/backend/api";
+    widgetScript.addEventListener("load", () => {
+        const unreadCount = new URLSearchParams(window.location.search).get("unread");
+        if (!unreadCount) return;
+
+        window.setTimeout(() => {
+            const badge = document
+                .querySelector("#ai-chat-widget-root")
+                ?.shadowRoot
+                ?.querySelector("[data-unread]");
+            if (!badge) return;
+
+            badge.textContent = unreadCount;
+            badge.classList.add("show");
+        }, 250);
+    });
     document.body.appendChild(widgetScript);
 </script>
 </body>

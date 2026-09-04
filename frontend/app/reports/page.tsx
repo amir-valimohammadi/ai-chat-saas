@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
@@ -88,6 +88,7 @@ const statusColors: Record<string, string> = {
 
 export default function ReportsPage() {
     const router = useRouter();
+    const reportRequestRef = useRef(0);
 
     const [data, setData] = useState<ReportData | null>(null);
     const [days, setDays] = useState("7");
@@ -96,6 +97,8 @@ export default function ReportsPage() {
     const [error, setError] = useState("");
 
     async function loadReports(nextDays = days, nextSiteId = siteId) {
+        const requestId = ++reportRequestRef.current;
+
         try {
             setLoading(true);
             setError("");
@@ -107,11 +110,17 @@ export default function ReportsPage() {
 
             const response = await apiRequest(`/customer/reports-summary.php?${query}`);
 
-            setData(response);
+            if (requestId === reportRequestRef.current) {
+                setData(response);
+            }
         } catch (err) {
-            setError(err instanceof Error ? err.message : "خطا در دریافت گزارش‌ها");
+            if (requestId === reportRequestRef.current) {
+                setError(err instanceof Error ? err.message : "خطا در دریافت گزارش‌ها");
+            }
         } finally {
-            setLoading(false);
+            if (requestId === reportRequestRef.current) {
+                setLoading(false);
+            }
         }
     }
 
@@ -191,148 +200,231 @@ export default function ReportsPage() {
         );
     }, [data]);
 
+    const activeRate = useMemo(() => {
+        if (!data || data.metrics.total_conversations === 0) {
+            return 0;
+        }
+
+        return Math.round(
+            (data.metrics.active_conversations / data.metrics.total_conversations) * 100
+        );
+    }, [data]);
+
+    const messagesPerConversation = useMemo(() => {
+        if (!data || data.metrics.total_conversations === 0) {
+            return 0;
+        }
+
+        return Math.round(
+            (data.metrics.total_messages / data.metrics.total_conversations) * 10
+        ) / 10;
+    }, [data]);
+
+    const rangeLabel = data
+        ? `${formatDate(data.range.start_date)} تا ${formatDate(data.range.end_date)}`
+        : "در حال آماده‌سازی بازه";
+
+    const performanceMessage = !data || data.metrics.total_conversations === 0
+        ? "با شروع گفتگوها، تصویر عملکرد تیم در این بخش شکل می‌گیرد."
+        : closeRate >= 75
+            ? "بخش بزرگی از گفتگوهای این بازه با موفقیت به نتیجه رسیده‌اند."
+            : closeRate >= 45
+                ? "روند رسیدگی متعادل است؛ گفتگوهای فعال را برای تکمیل بررسی کنید."
+                : "تعداد گفتگوهای در جریان بالاست و بهتر است صف فعال مرور شود.";
+
     return (
-        <AppShell
-            title="گزارش‌ها"
-            kicker="Reports"
-            description="نمای مدیریتی از عملکرد چت، گفتگوها، پیام‌ها و فعالیت پشتیبانی"
-            actions={
-                <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={() => loadReports(days, siteId)}
-                    disabled={loading}
-                >
-                    {loading ? "در حال بروزرسانی..." : "بروزرسانی"}
-                </button>
-            }
-        >
+        <AppShell title="گزارش‌ها">
             <div className="reports-shell">
-                {error && <div className="error">{error}</div>}
+                {error && (
+                    <div className="reports-alert" role="alert">
+                        <span className="reports-alert-icon" aria-hidden="true">
+                            <ReportsIcon name="warning" />
+                        </span>
+                        <div>
+                            <strong>گزارش تازه دریافت نشد</strong>
+                            <p>{error}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => loadReports(days, siteId)}
+                            disabled={loading}
+                        >
+                            تلاش دوباره
+                        </button>
+                    </div>
+                )}
 
-                <section className="reports-hero-card">
-                    <div className="reports-hero-copy">
-                        <span className="reports-eyebrow">Analytics Overview</span>
-
-                        <h2>عملکرد پشتیبانی را سریع و مدیریتی ببین</h2>
-
+                <section
+                    className="reports-overview-card"
+                    aria-labelledby="reports-overview-title"
+                    aria-busy={loading}
+                >
+                    <div className="reports-overview-copy">
+                        <span className="reports-eyebrow">
+                            <i aria-hidden="true" />
+                            تحلیل عملکرد پشتیبانی
+                        </span>
+                        <h2 id="reports-overview-title">
+                            از وضعیت گفتگوها، یک تصویر روشن و قابل تصمیم بسازید
+                        </h2>
                         <p>
-                            این صفحه برای فهم وضعیت کلی گفتگوها طراحی شده است: حجم گفتگو،
-                            پیام‌ها، سرعت پاسخ‌گویی، وضعیت‌ها، عملکرد سایت‌ها و گفتگوهای اخیر.
+                            مهم‌ترین شاخص‌های پشتیبانی، روند گفتگوها و نقاط نیازمند توجه
+                            در یک نمای ساده و مدیریتی کنار هم قرار گرفته‌اند.
                         </p>
+
+                        <div className="reports-overview-scope" aria-label="محدوده گزارش">
+                            <span>
+                                <ReportsIcon name="calendar" />
+                                {rangeLabel}
+                            </span>
+                            <span>
+                                <ReportsIcon name="site" />
+                                {selectedSiteName}
+                            </span>
+                        </div>
                     </div>
 
-                    <div className="reports-filter-card">
-                        <div className="reports-filter-title">
-                            <span>فیلتر گزارش</span>
-                            {data && <strong>{data.range.days} روز اخیر</strong>}
+                    <div className="reports-health-card">
+                        <div
+                            className="reports-rate-ring"
+                            style={{
+                                "--reports-rate": String(closeRate * 3.6) + "deg",
+                            } as CSSProperties}
+                            aria-label={"نرخ بسته‌شدن " + formatNumber(closeRate) + " درصد"}
+                        >
+                            <div>
+                                <strong>{formatNumber(closeRate)}٪</strong>
+                                <span>نرخ تکمیل</span>
+                            </div>
                         </div>
 
-                        <label>
-                            <span>بازه زمانی</span>
-                            <select
-                                className="input"
-                                value={days}
-                                onChange={(event) => handleDaysChange(event.target.value)}
-                            >
-                                <option value="7">۷ روز اخیر</option>
-                                <option value="30">۳۰ روز اخیر</option>
-                                <option value="90">۹۰ روز اخیر</option>
-                            </select>
-                        </label>
+                        <div className="reports-health-copy">
+                            <span>سلامت رسیدگی</span>
+                            <strong>
+                                {data
+                                    ? formatNumber(data.metrics.closed_conversations) +
+                                      " گفتگوی بسته‌شده"
+                                    : "در حال محاسبه"}
+                            </strong>
+                            <p>{performanceMessage}</p>
+                        </div>
+                    </div>
+                </section>
 
-                        <label>
-                            <span>سایت</span>
+                <section className="reports-filter-bar" aria-label="فیلترهای گزارش">
+                    <div className="reports-range-filter">
+                        <span>بازه گزارش</span>
+                        <div className="reports-range-tabs" role="group" aria-label="انتخاب بازه زمانی">
+                            {[
+                                { value: "7", label: "۷ روز" },
+                                { value: "30", label: "۳۰ روز" },
+                                { value: "90", label: "۹۰ روز" },
+                            ].map((item) => (
+                                <button
+                                    key={item.value}
+                                    className={days === item.value ? "active" : ""}
+                                    type="button"
+                                    aria-pressed={days === item.value}
+                                    onClick={() => handleDaysChange(item.value)}
+                                    disabled={loading && days === item.value}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <label className="reports-site-filter">
+                        <span>سایت</span>
+                        <div>
+                            <ReportsIcon name="site" />
                             <select
-                                className="input"
                                 value={siteId}
                                 onChange={(event) => handleSiteChange(event.target.value)}
-                                disabled={!data}
+                                disabled={!data || loading}
                             >
                                 <option value="0">همه سایت‌ها</option>
-
                                 {data?.sites.map((site) => (
                                     <option key={site.id} value={site.id}>
                                         {site.name}
                                     </option>
                                 ))}
                             </select>
-                        </label>
+                        </div>
+                    </label>
 
-                        <div className="reports-selected-scope">
-                            <span>محدوده فعلی</span>
+                    <div className="reports-filter-status" aria-live="polite">
+                        <span className={loading ? "is-loading" : ""} aria-hidden="true" />
+                        <div>
+                            <small>{loading ? "در حال دریافت اطلاعات" : "گزارش به‌روز است"}</small>
                             <strong>{selectedSiteName}</strong>
                         </div>
                     </div>
+
+                    <button
+                        className={"reports-refresh-button" + (loading ? " is-loading" : "")}
+                        type="button"
+                        onClick={() => loadReports(days, siteId)}
+                        disabled={loading}
+                        aria-label="بروزرسانی گزارش"
+                    >
+                        <ReportsIcon name="refresh" />
+                        <span>{loading ? "در حال بروزرسانی" : "بروزرسانی"}</span>
+                    </button>
                 </section>
 
                 {loading && !data ? (
-                    <section className="reports-loading-card">
-                        <div className="reports-skeleton-row" />
-                        <div className="reports-skeleton-row small" />
-                    </section>
+                    <ReportsLoading />
                 ) : data ? (
                     <>
-                        <section className="reports-kpi-grid">
+                        <section className="reports-kpi-grid" aria-label="شاخص‌های اصلی گزارش">
                             <ReportKpiCard
+                                icon="conversation"
                                 label="کل گفتگوها"
-                                value={data.metrics.total_conversations}
-                                hint="مجموع گفتگوهای بازه انتخاب‌شده"
-                                tone="primary"
-                            />
-
-                            <ReportKpiCard
-                                label="گفتگوهای امروز"
-                                value={data.metrics.today_conversations}
-                                hint="گفتگوهایی که امروز ایجاد شده‌اند"
-                            />
-
-                            <ReportKpiCard
-                                label="گفتگوهای فعال"
-                                value={data.metrics.active_conversations}
-                                hint="گفتگوهایی که هنوز در جریان هستند"
-                                tone="warning"
-                            />
-
-                            <ReportKpiCard
-                                label="بسته‌شده"
-                                value={data.metrics.closed_conversations}
-                                hint={`نرخ بسته‌شدن: ${closeRate}٪`}
-                                tone="success"
-                            />
-
-                            <ReportKpiCard
-                                label="کل پیام‌ها"
-                                value={data.metrics.total_messages}
-                                hint="پیام‌های ثبت‌شده در گفتگوها"
-                            />
-
-                            <ReportKpiCard
-                                label="فایل‌ها"
-                                value={data.metrics.total_attachments}
-                                hint="فایل‌های ارسال‌شده در گفتگوها"
-                            />
-
-                            <ReportKpiCard
-                                label="میانگین پاسخ اول"
-                                value={
-                                    data.metrics.avg_first_response_minutes === null
-                                        ? "-"
-                                        : `${data.metrics.avg_first_response_minutes} دقیقه`
+                                value={formatNumber(data.metrics.total_conversations)}
+                                hint={
+                                    formatNumber(data.metrics.today_conversations) +
+                                    " گفتگوی تازه در امروز"
                                 }
-                                hint="زمان تقریبی اولین پاسخ پشتیبان"
-                                tone="primary"
+                                tone="indigo"
+                            />
+                            <ReportKpiCard
+                                icon="pulse"
+                                label="گفتگوهای فعال"
+                                value={formatNumber(data.metrics.active_conversations)}
+                                hint={formatNumber(activeRate) + "٪ از کل گفتگوهای بازه"}
+                                tone="mint"
+                            />
+                            <ReportKpiCard
+                                icon="clock"
+                                label="میانگین پاسخ اول"
+                                value={formatDuration(data.metrics.avg_first_response_minutes)}
+                                hint="از اولین پیام مشتری تا پاسخ پشتیبان"
+                                tone="amber"
+                            />
+                            <ReportKpiCard
+                                icon="message"
+                                label="پیام‌های مبادله‌شده"
+                                value={formatNumber(data.metrics.total_messages)}
+                                hint={
+                                    formatNumber(messagesPerConversation) +
+                                    " پیام برای هر گفتگو · " +
+                                    formatNumber(data.metrics.total_attachments) +
+                                    " فایل"
+                                }
+                                tone="sky"
                             />
                         </section>
 
                         <section className="reports-main-grid">
                             <article className="reports-card reports-trend-card">
                                 <ReportsCardHead
-                                    kicker="Trend"
-                                    title="روند گفتگوها"
-                                    description="تعداد گفتگوهای ایجادشده در بازه انتخاب‌شده"
+                                    kicker="روند زمانی"
+                                    title="جریان گفتگوها"
+                                    description="تغییر تعداد گفتگوهای ایجادشده در بازه انتخابی"
+                                    meta={formatNumber(data.range.days) + " روز"}
+                                    icon="chart"
                                 />
-
                                 <TrendChart
                                     points={data.daily}
                                     max={maxDaily}
@@ -341,15 +433,17 @@ export default function ReportsPage() {
                                 />
                             </article>
 
-                            <article className="reports-card">
+                            <article className="reports-card reports-status-card">
                                 <ReportsCardHead
-                                    kicker="Status"
-                                    title="وضعیت گفتگوها"
-                                    description="تقسیم‌بندی گفتگوها بر اساس وضعیت"
+                                    kicker="ترکیب وضعیت"
+                                    title="وضعیت رسیدگی"
+                                    description="سهم هر وضعیت از کل گفتگوها"
+                                    meta={formatNumber(data.status_counts.length) + " وضعیت"}
+                                    icon="status"
                                 />
 
                                 {data.status_counts.length === 0 ? (
-                                    <EmptyMini text="هنوز داده‌ای برای وضعیت‌ها وجود ندارد." />
+                                    <EmptyMini text="هنوز داده‌ای برای وضعیت گفتگوها وجود ندارد." />
                                 ) : (
                                     <div className="reports-status-list">
                                         {data.status_counts.map((item) => (
@@ -365,11 +459,13 @@ export default function ReportsPage() {
                         </section>
 
                         <section className="reports-bottom-grid">
-                            <article className="reports-card">
+                            <article className="reports-card reports-sites-card">
                                 <ReportsCardHead
-                                    kicker="Sites"
+                                    kicker="کانال‌های ورودی"
                                     title="عملکرد سایت‌ها"
-                                    description="تعداد گفتگوها به تفکیک سایت"
+                                    description="مقایسه حجم گفتگو میان سایت‌های متصل"
+                                    meta={formatNumber(data.site_counts.length) + " سایت"}
+                                    icon="site"
                                 />
 
                                 {data.site_counts.length === 0 ? (
@@ -389,13 +485,15 @@ export default function ReportsPage() {
 
                             <article className="reports-card reports-recent-card">
                                 <ReportsCardHead
-                                    kicker="Recent"
+                                    kicker="فعالیت اخیر"
                                     title="آخرین گفتگوها"
-                                    description="گفتگوهای اخیر در بازه انتخاب‌شده"
+                                    description="آخرین مواردی که در محدوده فعلی تغییر کرده‌اند"
+                                    meta={formatNumber(data.recent_conversations.length) + " گفتگو"}
+                                    icon="recent"
                                 />
 
                                 {data.recent_conversations.length === 0 ? (
-                                    <EmptyMini text="هنوز گفتگویی ثبت نشده است." />
+                                    <EmptyMini text="هنوز گفتگویی در این بازه ثبت نشده است." />
                                 ) : (
                                     <div className="reports-recent-list">
                                         {data.recent_conversations.map((item) => (
@@ -403,7 +501,7 @@ export default function ReportsPage() {
                                                 key={item.id}
                                                 item={item}
                                                 onOpen={() =>
-                                                    router.push(`/conversations/${item.id}`)
+                                                    router.push("/conversations/" + item.id)
                                                 }
                                             />
                                         ))}
@@ -412,27 +510,36 @@ export default function ReportsPage() {
                             </article>
                         </section>
                     </>
-                ) : null}
+                ) : (
+                    <EmptyMini text="اطلاعات گزارش در دسترس نیست." />
+                )}
             </div>
         </AppShell>
     );
 }
 
 function ReportKpiCard({
+                           icon,
                            label,
                            value,
                            hint,
-                           tone = "default",
+                           tone,
                        }: {
+    icon: ReportIconName;
     label: string;
-    value: string | number;
+    value: string;
     hint: string;
-    tone?: "default" | "primary" | "success" | "warning";
+    tone: "indigo" | "mint" | "amber" | "sky";
 }) {
     return (
         <article className={`reports-kpi-card tone-${tone}`}>
-            <strong>{value}</strong>
-            <span>{label}</span>
+            <div className="reports-kpi-top">
+                <span className="reports-kpi-icon" aria-hidden="true">
+                    <ReportsIcon name={icon} />
+                </span>
+                <span className="reports-kpi-label">{label}</span>
+            </div>
+            <strong className="reports-kpi-value">{value}</strong>
             <p>{hint}</p>
         </article>
     );
@@ -442,18 +549,28 @@ function ReportsCardHead({
                              kicker,
                              title,
                              description,
+                             meta,
+                             icon,
                          }: {
     kicker: string;
     title: string;
     description: string;
+    meta: string;
+    icon: ReportIconName;
 }) {
     return (
         <div className="reports-card-head">
-            <div>
-                <span className="reports-section-kicker">{kicker}</span>
-                <h2>{title}</h2>
-                <p>{description}</p>
+            <div className="reports-card-title-group">
+                <span className="reports-card-icon" aria-hidden="true">
+                    <ReportsIcon name={icon} />
+                </span>
+                <div>
+                    <span className="reports-section-kicker">{kicker}</span>
+                    <h2>{title}</h2>
+                    <p>{description}</p>
+                </div>
             </div>
+            <span className="reports-card-meta">{meta}</span>
         </div>
     );
 }
@@ -476,6 +593,7 @@ function TrendChart({
     const chartWidth = width - paddingX * 2;
     const chartHeight = height - paddingY * 2;
     const safeMax = Math.max(max, 1);
+    const labelStep = Math.max(1, Math.ceil(points.length / 7));
 
     const coordinates = points.map((point, index) => {
         const x =
@@ -516,12 +634,12 @@ function TrendChart({
         <div className="reports-chart-shell">
             <div className="reports-chart-summary">
                 <div>
-                    <strong>{total}</strong>
+                    <strong>{formatNumber(total)}</strong>
                     <span>مجموع گفتگوها</span>
                 </div>
 
                 <div>
-                    <strong>{average}</strong>
+                    <strong>{formatNumber(average)}</strong>
                     <span>میانگین روزانه</span>
                 </div>
             </div>
@@ -576,41 +694,53 @@ function TrendChart({
                         />
                     )}
 
-                    {coordinates.map((point) => (
-                        <g key={point.date}>
-                            <circle
-                                cx={point.x}
-                                cy={point.y}
-                                r="7"
-                                fill="#ffffff"
-                                stroke="#4f46e5"
-                                strokeWidth="4"
-                            />
+                    {coordinates.map((point, index) => {
+                        const showLabel =
+                            index === 0 ||
+                            index === coordinates.length - 1 ||
+                            index % labelStep === 0;
+                        const showValue = points.length <= 14 && point.total > 0;
 
-                            {point.total > 0 && (
-                                <text
-                                    x={point.x}
-                                    y={point.y - 15}
-                                    textAnchor="middle"
-                                    fontSize="13"
-                                    fontWeight="850"
-                                    fill="#475569"
-                                >
-                                    {point.total}
-                                </text>
-                            )}
+                        return (
+                            <g key={point.date}>
+                                {showLabel && (
+                                    <circle
+                                        cx={point.x}
+                                        cy={point.y}
+                                        r="5"
+                                        fill="#ffffff"
+                                        stroke="#5266e8"
+                                        strokeWidth="3"
+                                    />
+                                )}
 
-                            <text
-                                x={point.x}
-                                y={height - 5}
-                                textAnchor="middle"
-                                fontSize="12"
-                                fill="#94a3b8"
-                            >
-                                {point.label}
-                            </text>
-                        </g>
-                    ))}
+                                {showValue && (
+                                    <text
+                                        x={point.x}
+                                        y={point.y - 13}
+                                        textAnchor="middle"
+                                        fontSize="12"
+                                        fontWeight="850"
+                                        fill="#475569"
+                                    >
+                                        {formatNumber(point.total)}
+                                    </text>
+                                )}
+
+                                {showLabel && (
+                                    <text
+                                        x={point.x}
+                                        y={height - 5}
+                                        textAnchor="middle"
+                                        fontSize="11"
+                                        fill="#98a2b3"
+                                    >
+                                        {formatNumber(point.label)}
+                                    </text>
+                                )}
+                            </g>
+                        );
+                    })}
                 </svg>
             </div>
         </div>
@@ -629,14 +759,14 @@ function StatusRow({ item, total }: { item: StatusCount; total: number }) {
                     <strong>{item.label || statusLabels[item.status] || item.status}</strong>
                 </div>
 
-                <b>{item.total}</b>
+                <b>{formatNumber(item.total)}</b>
             </div>
 
             <div className="reports-progress">
                 <div style={{ width: `${percent}%`, background: color }} />
             </div>
 
-            <small>{percent}٪ از کل گفتگوها</small>
+            <small>{formatNumber(percent)}٪ از کل گفتگوها</small>
         </div>
     );
 }
@@ -648,14 +778,14 @@ function SitePerformanceRow({ site, total }: { site: SiteCount; total: number })
         <div className="reports-site-row">
             <div className="reports-site-top">
                 <strong>{site.name}</strong>
-                <span>{site.total}</span>
+                <span>{formatNumber(site.total)}</span>
             </div>
 
             <div className="reports-progress">
                 <div style={{ width: `${percent}%` }} />
             </div>
 
-            <small>{percent}٪ از گفتگوهای سایت‌ها</small>
+            <small>{formatNumber(percent)}٪ از گفتگوهای سایت‌ها</small>
         </div>
     );
 }
@@ -670,11 +800,11 @@ function RecentConversationRow({
     const contact = item.visitor_phone || item.visitor_email || "بدون تماس";
 
     return (
-        <article className="reports-recent-row" onClick={onOpen}>
+        <button className="reports-recent-row" type="button" onClick={onOpen}>
             <div className="reports-recent-main">
                 <div className="reports-recent-title">
                     <strong>{item.visitor_name || "کاربر بدون نام"}</strong>
-                    <span>#{item.id}</span>
+                    <span>#{formatNumber(item.id)}</span>
                 </div>
 
                 <p>{truncateText(item.last_message || "بدون پیام", 120)}</p>
@@ -682,23 +812,206 @@ function RecentConversationRow({
                 <div className="reports-recent-meta">
                     <span>{item.site_name}</span>
                     <span>{contact}</span>
-                    <span>{item.last_message_at || item.created_at}</span>
+                    <span>{formatDateTime(item.last_message_at || item.created_at)}</span>
                 </div>
             </div>
 
-            <span className={`reports-status-chip status-${item.status}`}>
-                {statusLabels[item.status] || item.status}
-            </span>
-        </article>
+            <div className="reports-recent-side">
+                <span className={`reports-status-chip status-${item.status}`}>
+                    {statusLabels[item.status] || item.status}
+                </span>
+                <span className="reports-row-arrow" aria-hidden="true">
+                    <ReportsIcon name="arrow" />
+                </span>
+            </div>
+        </button>
     );
 }
 
 function EmptyMini({ text }: { text: string }) {
     return (
         <div className="reports-empty-mini">
+            <span aria-hidden="true">
+                <ReportsIcon name="empty" />
+            </span>
+            <strong>داده‌ای برای نمایش نیست</strong>
             <p>{text}</p>
         </div>
     );
+}
+
+function ReportsLoading() {
+    return (
+        <div className="reports-loading" aria-label="در حال بارگذاری گزارش‌ها">
+            <div className="reports-loading-kpis">
+                {[0, 1, 2, 3].map((item) => (
+                    <span key={item} />
+                ))}
+            </div>
+            <div className="reports-loading-panels">
+                <span />
+                <span />
+            </div>
+        </div>
+    );
+}
+
+type ReportIconName =
+    | "warning"
+    | "calendar"
+    | "site"
+    | "refresh"
+    | "conversation"
+    | "pulse"
+    | "clock"
+    | "message"
+    | "chart"
+    | "status"
+    | "recent"
+    | "arrow"
+    | "empty";
+
+function ReportsIcon({ name }: { name: ReportIconName }) {
+    const commonProps = {
+        viewBox: "0 0 24 24",
+        fill: "none",
+        "aria-hidden": true,
+    };
+
+    if (name === "warning") {
+        return (
+            <svg {...commonProps}>
+                <path d="M12 8v4m0 4h.01M10.25 4.7 2.8 17.6A1.6 1.6 0 0 0 4.18 20h15.64a1.6 1.6 0 0 0 1.38-2.4L13.75 4.7a2.02 2.02 0 0 0-3.5 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        );
+    }
+
+    if (name === "calendar") {
+        return (
+            <svg {...commonProps}>
+                <rect x="3.5" y="5.5" width="17" height="15" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+        );
+    }
+
+    if (name === "site") {
+        return (
+            <svg {...commonProps}>
+                <rect x="3" y="4" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M8 21h8M12 18v3M7 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+        );
+    }
+
+    if (name === "refresh") {
+        return (
+            <svg {...commonProps}>
+                <path d="M19.5 7.5A8 8 0 1 0 20 15M19.5 3.5v4h-4" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        );
+    }
+
+    if (name === "conversation") {
+        return (
+            <svg {...commonProps}>
+                <path d="M5.5 18.2 3.7 20a.7.7 0 0 1-1.18-.6l.38-3.24A8 8 0 0 1 2 12.5C2 7.8 6.48 4 12 4s10 3.8 10 8.5S17.52 21 12 21a11.7 11.7 0 0 1-6.5-2.8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                <path d="M7.5 11h9M7.5 14h5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+        );
+    }
+
+    if (name === "pulse") {
+        return (
+            <svg {...commonProps}>
+                <path d="M3 12h4l2.2-5 4.1 10 2.1-5H21" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        );
+    }
+
+    if (name === "clock" || name === "recent") {
+        return (
+            <svg {...commonProps}>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M12 7v5l3.3 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                {name === "recent" && <path d="M5.4 5.8H2.8V3.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />}
+            </svg>
+        );
+    }
+
+    if (name === "message") {
+        return (
+            <svg {...commonProps}>
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.3 3.4A.7.7 0 0 1 4.55 19L5 15.5A2.5 2.5 0 0 1 4 13.5v-8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                <path d="M8 8.5h8M8 11.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+        );
+    }
+
+    if (name === "chart") {
+        return (
+            <svg {...commonProps}>
+                <path d="M4 19V5M4 19h16M7.5 15l3-3 3 1.5 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="18.5" cy="7.5" r="1.3" fill="currentColor" />
+            </svg>
+        );
+    }
+
+    if (name === "status") {
+        return (
+            <svg {...commonProps}>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M12 3v9h9M12 12l-6.4 6.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        );
+    }
+
+    if (name === "arrow") {
+        return (
+            <svg {...commonProps}>
+                <path d="M19 12H5M11 6l-6 6 6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        );
+    }
+
+    return (
+        <svg {...commonProps}>
+            <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <path d="m4.5 7.8 7.5 4.3 7.5-4.3M12 12v8.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function formatNumber(value: number | string) {
+    return String(value).replace(/\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
+}
+
+function formatDuration(value: number | null) {
+    if (value === null) {
+        return "—";
+    }
+
+    if (value < 60) {
+        return formatNumber(value) + " دقیقه";
+    }
+
+    const hours = Math.floor(value / 60);
+    const minutes = Math.round(value % 60);
+    return minutes > 0
+        ? formatNumber(hours) + " ساعت و " + formatNumber(minutes) + " دقیقه"
+        : formatNumber(hours) + " ساعت";
+}
+
+function formatDate(value: string) {
+    const date = value.split(" ")[0]?.replaceAll("-", "/") || value;
+    return formatNumber(date);
+}
+
+function formatDateTime(value: string) {
+    const [date, time] = value.split(" ");
+    const safeDate = formatNumber((date || value).replaceAll("-", "/"));
+    const safeTime = time ? formatNumber(time.slice(0, 5)) : "";
+    return safeTime ? safeDate + " · " + safeTime : safeDate;
 }
 
 function truncateText(text: string, maxLength: number) {

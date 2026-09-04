@@ -1468,7 +1468,7 @@
         width: 62px;
         height: 62px;
         flex-basis: 62px;
-        overflow: hidden;
+        overflow: visible;
         border: 3px solid rgba(255, 255, 255, 0.96);
         border-radius: 22px;
         background:
@@ -1480,15 +1480,17 @@
       .ai-chat-button::before {
         content: "";
         position: absolute;
-        inset: 0;
-        background: linear-gradient(115deg, transparent 18%, rgba(255, 255, 255, 0.16) 50%, transparent 72%);
-        transform: translateX(115%);
-        transition: transform 460ms ease;
+        inset: 3px;
+        z-index: 0;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 46%);
+        opacity: 0.55;
+        transition: opacity 180ms ease;
         pointer-events: none;
       }
 
       .ai-chat-button:hover::before {
-        transform: translateX(-115%);
+        opacity: 0.9;
       }
 
       .ai-chat-button:hover {
@@ -1504,10 +1506,16 @@
         height: 28px;
       }
 
+      .ai-chat-launcher-icon,
+      .ai-chat-launcher-close {
+        position: relative;
+        z-index: 1;
+      }
+
       .ai-chat-launcher-presence {
         position: absolute;
-        right: -1px;
-        bottom: -1px;
+        right: -4px;
+        bottom: -4px;
         z-index: 4;
         width: 14px;
         height: 14px;
@@ -1534,13 +1542,17 @@
       }
 
       .ai-chat-unread {
-        top: -3px;
-        left: -3px;
-        min-width: 22px;
-        height: 22px;
+        top: -7px;
+        left: -7px;
+        z-index: 6;
+        min-width: 24px;
+        height: 24px;
+        padding: 0 6px;
         border-width: 3px;
         box-shadow: 0 8px 18px rgba(239, 68, 68, 0.28);
-        font-size: 10px;
+        font-size: 10.5px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
       }
 
       .ai-chat-window {
