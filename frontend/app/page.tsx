@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ContactRequestSection from "@/components/public/ContactRequestSection";
+import PlanPricingCards from "@/components/public/PlanPricingCards";
 
 type IconName =
     | "spark"
@@ -89,25 +90,6 @@ const workflow = [
     { number: "02", title: "دانش را بساز", text: "صفحات داخلی سایت را بخزش کن یا سؤال و پاسخ‌های اختصاصی خودت را به پایگاه دانش اضافه کن." },
     { number: "03", title: "گفت‌وگو را مدیریت کن", text: "پشتیبان‌ها پیام‌ها را در Inbox تیمی دریافت می‌کنند و موتور داخلی پاسخ‌های مرتبط پیشنهاد می‌دهد." },
     { number: "04", title: "کیفیت را بهبود بده", text: "سؤال‌های بی‌پاسخ را شناسایی کن، دانش را کامل‌تر کن و عملکرد سیستم را با گزارش‌ها بسنج." },
-];
-
-const plans = [
-    {
-        name: "Basic",
-        caption: "برای شروع و تست محصول",
-        items: ["یک سایت", "ویجت شخصی‌سازی‌شده", "Inbox پشتیبانی", "دانش دستی", "گزارش پایه"],
-    },
-    {
-        name: "Growth",
-        caption: "برای کسب‌وکارهای در حال رشد",
-        featured: true,
-        items: ["چند پشتیبان", "خزش داخلی سایت", "موتور پاسخ فارسی", "پاسخ خودکار کنترل‌شده", "گزارش کیفیت AI"],
-    },
-    {
-        name: "Pro",
-        caption: "برای تیم‌ها و چند سایت",
-        items: ["چند سایت", "مدیریت تیم پیشرفته", "محدودیت‌های اختصاصی", "نظارت سوپرادمین", "گزارش و کنترل کامل"],
-    },
 ];
 
 const faqs = [
@@ -489,18 +471,7 @@ export default function HomePage() {
                     <p>ساختار پلن‌ها در پنل سوپرادمین قابل مدیریت است و دسترسی به قابلیت‌ها بر اساس هر پلن کنترل می‌شود.</p>
                 </div>
                 <div className="orbit-plans">
-                    {plans.map((plan) => (
-                        <article key={plan.name} className={plan.featured ? "is-featured" : ""} data-reveal>
-                            {plan.featured && <span className="orbit-plan-badge">انتخاب پیشنهادی</span>}
-                            <small>{plan.caption}</small>
-                            <h3>{plan.name}</h3>
-                            <div className="orbit-plan-line"/>
-                            <ul>{plan.items.map((item) => <li key={item}><Icon name="check" size={16}/>{item}</li>)}</ul>
-                            <button type="button" onClick={() => choosePlan(plan.name)}>
-                                درخواست این پلن <Icon name="arrow" size={17}/>
-                            </button>
-                        </article>
-                    ))}
+                    <PlanPricingCards onChoose={choosePlan} />
                 </div>
             </section>
 

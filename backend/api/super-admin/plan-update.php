@@ -21,6 +21,9 @@ $user = require_auth($pdo);
 require_role($user, ['super_admin']);
 
 $input = get_json_input();
+if (($input['price_currency'] ?? null) !== 'IRR') {
+    json_response(['success' => false, 'message' => 'واحد ذخیره قیمت پلن باید IRR باشد؛ صفحه را تازه کنید.'], 422);
+}
 
 function plan_bool(
     array $input,

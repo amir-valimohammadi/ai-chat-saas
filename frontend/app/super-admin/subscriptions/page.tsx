@@ -1,5 +1,7 @@
 "use client";
 
+import { suggestedSubscriptionPrice } from "@/lib/plan-money";
+
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -225,7 +227,7 @@ export default function SubscriptionsPage() {
         setForm((current) => ({
             ...current,
             plan_id: value,
-            price: plan ? String(calculateCyclePrice(plan.price_monthly, current.billing_cycle)) : current.price,
+            price: plan ? suggestedSubscriptionPrice(plan.price_monthly, current.billing_cycle, current.currency) : "",
         }));
     }
 
@@ -235,7 +237,7 @@ export default function SubscriptionsPage() {
             billing_cycle: value,
             ends_at: addCycle(current.starts_at, value),
             price: selectedPlan
-                ? String(calculateCyclePrice(selectedPlan.price_monthly, value))
+                ? suggestedSubscriptionPrice(selectedPlan.price_monthly, value, current.currency)
                 : current.price,
         }));
     }
@@ -638,7 +640,7 @@ export default function SubscriptionsPage() {
 
                             <div className="subscription-form-grid money-grid">
                                 <label className="subscription-field">
-                                    <span>مبلغ قرارداد</span>
+                                    <span>مبلغ کل قرارداد ({form.currency || "کد ارز را انتخاب کنید"})</span>
                                     <input
                                         type="number"
                                         min="0"
@@ -654,7 +656,11 @@ export default function SubscriptionsPage() {
                                         dir="ltr"
                                         maxLength={3}
                                         value={form.currency}
-                                        onChange={(event) => updateForm("currency", event.target.value.toUpperCase())}
+                                        onChange={(event) => {
+                                            const currency = event.target.value.toUpperCase();
+                                            setForm((current) => ({ ...current, currency,
+                                                price: selectedPlan ? suggestedSubscriptionPrice(selectedPlan.price_monthly, current.billing_cycle, currency) : "" }));
+                                        }}
                                         required
                                     />
                                 </label>
@@ -687,12 +693,6 @@ export default function SubscriptionsPage() {
             )}
         </AppShell>
     );
-}
-
-function calculateCyclePrice(monthlyPrice: number, cycle: BillingCycle) {
-    if (cycle === "quarterly") return monthlyPrice * 3;
-    if (cycle === "yearly") return monthlyPrice * 12;
-    return monthlyPrice;
 }
 
 function formatDate(value: string) {

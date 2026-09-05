@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
+import { formatPlanPrice, rialToTomanInput, tomanInputToRial } from "@/lib/plan-money";
 
 type Plan = {
     id: number;
@@ -189,7 +190,7 @@ export default function SuperAdminPlansPage() {
             ai_suggestions_enabled: plan.ai_suggestions_enabled,
             ai_auto_reply_enabled: plan.ai_auto_reply_enabled,
             knowledge_base_enabled: plan.knowledge_base_enabled,
-            price_monthly: String(plan.price_monthly),
+            price_monthly: rialToTomanInput(plan.price_monthly),
             is_active: plan.is_active,
         });
         setError("");
@@ -208,7 +209,7 @@ export default function SuperAdminPlansPage() {
             ai_suggestions_enabled: plan.ai_suggestions_enabled,
             ai_auto_reply_enabled: plan.ai_auto_reply_enabled,
             knowledge_base_enabled: plan.knowledge_base_enabled,
-            price_monthly: String(plan.price_monthly),
+            price_monthly: rialToTomanInput(plan.price_monthly),
             is_active: false,
         });
         setSuccess("یک نسخه قابل ویرایش از پلن آماده شد؛ نام آن را بررسی کن.");
@@ -228,7 +229,8 @@ export default function SuperAdminPlansPage() {
             ai_suggestions_enabled: form.ai_suggestions_enabled,
             ai_auto_reply_enabled: form.ai_auto_reply_enabled,
             knowledge_base_enabled: form.knowledge_base_enabled,
-            price_monthly: Number(form.price_monthly || 0),
+            price_monthly: tomanInputToRial(form.price_monthly),
+            price_currency: "IRR",
             is_active: form.is_active,
         };
 
@@ -236,7 +238,7 @@ export default function SuperAdminPlansPage() {
         if (payload.max_sites < 1) return setError("حداکثر سایت باید حداقل ۱ باشد.");
         if (payload.max_agents < 0) return setError("حداکثر پشتیبان نمی‌تواند منفی باشد.");
         if (payload.max_monthly_conversations < 0) return setError("گفتگوی ماهانه نمی‌تواند منفی باشد.");
-        if (payload.price_monthly < 0) return setError("قیمت ماهانه نمی‌تواند منفی باشد.");
+        if (!Number.isFinite(payload.price_monthly)) return setError("قیمت ماهانه به تومان معتبر نیست؛ حداکثر سه رقم اعشار مجاز است.");
 
         try {
             setSaving(true);
@@ -358,8 +360,8 @@ export default function SuperAdminPlansPage() {
                             <FormField label="نام پلن">
                                 <input className="input" value={form.name} maxLength={100} onChange={(event) => updateField("name", event.target.value)} />
                             </FormField>
-                            <FormField label="قیمت ماهانه">
-                                <input className="input" type="number" min="0" value={form.price_monthly} onChange={(event) => updateField("price_monthly", event.target.value)} />
+                            <FormField label="قیمت ماهانه (تومان)">
+                                <input className="input" type="number" min="0" max="999999999.999" step="0.001" value={form.price_monthly} onChange={(event) => updateField("price_monthly", event.target.value)} />
                             </FormField>
                             <FormField label="توضیحات">
                                 <textarea className="textarea" value={form.description} maxLength={1000} onChange={(event) => updateField("description", event.target.value)} />
@@ -527,7 +529,7 @@ function Feature({ enabled, label }: { enabled: boolean; label: string }) {
 }
 
 function formatMoney(value: number) {
-    return Number(value || 0) === 0 ? "رایگان" : `${Number(value).toLocaleString("fa-IR")} تومان`;
+    return formatPlanPrice(value);
 }
 
 function formatNumber(value: number) {

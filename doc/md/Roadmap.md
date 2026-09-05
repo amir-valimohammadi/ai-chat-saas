@@ -4,6 +4,10 @@ This roadmap is based on the current product architecture and sales report. The 
 
 ## Roadmap Strategy
 
+### Tracked follow-up — 2026-09-05
+
+- [ ] Domestic-network chat continuity during international connectivity loss. Deferred at the user's request; do not treat it as implemented or verified. Acceptance criteria and deployment prerequisites are tracked in section 7 of [the release checklist](../../deploy/README.md). This is conditional on domestic connectivity, not a promise of uninterrupted delivery during a total outage.
+
 The product already has the foundation:
 
 - Multi-tenant SaaS structure.

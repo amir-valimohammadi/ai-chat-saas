@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/cors.php';
 require_once __DIR__ . '/../../includes/response.php';
 require_once __DIR__ . '/../../includes/helpers.php';
 require_once __DIR__ . '/../../includes/admin-audit.php';
+require_once __DIR__ . '/../../includes/plan-change.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
 
@@ -58,7 +59,16 @@ if ($planId <= 0) {
     ], 422);
 }
 
+$cycle = $input['billing_cycle'] ?? null;
+$price = plan_change_price($input['price'] ?? null);
+$expectedPlanId = filter_var($input['expected_plan_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+if (!in_array($cycle, ['monthly', 'quarterly', 'yearly'], true) || $price === null
+    || ($input['confirmed'] ?? null) !== true || $expectedPlanId === false) {
+    json_response(['success' => false, 'message' => 'مدت، مبلغ معتبر به ریال و تأیید تغییر پلن الزامی است. صفحه را تازه کنید.'], 422);
+}
+
 try {
+    $pdo->beginTransaction();
     $tenantStmt = $pdo->prepare("
         SELECT
             tenants.id,
@@ -70,6 +80,7 @@ try {
             ON current_plan.id = tenants.plan_id
         WHERE tenants.id = :tenant_id
         LIMIT 1
+        FOR UPDATE
     ");
 
     $tenantStmt->execute([
@@ -79,6 +90,7 @@ try {
     $tenant = $tenantStmt->fetch();
 
     if (!$tenant) {
+        $pdo->rollBack();
         json_response([
             'success' => false,
             'message' => 'Customer not found',
@@ -106,6 +118,7 @@ try {
     $plan = $planStmt->fetch();
 
     if (!$plan) {
+        $pdo->rollBack();
         json_response([
             'success' => false,
             'message' => 'Plan not found',
@@ -113,6 +126,7 @@ try {
     }
 
     if ((int) $plan['is_active'] !== 1) {
+        $pdo->rollBack();
         json_response([
             'success' => false,
             'message' => 'Inactive plans cannot be assigned to customers',
@@ -123,8 +137,25 @@ try {
         ? (int) $tenant['plan_id']
         : null;
 
+    if ($previousPlanId === $planId) {
+        $current = $pdo->prepare("SELECT id FROM tenant_subscriptions
+            WHERE tenant_id=:tenant_id AND plan_id=:plan_id AND status='active'
+                AND ends_at > NOW() AND billing_cycle=:cycle AND price=:price AND currency='IRR'
+            LIMIT 1");
+        $current->execute([':tenant_id' => $tenantId, ':plan_id' => $planId, ':cycle' => $cycle, ':price' => $price]);
+        if (!$current->fetchColumn()) {
+            $pdo->rollBack();
+            json_response(['success' => false, 'message' => 'پلن انتخاب‌شده فعلی است اما شرایط اشتراک متفاوت است. برای تمدید یا اصلاح شرایط، از بخش اشتراک‌ها استفاده کنید.'], 409);
+        }
+    }
+
     if ($previousPlanId !== $planId) {
-        $pdo->beginTransaction();
+        if (($previousPlanId ?? 0) !== $expectedPlanId) {
+            $pdo->rollBack();
+            json_response(['success' => false, 'message' => 'پلن مشتری تغییر کرده است؛ صفحه را تازه کنید و دوباره تأیید کنید.'], 409);
+        }
+        $startsAt = new DateTimeImmutable('now');
+        $endsAt = plan_change_end($startsAt, $cycle);
 
         $updateStmt = $pdo->prepare("
             UPDATE tenants
@@ -137,13 +168,29 @@ try {
             ':tenant_id' => $tenantId,
         ]);
 
-        $pdo->prepare("\n            UPDATE tenant_subscriptions\n+            SET status = 'cancelled', updated_at = NOW()\n+            WHERE tenant_id = :tenant_id\n+              AND status IN ('trial','active','past_due','suspended')\n+        ")->execute([':tenant_id' => $tenantId]);
+        $pdo->prepare("
+            UPDATE tenant_subscriptions
+            SET status = 'cancelled', updated_at = NOW()
+            WHERE tenant_id = :tenant_id
+              AND status IN ('trial','active','past_due','suspended')
+        ")->execute([':tenant_id' => $tenantId]);
 
-        $subscriptionStmt = $pdo->prepare("\n            INSERT INTO tenant_subscriptions (\n+                tenant_id, plan_id, status, billing_cycle, starts_at, ends_at,\n+                auto_renew, price, currency, created_by\n+            ) VALUES (\n+                :tenant_id, :plan_id, 'active', 'manual', NOW(),\n+                DATE_ADD(NOW(), INTERVAL 1 YEAR), 0, :price, 'IRR', :created_by\n+            )\n+        ");
+        $subscriptionStmt = $pdo->prepare("
+            INSERT INTO tenant_subscriptions (
+                tenant_id, plan_id, status, billing_cycle, starts_at, ends_at,
+                auto_renew, price, currency, created_by
+            ) VALUES (
+                :tenant_id, :plan_id, 'active', :cycle, :starts_at,
+                :ends_at, 0, :price, 'IRR', :created_by
+            )
+        ");
         $subscriptionStmt->execute([
             ':tenant_id' => $tenantId,
             ':plan_id' => $planId,
-            ':price' => (float) $plan['price_monthly'],
+            ':cycle' => $cycle,
+            ':starts_at' => $startsAt->format('Y-m-d H:i:s'),
+            ':ends_at' => $endsAt->format('Y-m-d H:i:s'),
+            ':price' => $price,
             ':created_by' => $user['id'],
         ]);
 
@@ -166,6 +213,11 @@ try {
             [
                 'plan_id' => (int) $plan['id'],
                 'plan_name' => $plan['name'],
+                'billing_cycle' => $cycle,
+                'price' => $price,
+                'currency' => 'IRR',
+                'starts_at' => $startsAt->format('Y-m-d H:i:s'),
+                'ends_at' => $endsAt->format('Y-m-d H:i:s'),
             ],
             [
                 'tenant_id' => $tenantId,
@@ -173,11 +225,13 @@ try {
             ]
         );
 
-        $pdo->commit();
     }
+
+    $pdo->commit();
 
     json_response([
         'success' => true,
+        'changed' => $previousPlanId !== $planId,
         'message' => $previousPlanId === $planId
             ? 'Customer plan was already up to date'
             : 'Customer plan updated',

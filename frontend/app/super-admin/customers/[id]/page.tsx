@@ -15,9 +15,14 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
+import { formatPlanPrice, suggestedSubscriptionPrice } from "@/lib/plan-money";
 import Customer360Panel from "@/components/super-admin/Customer360Panel";
 
 type TenantStatus = "active" | "inactive" | "suspended";
+type PlanCycle = "monthly" | "quarterly" | "yearly";
+const planCycleLabels: Record<PlanCycle, string> = {
+    monthly: "یک ماه", quarterly: "سه ماه", yearly: "یک سال",
+};
 type AiMode = "off" | "assistant" | "semi_auto";
 type DetailTab = "overview" | "customer360" | "sites" | "users" | "activity";
 
@@ -233,9 +238,6 @@ function readRequestedDetailTab(): DetailTab {
 }
 
 const numberFormatter = new Intl.NumberFormat("fa-IR");
-const currencyFormatter = new Intl.NumberFormat("fa-IR", {
-    maximumFractionDigits: 0,
-});
 
 export default function SuperAdminCustomerDetailPage() {
     const router = useRouter();
@@ -383,7 +385,7 @@ export default function SuperAdminCustomerDetailPage() {
         }
     }
 
-    async function updateCustomerPlan() {
+    async function updateCustomerPlan(cycle: PlanCycle, price: string) {
         if (!data || !selectedPlanId || Number(selectedPlanId) === data.tenant.plan_id) {
             return;
         }
@@ -391,8 +393,12 @@ export default function SuperAdminCustomerDetailPage() {
         const selectedPlan = data.plans.find(
             (plan) => plan.id === Number(selectedPlanId)
         );
+        if (!/^(0|[1-9][0-9]{0,11})(\.[0-9]{1,2})?$/.test(price)) {
+            setError("مبلغ کل اشتراک را به ریال، بدون جداکننده و با حداکثر دو رقم اعشار وارد کنید.");
+            return;
+        }
         const accepted = window.confirm(
-            `پلن مشتری به «${selectedPlan?.name || "پلن انتخاب‌شده"}» تغییر کند؟`
+            `پلن جدید: ${selectedPlan?.name || "پلن انتخاب‌شده"}\nمدت: ${planCycleLabels[cycle]} از زمان ثبت\nمبلغ کل: ${Number(price).toLocaleString("fa-IR")} ریال\n\nاشتراک جاری لغو و اشتراک جدید فعال می‌شود. اعتبار باقی‌مانده محاسبه یا مسترد نمی‌شود و هیچ پرداختی ثبت نمی‌شود.\nتأیید می‌کنید؟`
         );
 
         if (!accepted) {
@@ -403,15 +409,21 @@ export default function SuperAdminCustomerDetailPage() {
             setSavingCustomerAction("plan");
             setError("");
 
-            await apiRequest("/super-admin/customer-plan-update.php", {
+            const result = await apiRequest("/super-admin/customer-plan-update.php", {
                 method: "POST",
                 body: JSON.stringify({
                     tenant_id: data.tenant.id,
                     plan_id: Number(selectedPlanId),
+                    expected_plan_id: data.tenant.plan_id ?? 0,
+                    billing_cycle: cycle,
+                    price,
+                    confirmed: true,
                 }),
             });
 
-            setNotice("پلن مشتری با موفقیت به‌روزرسانی شد.");
+            setNotice(result.changed
+                ? "پلن و اشتراک جدید ثبت شدند؛ برای ثبت دریافت وجه از بخش پرداخت‌های اشتراک استفاده کنید."
+                : "این پلن با همین شرایط قبلاً ثبت شده است؛ اشتراک تکراری ساخته نشد.");
             await loadCustomer(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : "تغییر پلن ناموفق بود");
@@ -697,6 +709,7 @@ export default function SuperAdminCustomerDetailPage() {
                             {activeTab !== "customer360" && (
                                 <aside className="sa-customer-detail-sidebar">
                                     <ManagementCard
+                                        key={data.tenant.id}
                                         data={data}
                                         selectedStatus={selectedStatus}
                                         selectedPlanId={selectedPlanId}
@@ -1320,10 +1333,13 @@ function ManagementCard({
     onStatusChange: (status: TenantStatus) => void;
     onPlanChange: (planId: string) => void;
     onSaveStatus: () => void;
-    onSavePlan: () => void;
+    onSavePlan: (cycle: PlanCycle, price: string) => void;
 }) {
+    const [cycle, setCycle] = useState<PlanCycle>("monthly");
+    const [price, setPrice] = useState("");
     const statusChanged = selectedStatus !== data.tenant.status;
     const planChanged = Number(selectedPlanId) !== data.tenant.plan_id;
+    const validPrice = /^(0|[1-9][0-9]{0,11})(\.[0-9]{1,2})?$/.test(price);
 
     return (
         <section className="sa-customer-detail-side-card">
@@ -1368,23 +1384,55 @@ function ManagementCard({
                     id="customer-plan"
                     className="input"
                     value={selectedPlanId}
-                    onChange={(event) => onPlanChange(event.target.value)}
+                    disabled={savingAction !== null}
+                    onChange={(event) => {
+                        onPlanChange(event.target.value);
+                        const plan = data.plans.find((item) => item.id === Number(event.target.value));
+                        setPrice(plan ? suggestedSubscriptionPrice(plan.price_monthly, cycle, "IRR") : "");
+                    }}
                 >
                     <option value="">انتخاب پلن</option>
                     {data.plans.map((plan) => (
                         <option key={plan.id} value={plan.id}>
-                            {plan.name} — {formatMoney(plan.price_monthly)}
+                            {plan.name} — {formatPlanPrice(plan.price_monthly)} در ماه
                         </option>
                     ))}
                 </select>
+                {selectedPlanId && planChanged && (
+                    <>
+                        <label htmlFor="customer-plan-cycle">مدت اشتراک جدید</label>
+                        <select id="customer-plan-cycle" className="input" value={cycle}
+                            disabled={savingAction !== null}
+                            onChange={(event) => {
+                                const nextCycle = event.target.value as PlanCycle;
+                                setCycle(nextCycle);
+                                const plan = data.plans.find((item) => item.id === Number(selectedPlanId));
+                                setPrice(plan ? suggestedSubscriptionPrice(plan.price_monthly, nextCycle, "IRR") : "");
+                            }}>
+                            {Object.entries(planCycleLabels).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                            ))}
+                        </select>
+                        <label htmlFor="customer-plan-price">مبلغ کل دوره (ریال)</label>
+                        <input id="customer-plan-price" className="input" type="number" dir="ltr"
+                            min="0" max="999999999999.99" step="0.01" inputMode="decimal"
+                            value={price} disabled={savingAction !== null}
+                            aria-describedby="customer-plan-terms"
+                            onChange={(event) => setPrice(event.target.value)} placeholder="مثلاً 3000000" />
+                        <p id="customer-plan-terms">
+                            شروع از زمان ثبت؛ اشتراک جاری جایگزین می‌شود. مبلغ کل را به ریال وارد کنید
+                            (هر تومان ۱۰ ریال). پرداخت، تمدید خودکار یا بازپرداخت انجام نمی‌شود.
+                        </p>
+                    </>
+                )}
                 <button
                     className="btn"
                     type="button"
-                    disabled={!selectedPlanId || !planChanged || savingAction !== null}
-                    onClick={onSavePlan}
+                    disabled={!selectedPlanId || !planChanged || !validPrice || savingAction !== null}
+                    onClick={() => onSavePlan(cycle, price)}
                 >
                     <Icon name="check" />
-                    {savingAction === "plan" ? "در حال ذخیره..." : "اعمال پلن"}
+                    {savingAction === "plan" ? "در حال ذخیره..." : "بررسی و تأیید تغییر پلن"}
                 </button>
             </div>
 
@@ -2267,7 +2315,7 @@ function toWebsiteUrl(domain: string): string {
 }
 
 function formatMoney(value: number): string {
-    return `${currencyFormatter.format(value)} تومان`;
+    return formatPlanPrice(value);
 }
 
 function formatPercent(value: number): string {

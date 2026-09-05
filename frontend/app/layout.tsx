@@ -19,6 +19,7 @@ import "../styles/automation-alert-center.css";
 import "../styles/visitors.css";
 import "../styles/announcements.css";
 import "../styles/reports.css";
+import "../styles/knowledge.css";
 import "../styles/subscription.css";
 import "../styles/sites.css";
 import "../styles/landing.css";

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { apiRequest, getAuthUser } from "@/lib/api";
+import { formatPlanPrice } from "@/lib/plan-money";
 
 type UsageStatus =
     | "normal"
@@ -173,11 +174,7 @@ export default function SubscriptionPage() {
                                         : "پلن غیرفعال"}
                                 </span>
                                 <strong>
-                                    {data.plan.price_monthly === 0
-                                        ? "رایگان"
-                                        : `${Number(
-                                            data.plan.price_monthly
-                                        ).toLocaleString("fa-IR")} تومان`}
+                                    {formatPlanPrice(data.plan.price_monthly)}
                                 </strong>
                                 <small>هزینه ماهانه</small>
                             </div>

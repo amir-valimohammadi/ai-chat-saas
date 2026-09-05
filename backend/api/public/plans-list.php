@@ -29,6 +29,7 @@ try {
             'ai_auto_reply_enabled' => (bool) $plan['ai_auto_reply_enabled'],
             'knowledge_base_enabled' => (bool) $plan['knowledge_base_enabled'],
             'price_monthly' => (float) $plan['price_monthly'],
+            'price_currency' => 'IRR',
         ];
     }, $stmt->fetchAll());
 
